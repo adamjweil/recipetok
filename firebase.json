@@ -1,1 +1,48 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tiktok-d4955","appId":"1:353008864151:android:387400f16989423e5952d2","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"tiktok-d4955","appId":"1:353008864151:ios:2231386abefc89dd5952d2","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"tiktok-d4955","configurations":{"android":"1:353008864151:android:387400f16989423e5952d2","ios":"1:353008864151:ios:2231386abefc89dd5952d2"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tiktok-d4955",
+          "appId": "1:353008864151:android:387400f16989423e5952d2",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "tiktok-d4955",
+          "appId": "1:353008864151:ios:2231386abefc89dd5952d2",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tiktok-d4955",
+          "configurations": {
+            "android": "1:353008864151:android:387400f16989423e5952d2",
+            "ios": "1:353008864151:ios:2231386abefc89dd5952d2"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "database": {
+    "rules": "database.rules.json"
+  }
+}
