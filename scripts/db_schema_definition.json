@@ -1,0 +1,95 @@
+{
+  "comments": {
+    "<postId>": {
+      "<commentId>": {
+        "createdAt": "number",
+        "text": "string",
+        "userId": "string",
+        "userImage": "string",
+        "username": "string",
+        "likes?": "number",
+        "timestamp?": "number"
+      }
+    }
+  },
+  "follows": {
+    "<userId>": {
+      "<followedUserId>": "boolean"
+    }
+  },
+  "userComments": {
+    "<userId>": {
+      "<postId>": "boolean"
+    }
+  },
+  "userFollowers": {
+    "<userId>": {
+      "<followerUserId>": {
+        "createdAt": "string (ISO date)"
+      }
+    }
+  },
+  "userFollowing": {
+    "<userId>": {
+      "<followingUserId>": {
+        "createdAt": "string (ISO date)"
+      }
+    }
+  },
+  "userLikes": {
+    "<userId>": {
+      "<postId>": "boolean"
+    }
+  },
+  "users": {
+    "<userId>": {
+      "profile": {
+        "avatarUrl": "string",
+        "city": "string",
+        "comments": "number",
+        "createdAt": "string (ISO date)",
+        "followers": "number",
+        "following": "number",
+        "likes": "number",
+        "name": "string",
+        "state": "string",
+        "updatedAt": "string (ISO date)"
+      },
+      "videos": {
+        "<videoId>": "boolean"
+      }
+    }
+  },
+  "videoComments": {
+    "<videoId>": {
+      "<commentId>": {
+        // Define video comment properties here
+      }
+    }
+  },
+  "videoLikes": {
+    "<videoId>": {
+      "<userId>": {
+        // Define video like properties here
+      }
+    }
+  },
+  "videos": {
+    "<videoId>": {
+      "comments": "number",
+      "createdAt": "string (ISO date)",
+      "description": "string",
+      "id": "string",
+      "likes": "number",
+      "thumbnailUrl": "string",
+      "title": "string",
+      "updatedAt": "string (ISO date)",
+      "userId": "string",
+      "videoUrl": "string",
+      "views": "number",
+      "likedBy?": {
+        "<userId>": "boolean"
+      }
+    }
+  }
+} 
