@@ -5,6 +5,7 @@ import 'package:recipetok/screens/welcome_screen.dart';
 import 'package:recipetok/screens/login_screen.dart';
 import 'package:recipetok/screens/register_screen.dart';
 import 'package:recipetok/screens/profile_screen.dart';
+import 'package:recipetok/screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/main': (context) => const MainNavigationScreen(),
       },
     );
   }

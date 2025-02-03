@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  final DatabaseReference _database = FirebaseDatabase.instance.ref();
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
@@ -27,11 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         // Navigate to profile screen and remove all previous routes
         if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/profile',
-            (route) => false,
-          );
+          Navigator.pushReplacementNamed(context, '/main');
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -42,6 +41,62 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return;
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in with Firebase
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final userId = userCredential.user!.uid;
+
+      // Check if user exists in Realtime Database
+      final userSnapshot = await _database.child('users/$userId').get();
+
+      if (!userSnapshot.exists) {
+        // Only create new user if they don't exist
+        await _database.child('users/$userId').set({
+          'username': userCredential.user!.displayName ?? 'User',
+          'email': userCredential.user!.email,
+          'createdAt': ServerValue.timestamp,
+          'followers': 0,
+          'following': 0,
+          'videoCount': 0,
+          'bio': '',
+          'profileImageUrl': userCredential.user!.photoURL ?? '',
+        });
+      }
+
+      // Fetch latest user data
+      final userData = await _database.child('users/$userId').get();
+      
+      // Here you can use userData.value to access the latest user information
+      print('User Data: ${userData.value}');
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/main');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -122,6 +177,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: _isLoading
                         ? const CircularProgressIndicator()
                         : const Text('Login'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text('OR', style: TextStyle(color: Colors.grey)),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: Icon(
+                      Icons.g_mobiledata,
+                      size: 24,
+                      color: Colors.blue,
+                    ),
+                    label: const Text('Continue with Google'),
                   ),
                 ),
                 const SizedBox(height: 16),
