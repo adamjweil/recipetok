@@ -67,5 +67,9 @@
 	</dict>
 	<key>NSAllowsLocalNetworking</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Application needs access to write to photo library for caching images</string>
+	<key>NSCachesDirectory</key>
+	<string>Allows the app to cache images for better performance</string>
 </dict>
 </plist>

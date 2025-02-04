@@ -34,6 +34,69 @@ const sampleVideos = [
   },
 ];
 
+// Add these arrays at the top of the file
+const recipeTitles = [
+  'Easy Homemade Pasta',
+  'Perfect Chocolate Cake',
+  'Crispy Fried Chicken',
+  '30-Minute Stir Fry',
+  'Classic Apple Pie',
+  'Creamy Mac and Cheese',
+  'Best Breakfast Pancakes',
+  'Healthy Quinoa Bowl',
+  'Spicy Thai Curry',
+  'Fresh Garden Salad',
+  'Grilled Salmon',
+  'Homemade Pizza Dough',
+  'Beef Stroganoff',
+  'Vegetable Lasagna',
+  'French Onion Soup'
+];
+
+const recipeDescriptions = [
+  'Quick and easy recipe perfect for weeknight dinners',
+  'A family favorite that never disappoints',
+  'Restaurant-quality dish you can make at home',
+  'Healthy and delicious meal prep option',
+  'Traditional recipe with a modern twist',
+  'Perfect comfort food for any occasion',
+  'Budget-friendly meal the whole family will love',
+  'Impressive dish that\'s surprisingly simple to make',
+  'Classic recipe passed down through generations',
+  'Ready in under 30 minutes!'
+];
+
+const commonIngredients = [
+  'olive oil',
+  'garlic',
+  'onion',
+  'salt',
+  'black pepper',
+  'butter',
+  'eggs',
+  'flour',
+  'milk',
+  'chicken breast',
+  'pasta',
+  'rice',
+  'tomatoes',
+  'cheese',
+  'herbs'
+];
+
+const cookingInstructions = [
+  'Preheat the oven to 350°F (175°C)',
+  'Chop all vegetables finely',
+  'Mix dry ingredients in a large bowl',
+  'Heat oil in a large skillet over medium heat',
+  'Season with salt and pepper to taste',
+  'Cook until golden brown',
+  'Simmer for 20 minutes',
+  'Let rest for 5 minutes before serving',
+  'Garnish with fresh herbs',
+  'Serve hot and enjoy!'
+];
+
 async function createUser() {
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
@@ -75,17 +138,32 @@ async function createUser() {
 async function createVideo(userId: string) {
   const randomVideo = sampleVideos[Math.floor(Math.random() * sampleVideos.length)];
   
+  // Get 3-5 random ingredients
+  const numIngredients = Math.floor(Math.random() * 3) + 3;
+  const ingredients = Array.from({ length: numIngredients }, () => {
+    const randomIndex = Math.floor(Math.random() * commonIngredients.length);
+    return commonIngredients[randomIndex];
+  });
+
+  // Get 3-5 random instructions
+  const numInstructions = Math.floor(Math.random() * 3) + 3;
+  const instructions = Array.from({ length: numInstructions }, () => {
+    const randomIndex = Math.floor(Math.random() * cookingInstructions.length);
+    return cookingInstructions[randomIndex];
+  });
+
   try {
     const videoDoc = await db.collection('videos').add({
       userId,
       videoUrl: randomVideo.videoUrl,
       thumbnailUrl: randomVideo.thumbnailUrl,
-      title: faker.lorem.words(3),
-      description: faker.lorem.sentence(),
-      ingredients: Array.from({ length: 3 }, () => faker.lorem.word()),
-      instructions: Array.from({ length: 3 }, () => faker.lorem.sentence()),
+      title: recipeTitles[Math.floor(Math.random() * recipeTitles.length)],
+      description: recipeDescriptions[Math.floor(Math.random() * recipeDescriptions.length)],
+      ingredients,
+      instructions,
       likes: 0,
       views: 0,
+      comments: 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -94,7 +172,7 @@ async function createVideo(userId: string) {
       videoCount: admin.firestore.FieldValue.increment(1),
     });
 
-    console.log(`Created video with thumbnail: ${randomVideo.thumbnailUrl}`);
+    console.log(`Created recipe video: ${videoDoc.id}`);
     return videoDoc.id;
   } catch (error) {
     console.error('Error creating video:', error);
