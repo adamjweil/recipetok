@@ -24,26 +24,47 @@ class WelcomeScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.waving_hand,
-                    size: 80,
-                    color: Colors.white,
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.restaurant,
+                      size: 64,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Welcome!',
+                    'RecipeTok',
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
                         ),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Join us today and start your journey',
+                    'Share your culinary creations\nwith the world',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: Colors.white70,
                         ),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.cake, color: Colors.white70),
+                      SizedBox(width: 16),
+                      Icon(Icons.local_pizza, color: Colors.white70),
+                      SizedBox(width: 16),
+                      Icon(Icons.coffee, color: Colors.white70),
+                      SizedBox(width: 16),
+                      Icon(Icons.restaurant_menu, color: Colors.white70),
+                    ],
                   ),
                   const SizedBox(height: 48),
                   SizedBox(
@@ -80,6 +101,13 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       child: const Text('Register'),
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Join our community of food lovers',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
                   ),
                 ],
               ),
