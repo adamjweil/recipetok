@@ -3,6 +3,7 @@ import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/home_screen.dart';
 import 'package:recipetok/screens/users_screen.dart';
 import 'package:recipetok/screens/trending_screen.dart';
+import 'package:recipetok/screens/video_upload_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -32,6 +33,44 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
+      floatingActionButton: SizedBox(
+        width: 48,
+        height: 48,
+        child: FloatingActionButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const VideoUploadScreen(),
+              ),
+            );
+          },
+          backgroundColor: Theme.of(context).primaryColor,
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).primaryColor,
+                  Theme.of(context).primaryColor.withOpacity(0.8),
+                ],
+              ),
+            ),
+            child: const Icon(
+              Icons.add,
+              size: 24,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [

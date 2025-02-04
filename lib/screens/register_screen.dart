@@ -72,11 +72,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             'username': _usernameController.text,
             'email': _emailController.text.trim(),
             'createdAt': FieldValue.serverTimestamp(),
-            'followers': 0,
-            'following': 0,
+            'followers': [],
+            'following': [],
             'videoCount': 0,
             'bio': '',
-            'profileImageUrl': user.photoURL ?? '',
+            'uid': user.uid,
+            'displayName': _usernameController.text,
+            'avatarUrl': user.photoURL ?? '',
           });
           print('Firestore document created successfully');
           
@@ -139,11 +141,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'username': userCredential.user!.displayName ?? 'User',
         'email': userCredential.user!.email,
         'createdAt': FieldValue.serverTimestamp(),
-        'followers': 0,
-        'following': 0,
+        'followers': [],
+        'following': [],
         'videoCount': 0,
         'bio': '',
-        'profileImageUrl': userCredential.user!.photoURL ?? '',
+        'uid': userCredential.user!.uid,
+        'displayName': userCredential.user!.displayName ?? 'User',
+        'avatarUrl': userCredential.user!.photoURL ?? '',
       });
 
       if (mounted) {
