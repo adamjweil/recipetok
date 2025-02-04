@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../screens/home_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -115,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       stream: FirebaseFirestore.instance
           .collection('videos')
           .where('userId', isEqualTo: userId)
-          .orderBy('timestamp', descending: true)
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -155,33 +157,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
           itemCount: videos.length,
           itemBuilder: (context, index) {
             final video = videos[index].data() as Map<String, dynamic>;
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(Icons.play_circle_outline, size: 32),
-                  Positioned(
-                    bottom: 4,
-                    left: 4,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.favorite, size: 12, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${video['likes'] ?? 0}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+            final videoId = videos[index].id;
+            final thumbnailUrl = video['thumbnailUrl'] as String?;
+
+            return GestureDetector(
+              onTap: () {
+                // Show video in full screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoPlayerScreen(
+                      videoData: video,
+                      videoId: videoId,
                     ),
                   ),
-                ],
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                  image: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                      ? DecorationImage(
+                          image: CachedNetworkImageProvider(thumbnailUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (thumbnailUrl == null || thumbnailUrl.isEmpty)
+                      const Icon(Icons.video_library, size: 32),
+                    const Icon(
+                      Icons.play_circle_outline,
+                      size: 32,
+                      color: Colors.white,
+                    ),
+                    Positioned(
+                      bottom: 4,
+                      left: 4,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.favorite,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${video['likes'] ?? 0}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -383,6 +418,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+// Add this new screen for playing videos
+class VideoPlayerScreen extends StatelessWidget {
+  final Map<String, dynamic> videoData;
+  final String videoId;
+
+  const VideoPlayerScreen({
+    super.key,
+    required this.videoData,
+    required this.videoId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: VideoCard(
+        videoData: videoData,
+        videoId: videoId,
+        onUserTap: () {},
+      ),
     );
   }
 } 

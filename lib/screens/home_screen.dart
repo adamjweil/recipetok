@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:video_player/video_player.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -90,9 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
               return VideoCard(
                 videoData: videoData,
                 videoId: videoId,
-                onUserTap: () {
-                  // TODO: Navigate to user profile
-                },
+                onUserTap: () {},
               );
             },
           );
@@ -102,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class VideoCard extends StatelessWidget {
+class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
   final VoidCallback onUserTap;
   final String videoId;
@@ -114,17 +113,101 @@ class VideoCard extends StatelessWidget {
     required this.videoId,
   });
 
+  @override
+  State<VideoCard> createState() => _VideoCardState();
+}
+
+class _VideoCardState extends State<VideoCard> {
+  late VideoPlayerController _videoController;
+  bool _isInitialized = false;
+  bool _hasRecordedView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  @override
+  void dispose() {
+    if (_isInitialized) {
+      _videoController.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _initializeVideo() async {
+    final videoUrl = widget.videoData['videoUrl'] as String?;
+    if (videoUrl == null || videoUrl.isEmpty) return;
+
+    _videoController = VideoPlayerController.network(videoUrl);
+
+    try {
+      await _videoController.initialize();
+      _videoController.setLooping(true);
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (e) {
+      print('Error initializing video: $e');
+    }
+  }
+
+  void _togglePlay() {
+    if (!_isInitialized) return;
+
+    setState(() {
+      if (_videoController.value.isPlaying) {
+        _videoController.pause();
+      } else {
+        _videoController.play();
+        if (!_hasRecordedView) {
+          _recordView();
+        }
+      }
+    });
+  }
+
+  Future<void> _recordView() async {
+    try {
+      final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (currentUserId.isEmpty) return;
+
+      await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(widget.videoId)
+          .update({
+        'views': FieldValue.increment(1),
+      });
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .collection('views')
+          .doc(widget.videoId)
+          .set({
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      setState(() {
+        _hasRecordedView = true;
+      });
+    } catch (e) {
+      print('Error recording view: $e');
+    }
+  }
+
   Future<void> _handleLike(BuildContext context) async {
     try {
       final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
       if (currentUserId.isEmpty) return;
 
-      final videoRef = FirebaseFirestore.instance.collection('videos').doc(videoId);
+      final videoRef = FirebaseFirestore.instance.collection('videos').doc(widget.videoId);
       final userLikesRef = FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
           .collection('likes')
-          .doc(videoId);
+          .doc(widget.videoId);
 
       final likeDoc = await userLikesRef.get();
       final bool isLiked = likeDoc.exists;
@@ -154,181 +237,170 @@ class VideoCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => CommentsSheet(videoId: videoId),
+      builder: (context) => CommentsSheet(videoId: widget.videoId),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final String thumbnailUrl = videoData['thumbnailUrl'] ?? '';
+    final String thumbnailUrl = widget.videoData['thumbnailUrl'] ?? '';
     final bool hasValidThumbnail = thumbnailUrl.startsWith('http');
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseAuth.instance.currentUser != null
-          ? FirebaseFirestore.instance
-              .collection('users')
-              .doc(FirebaseAuth.instance.currentUser!.uid)
-              .collection('likes')
-              .doc(videoId)
-              .snapshots()
-          : const Stream.empty(),
-      builder: (context, snapshot) {
-        final bool isLiked = snapshot.data?.exists ?? false;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_isInitialized)
+          GestureDetector(
+            onTap: _togglePlay,
+            child: VideoPlayer(_videoController),
+          )
+        else
+          _buildPlaceholder(),
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasValidThumbnail)
-              CachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: Colors.black12,
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black.withOpacity(0.7),
+              ],
+            ),
+          ),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.videoData['title'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
-                errorWidget: (context, url, error) => _buildPlaceholder(),
-              )
-            else
-              _buildPlaceholder(),
-
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.videoData['description'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 16),
+              
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Ingredients:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      (widget.videoData['ingredients'] as List?)
+                          ?.join(', ') ?? '',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Instructions:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      (widget.videoData['instructions'] as List?)
+                          ?.join('\n') ?? '',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
                   ],
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
 
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    videoData['title'] ?? '',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    videoData['description'] ?? '',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Ingredients:',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          (videoData['ingredients'] as List?)
-                              ?.join(', ') ?? '',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Instructions:',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          (videoData['instructions'] as List?)
-                              ?.join('\n') ?? '',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Positioned(
-              right: 16,
-              bottom: 100,
-              child: Column(
-                children: [
-                  _buildActionButton(
+        Positioned(
+          right: 16,
+          bottom: 100,
+          child: Column(
+            children: [
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid ?? '')
+                    .collection('likes')
+                    .doc(widget.videoId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final bool isLiked = snapshot.data?.exists ?? false;
+                  return _buildActionButton(
                     icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                    label: '${videoData['likes'] ?? 0}',
+                    label: '${widget.videoData['likes'] ?? 0}',
                     onTap: () => _handleLike(context),
                     color: isLiked ? Colors.red : Colors.white,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildActionButton(
-                    icon: Icons.remove_red_eye,
-                    label: '${videoData['views'] ?? 0}',
-                    onTap: () {},
-                    color: Colors.white,
-                  ),
-                  const SizedBox(height: 16),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('videos')
-                        .doc(videoId)
-                        .collection('comments')
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final commentCount = snapshot.data?.docs.length ?? 0;
-                      return _buildActionButton(
-                        icon: Icons.comment,
-                        label: '$commentCount',
-                        onTap: () => _showComments(context),
-                        color: Colors.white,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            Center(
-              child: IconButton(
-                icon: const Icon(
-                  Icons.play_circle_outline,
-                  size: 64,
-                  color: Colors.white70,
-                ),
-                onPressed: () {
-                  // TODO: Implement video playback
+                  );
                 },
               ),
+              const SizedBox(height: 16),
+              _buildActionButton(
+                icon: Icons.remove_red_eye,
+                label: '${widget.videoData['views'] ?? 0}',
+                onTap: () {},
+                color: Colors.white,
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('videos')
+                    .doc(widget.videoId)
+                    .collection('comments')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final commentCount = snapshot.data?.docs.length ?? 0;
+                  return _buildActionButton(
+                    icon: Icons.comment,
+                    label: '$commentCount',
+                    onTap: () => _showComments(context),
+                    color: Colors.white,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        if (!_isInitialized || !_videoController.value.isPlaying)
+          Center(
+            child: IconButton(
+              icon: Icon(
+                _isInitialized ? Icons.play_circle_outline : Icons.error_outline,
+                size: 64,
+                color: Colors.white70,
+              ),
+              onPressed: _isInitialized ? _togglePlay : null,
             ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 
@@ -490,6 +562,13 @@ class _CommentsSheetState extends State<CommentsSheet> {
     }
   }
 
+  Stream<DocumentSnapshot> _getCurrentUserStream() {
+    return _firestore
+        .collection('users')
+        .doc(currentUserId)
+        .snapshots();
+  }
+
   @override
   void dispose() {
     _commentController.dispose();
@@ -643,10 +722,16 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.grey[200],
-                                      child: const Icon(
-                                        Icons.person,
-                                        color: Colors.grey,
-                                      ),
+                                      backgroundImage: userData['avatarUrl'] != null && 
+                                                     userData['avatarUrl'].toString().isNotEmpty && 
+                                                     userData['avatarUrl'].toString().startsWith('http')
+                                                  ? NetworkImage(userData['avatarUrl']) as ImageProvider
+                                                  : null,
+                                      child: (userData['avatarUrl'] == null || 
+                                             userData['avatarUrl'].toString().isEmpty || 
+                                             !userData['avatarUrl'].toString().startsWith('http'))
+                                          ? const Icon(Icons.person, color: Colors.grey)
+                                          : null,
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -740,41 +825,55 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.grey[200],
-                  child: const Icon(Icons.person, color: Colors.grey),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: _getCurrentUserStream(),
+              builder: (context, snapshot) {
+                final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+                final avatarUrl = userData['avatarUrl'] as String?;
+                final hasValidAvatar = avatarUrl != null && 
+                                     avatarUrl.isNotEmpty && 
+                                     avatarUrl.startsWith('http');
+
+                return Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: hasValidAvatar ? NetworkImage(avatarUrl) : null,
+                      child: !hasValidAvatar
+                          ? const Icon(Icons.person, color: Colors.grey)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                        ),
+                        maxLines: null,
                       ),
                     ),
-                    maxLines: null,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send_rounded),
-                  onPressed: _postComment,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ],
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.send_rounded),
+                      onPressed: _postComment,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
