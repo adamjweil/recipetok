@@ -7,6 +7,7 @@ import 'package:recipetok/screens/register_screen.dart';
 import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/main_navigation_screen.dart';
 import 'package:recipetok/firebase_options.dart';
+import 'package:recipetok/screens/auth_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,9 +46,9 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      initialRoute: '/',
+      home: const AuthWrapper(),
       routes: {
-        '/': (context) => const WelcomeScreen(),
+        '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/main': (context) => const MainNavigationScreen(),
