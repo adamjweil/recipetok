@@ -153,7 +153,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisCount: 3,
             crossAxisSpacing: 4,
             mainAxisSpacing: 4,
+            childAspectRatio: 1,
           ),
+          padding: const EdgeInsets.all(4),
           itemCount: videos.length,
           itemBuilder: (context, index) {
             final video = videos[index].data() as Map<String, dynamic>;
@@ -162,7 +164,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             return GestureDetector(
               onTap: () {
-                // Show video in full screen
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -175,47 +176,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
-                  image: thumbnailUrl != null && thumbnailUrl.isNotEmpty
+                  image: thumbnailUrl != null
                       ? DecorationImage(
                           image: CachedNetworkImageProvider(thumbnailUrl),
                           fit: BoxFit.cover,
                         )
                       : null,
+                  color: Colors.grey[200],
                 ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (thumbnailUrl == null || thumbnailUrl.isEmpty)
-                      const Icon(Icons.video_library, size: 32),
-                    const Icon(
-                      Icons.play_circle_outline,
-                      size: 32,
-                      color: Colors.white,
-                    ),
-                    Positioned(
-                      bottom: 4,
-                      left: 4,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.favorite,
-                            size: 12,
-                            color: Colors.white,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (thumbnailUrl == null)
+                        const Icon(Icons.video_library, size: 24),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.center,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.5),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${video['likes'] ?? 0}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const Center(
+                        child: Icon(
+                          Icons.play_circle_outline,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Positioned(
+                        left: 4,
+                        right: 4,
+                        bottom: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              video['title'] ?? 'Untitled',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.favorite,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${video['likes'] ?? 0}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -327,14 +362,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   Text(
-                    user?.displayName ?? 'User',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    user?.displayName ?? '',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 8),
                   Text(
                     user?.email ?? '',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -370,22 +402,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
                   Expanded(
                     child: _buildVideoGrid(),
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.edit),
-                    title: const Text('Edit Profile'),
-                    onTap: () {
-                      // TODO: Implement edit profile functionality
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.settings),
-                    title: const Text('Settings'),
-                    onTap: () {
-                      // TODO: Implement settings functionality
-                    },
                   ),
                 ],
               ),
