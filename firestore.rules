@@ -1,6 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Only allow updates to specific fields
+    function onlyUpdatingAllowedFields() {
+      let allowedFields = ['views', 'likes', 'likesCount', 'commentCount'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
     // Default rule - deny all
     match /{document=**} {
       allow read, write: if false;
@@ -8,32 +23,55 @@ service cloud.firestore {
     
     // Users collection rules
     match /users/{userId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isOwner(userId) || 
+        (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['followers', 'following'])
+        )
+      );
       
       // Allow access to all subcollections under user document
       match /{subcollection}/{docId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Explicitly allow videoLikes and bookmarks subcollections
+      match /videoLikes/{videoId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+      
+      match /bookmarks/{videoId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
     // Videos collection rules
     match /videos/{videoId} {
-      allow read: if true;
-      // Allow video creation
-      allow create: if request.auth != null;
-      // Allow updates for likes, views, and other metrics
-      allow update: if request.auth != null;
-      // Allow deletion only by video owner
-      allow delete: if request.auth != null && 
-                   request.auth.uid == resource.data.userId;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        onlyUpdatingAllowedFields()
+      );
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
 
       // Allow access to video subcollections (comments, etc)
       match /{subcollection}/{docId} {
-        allow read: if true;
-        allow write: if request.auth != null;
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
+    }
+
+    // Add rules for groups subcollection
+    match /users/{userId}/groups/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
   }
 }
