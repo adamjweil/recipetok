@@ -5,11 +5,14 @@
     "clear-users": "ts-node clear-users.ts"
   },
   "dependencies": {
-    "firebase-admin": "^11.11.0"
+    "firebase-admin": "^11.0.0",
+    "@faker-js/faker": "^8.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.2.2",
+    "@types/node": "^20.8.0",
     "ts-node": "^10.9.1",
-    "@types/node": "^20.8.0"
+    "typescript": "^5.2.2"
   }
-} 
+}
