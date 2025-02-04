@@ -6,11 +6,15 @@ import 'package:recipetok/screens/login_screen.dart';
 import 'package:recipetok/screens/register_screen.dart';
 import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/main_navigation_screen.dart';
+import 'package:recipetok/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  print('Firebase initialized successfully');
   runApp(const MyApp());
 }
 
@@ -46,8 +50,8 @@ class MyApp extends StatelessWidget {
         '/': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/profile': (context) => const ProfileScreen(),
         '/main': (context) => const MainNavigationScreen(),
+        '/profile': (context) => const ProfileScreen(),
       },
     );
   }

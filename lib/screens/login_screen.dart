@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:firebase_database/firebase_database.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,7 +15,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  final DatabaseReference _database = FirebaseDatabase.instance.ref();
 
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
@@ -63,15 +62,15 @@ class _LoginScreenState extends State<LoginScreen> {
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       final userId = userCredential.user!.uid;
 
-      // Check if user exists in Realtime Database
-      final userSnapshot = await _database.child('users/$userId').get();
+      // Check if user exists in Firestore
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
 
-      if (!userSnapshot.exists) {
+      if (!userDoc.exists) {
         // Only create new user if they don't exist
-        await _database.child('users/$userId').set({
+        await FirebaseFirestore.instance.collection('users').doc(userId).set({
           'username': userCredential.user!.displayName ?? 'User',
           'email': userCredential.user!.email,
-          'createdAt': ServerValue.timestamp,
+          'createdAt': FieldValue.serverTimestamp(),
           'followers': 0,
           'following': 0,
           'videoCount': 0,
@@ -81,10 +80,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // Fetch latest user data
-      final userData = await _database.child('users/$userId').get();
+      final userData = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       
-      // Here you can use userData.value to access the latest user information
-      print('User Data: ${userData.value}');
+      // Here you can use userData.data() to access the latest user information
+      print('User Data: ${userData.data()}');
 
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/main');

@@ -12,6 +12,10 @@
 .swiftpm/
 migrate_working_dir/
 
+# Node.js related
+node_modules/
+scripts/node_modules/
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -21,7 +25,8 @@ migrate_working_dir/
 # Firebase configuration files
 google-services.json
 GoogleService-Info.plist
-
+serviceAccountKey.json
+scripts/serviceAccountKey.json
 
 # Firebase service account
 lib/config/service-account.json
