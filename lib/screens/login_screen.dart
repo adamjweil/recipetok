@@ -23,18 +23,37 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
+        // First, check for existing accounts with this email
+        final methods = await FirebaseAuth.instance.fetchSignInMethodsForEmail(
+          _emailController.text.trim(),
+        );
+
+        if (methods.contains('google.com')) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This email is associated with a Google account. Please sign in with Google.'),
+              ),
+            );
+          }
+          return;
+        }
+
+        // Proceed with email/password login if no social auth found
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        // Navigate to profile screen and remove all previous routes
+        
         if (mounted) {
           Navigator.pushReplacementNamed(context, '/main');
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString())),
+          );
+        }
       } finally {
         setState(() {
           _isLoading = false;
@@ -49,53 +68,84 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+      // Initialize Google Sign In
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: [
+          'email',
+          'profile',
+        ],
       );
 
-      // Sign in with Firebase
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      final userId = userCredential.user!.uid;
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
-      // Check if user exists in Firestore
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-
-      if (!userDoc.exists) {
-        // Only create new user if they don't exist
-        await FirebaseFirestore.instance.collection('users').doc(userId).set({
-          'username': userCredential.user!.displayName ?? 'User',
-          'email': userCredential.user!.email,
-          'createdAt': FieldValue.serverTimestamp(),
-          'followers': 0,
-          'following': 0,
-          'videoCount': 0,
-          'bio': '',
-          'profileImageUrl': userCredential.user!.photoURL ?? '',
+      if (googleUser == null) {
+        setState(() {
+          _isLoading = false;
         });
+        return;
       }
 
-      // Fetch latest user data
-      final userData = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-      
-      // Here you can use userData.data() to access the latest user information
-      print('User Data: ${userData.data()}');
+      try {
+        // Obtain the auth details from the request
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/main');
+        // Create a new credential
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        // Sign in with Firebase
+        final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+        final user = userCredential.user;
+        
+        if (user != null) {
+          // Check if user exists in Firestore
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          if (!userDoc.exists) {
+            // Create new user document if it doesn't exist
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+              'username': user.displayName?.toLowerCase().replaceAll(' ', '_') ?? 'user_${user.uid.substring(0, 5)}',
+              'displayName': user.displayName ?? 'User',
+              'email': user.email,
+              'avatarUrl': user.photoURL,
+              'createdAt': FieldValue.serverTimestamp(),
+              'followers': [],
+              'following': [],
+              'videoCount': 0,
+            });
+          }
+
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/main');
+          }
+        }
+      } catch (e) {
+        print('Error during Google sign in: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to sign in with Google')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      print('Error initiating Google sign in: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to initiate Google sign in')),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
