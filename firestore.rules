@@ -8,47 +8,31 @@ service cloud.firestore {
     
     // Users collection rules
     match /users/{userId} {
-      allow read: if true;  // Anyone can read user profiles
-      allow write: if request.auth != null && (
-        request.auth.uid == userId ||  // User can edit their own profile
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['followers', 'following'])  // Allow updates to followers/following arrays
-      );
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
       
-      // Add rules for likes subcollection
-      match /likes/{videoId} {
-        allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      match /commentLikes/{commentId} {
-        allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      match /views/{videoId} {
-        allow read: if true;
+      // Allow access to all subcollections under user document
+      match /{subcollection}/{docId} {
+        allow read: if request.auth != null;
         allow write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
     // Videos collection rules
     match /videos/{videoId} {
-      allow read: if true;  // Anyone can read videos
-      allow create: if request.auth != null;  // Authenticated users can create videos
-      allow update: if request.auth != null && 
-        (resource.data.userId == request.auth.uid ||  // Video owner can update
-         request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['likes', 'views']));  // Allow updates to likes and views
+      allow read: if true;
+      // Allow video creation
+      allow create: if request.auth != null;
+      // Allow updates for likes, views, and other metrics
+      allow update: if request.auth != null;
+      // Allow deletion only by video owner
       allow delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;  // Only video owner can delete
+                   request.auth.uid == resource.data.userId;
 
-      // Add this inside the videos/{videoId} match block
-      match /comments/{commentId} {
+      // Allow access to video subcollections (comments, etc)
+      match /{subcollection}/{docId} {
         allow read: if true;
-        allow create: if request.auth != null;
-        allow update, delete: if request.auth != null && 
-          request.auth.uid == resource.data.userId;
+        allow write: if request.auth != null;
       }
     }
   }

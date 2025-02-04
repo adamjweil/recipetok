@@ -66,6 +66,12 @@
       },
       "videos": {
         "<videoId>": "boolean"
+      },
+      "bookmarks": {
+        "<videoId>": {
+          "createdAt": "timestamp",
+          "videoId": "string"
+        }
       }
     }
   },

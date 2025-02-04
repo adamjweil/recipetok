@@ -8,6 +8,7 @@ import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/main_navigation_screen.dart';
 import 'package:recipetok/firebase_options.dart';
 import 'package:recipetok/screens/auth_wrapper.dart';
+import 'package:recipetok/utils/custom_cache_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await CustomCacheManager.initialize();
   print('Firebase initialized successfully');
   runApp(const MyApp());
 }
