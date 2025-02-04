@@ -52,12 +52,12 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.353008864151-brf26h38m1l14in5h5tphsla2oi7bciv</string>
+				<string>com.googleusercontent.apps.655435823575-1qmnor8p06cv7f528ifcnofhuuq8o1fo</string>
 			</array>
 		</dict>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to update your profile picture.</string>
+	<string>This app needs access to photo library for caching images</string>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs access to your camera to take profile pictures.</string>
 	<key>NSAppTransportSecurity</key>

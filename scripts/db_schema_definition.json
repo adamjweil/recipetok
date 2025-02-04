@@ -43,6 +43,15 @@
   },
   "users": {
     "<userId>": {
+      "displayName": "string",
+      "email": "string",
+      "username": "string",
+      "bio": "string",
+      "avatarUrl": "string",
+      "followers": ["userId"],
+      "following": ["userId"],
+      "videoCount": "number",
+      "createdAt": "timestamp",
       "profile": {
         "avatarUrl": "string",
         "city": "string",
