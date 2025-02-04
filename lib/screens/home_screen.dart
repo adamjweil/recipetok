@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
+import '../utils/custom_cache_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -120,7 +121,7 @@ class VideoCard extends StatefulWidget {
 }
 
 class _VideoCardState extends State<VideoCard> {
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   bool _isInitialized = false;
   bool _hasRecordedView = false;
 
@@ -132,37 +133,44 @@ class _VideoCardState extends State<VideoCard> {
 
   @override
   void dispose() {
-    if (_isInitialized) {
-      _videoController.dispose();
-    }
+    _videoController?.dispose();
     super.dispose();
   }
 
   Future<void> _initializeVideo() async {
+    if (!mounted) return;
+    
     final videoUrl = widget.videoData['videoUrl'] as String?;
     if (videoUrl == null || videoUrl.isEmpty) return;
 
-    _videoController = VideoPlayerController.network(videoUrl);
-
     try {
-      await _videoController.initialize();
-      _videoController.setLooping(true);
-      setState(() {
-        _isInitialized = true;
-      });
+      _videoController = VideoPlayerController.network(videoUrl);
+      await _videoController?.initialize();
+      
+      if (mounted) {
+        _videoController?.setLooping(true);
+        setState(() {
+          _isInitialized = true;
+        });
+      }
     } catch (e) {
       print('Error initializing video: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+        });
+      }
     }
   }
 
   void _togglePlay() {
-    if (!_isInitialized) return;
+    if (!_isInitialized || !mounted) return;
 
     setState(() {
-      if (_videoController.value.isPlaying) {
-        _videoController.pause();
+      if (_videoController!.value.isPlaying) {
+        _videoController!.pause();
       } else {
-        _videoController.play();
+        _videoController!.play();
         if (!_hasRecordedView) {
           _recordView();
         }
@@ -234,6 +242,32 @@ class _VideoCardState extends State<VideoCard> {
     }
   }
 
+  Future<void> _toggleBookmark(BuildContext context) async {
+    try {
+      final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (currentUserId.isEmpty) return;
+
+      final userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+      final bookmarkRef = userRef.collection('bookmarks').doc(widget.videoId);
+
+      final bookmarkDoc = await bookmarkRef.get();
+      final bool isBookmarked = bookmarkDoc.exists;
+
+      if (isBookmarked) {
+        await bookmarkRef.delete();
+      } else {
+        await bookmarkRef.set({
+          'createdAt': FieldValue.serverTimestamp(),
+          'videoId': widget.videoId,
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    }
+  }
+
   void _showComments(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -262,7 +296,7 @@ class _VideoCardState extends State<VideoCard> {
             if (_isInitialized)
               GestureDetector(
                 onTap: _togglePlay,
-                child: VideoPlayer(_videoController),
+                child: VideoPlayer(_videoController!),
               )
             else
               _buildPlaceholder(),
@@ -372,6 +406,24 @@ class _VideoCardState extends State<VideoCard> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(FirebaseAuth.instance.currentUser?.uid ?? '')
+                        .collection('bookmarks')
+                        .doc(widget.videoId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      final bool isBookmarked = snapshot.data?.exists ?? false;
+                      return _buildActionButton(
+                        icon: isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        label: 'Save',
+                        onTap: () => _toggleBookmark(context),
+                        color: isBookmarked ? Theme.of(context).primaryColor : Colors.white,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   _buildActionButton(
                     icon: Icons.remove_red_eye,
                     label: '${videoData['views'] ?? 0}',
@@ -399,7 +451,7 @@ class _VideoCardState extends State<VideoCard> {
               ),
             ),
 
-            if (!_isInitialized || !_videoController.value.isPlaying)
+            if (!_isInitialized || !_videoController!.value.isPlaying)
               Center(
                 child: IconButton(
                   icon: Icon(
