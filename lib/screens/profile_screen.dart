@@ -273,8 +273,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       ? CachedNetworkImage(
                           imageUrl: thumbnailUrl,
                           fit: BoxFit.cover,
+                          cacheManager: CustomCacheManager.instance,
                           placeholder: (context, url) => Container(
                             color: Colors.grey[200],
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.error),
                           ),
                         )
                       : Container(color: Colors.grey[200]),
@@ -294,24 +299,47 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   ),
                   Positioned(
                     bottom: 8,
-                    left: 8,
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.play_arrow,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatViewCount(video['views'] ?? 0),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                    left: 0,
+                    right: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Views (left)
+                          Row(
+                            children: [
+                              const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatViewCount(video['views'] ?? 0),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          // Comments (right)
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('videos')
+                                .doc(videos[index].id)
+                                .collection('comments')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final commentCount = snapshot.data?.docs.length ?? 0;
+                              return Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    _formatCount(commentCount),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -410,8 +438,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ? CachedNetworkImage(
                               imageUrl: thumbnailUrl,
                               fit: BoxFit.cover,
+                              cacheManager: CustomCacheManager.instance,
                               placeholder: (context, url) => Container(
                                 color: Colors.grey[200],
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.error),
                               ),
                             )
                           : Container(color: Colors.grey[200]),
@@ -431,24 +464,47 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       ),
                       Positioned(
                         bottom: 8,
-                        left: 8,
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatViewCount(videoData['views'] ?? 0),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                        left: 0,
+                        right: 0,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Views (left)
+                              Row(
+                                children: [
+                                  const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    _formatViewCount(videoData['views'] ?? 0),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                              // Comments (right)
+                              StreamBuilder<QuerySnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collection('videos')
+                                    .doc(videos[index].id)
+                                    .collection('comments')
+                                    .snapshots(),
+                                builder: (context, snapshot) {
+                                  final commentCount = snapshot.data?.docs.length ?? 0;
+                                  return Row(
+                                    children: [
+                                      const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        _formatCount(commentCount),
+                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -500,7 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     return [
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -514,7 +570,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                         radius: 40,
                                         backgroundColor: Colors.grey[200],
                                         backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
-                                            ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
+                                            ? CachedNetworkImageProvider(
+                                                FirebaseAuth.instance.currentUser!.photoURL!,
+                                                cacheManager: CustomCacheManager.instance,
+                                                errorListener: (error) => print('Error loading profile image: $error'),
+                                              )
                                             : null,
                                         child: FirebaseAuth.instance.currentUser?.photoURL == null
                                             ? const Icon(Icons.person, size: 40)
@@ -827,6 +887,7 @@ class UserListItem extends StatelessWidget {
                 ? CachedNetworkImageProvider(
                     userData['avatarUrl'],
                     cacheManager: CustomCacheManager.instance,
+                    errorListener: (error) => print('Error loading user avatar: $error'),
                   )
                 : null,
             child: userData['avatarUrl'] == null
@@ -901,6 +962,16 @@ String _formatViewCount(int viewCount) {
     return '${(viewCount / 1000).toStringAsFixed(1)}K';
   } else {
     return viewCount.toString();
+  }
+}
+
+String _formatCount(int count) {
+  if (count >= 1000000) {
+    return '${(count / 1000000).toStringAsFixed(1)}M';
+  } else if (count >= 1000) {
+    return '${(count / 1000).toStringAsFixed(1)}K';
+  } else {
+    return count.toString();
   }
 }
 

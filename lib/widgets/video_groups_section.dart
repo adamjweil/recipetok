@@ -70,6 +70,10 @@ class VideoGroupsSection extends StatelessWidget {
                         imageUrl: group['imageUrl'],
                         fit: BoxFit.cover,
                         cacheManager: CustomCacheManager.instance,
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.collections, color: Colors.grey),
+                        ),
                       )
                     : Container(
                         color: Colors.grey[200],

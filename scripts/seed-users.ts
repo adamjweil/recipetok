@@ -32,6 +32,26 @@ const sampleVideos = [
     videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
     thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerMeltdowns.jpg',
   },
+  {
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
+  },
+  {
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
+  },
+  {
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg',
+  },
+  {
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg',
+  },
+  {
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
+    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg',
+  }
 ];
 
 // Add these arrays at the top of the file
@@ -95,6 +115,28 @@ const cookingInstructions = [
   'Let rest for 5 minutes before serving',
   'Garnish with fresh herbs',
   'Serve hot and enjoy!'
+];
+
+// Add this near the top of the file with other constants
+const adamCollections = [
+  {
+    name: 'Pizza',
+    description: 'My favorite pizza recipes',
+    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRevNsmPB3e-9h1eS48vt2dRJSi32eGw9eWFw&s',
+    videos: {},
+  },
+  {
+    name: 'Burgers',
+    description: 'Best burger recipes',
+    imageUrl: 'https://plus.unsplash.com/premium_photo-1683619761468-b06992704398?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8YnVyZ2VyJTIwcG5nfGVufDB8fDB8fHww',
+    videos: {},
+  },
+  {
+    name: 'Donuts',
+    description: 'Sweet donut recipes',
+    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT9za753NZ8JZfpdMxdGvYIMyFYsQJ6FgexIpuhhZx7fE7mQ8zNxLZogwUehpjdULMX85M&usqp=CAU',
+    videos: {},
+  },
 ];
 
 async function createUser() {
@@ -163,8 +205,13 @@ async function createVideo(userId: string) {
       instructions,
       likes: 0,
       views: 0,
-      comments: 0,
+      commentCount: 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Create the likes subcollection document
+    await videoDoc.collection('likes').doc('placeholder').set({
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Update the user's videoCount
@@ -204,6 +251,38 @@ async function createRandomConnections(userIds: string[]) {
       
       console.log(`User ${userId} is now following ${targetId}`);
     }
+  }
+}
+
+// Add this function to create collections
+async function createAdamCollections(userId: string, adamVideos: any[]) {
+  console.log('Creating collections for Adam...');
+  
+  for (const collection of adamCollections) {
+    const groupRef = await db.collection('users').doc(userId).collection('groups').add({
+      name: collection.name,
+      description: collection.description,
+      imageUrl: collection.imageUrl,
+      videos: {},
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    
+    if (collection.name === 'Pizza' && adamVideos[0]) {
+      await groupRef.update({
+        [`videos.${adamVideos[0].id}`]: {
+          addedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+    } else if (collection.name === 'Burgers' && adamVideos[2]) {
+      await groupRef.update({
+        [`videos.${adamVideos[2].id}`]: {
+          addedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+    }
+    
+    console.log(`Created ${collection.name} collection: ${groupRef.id}`);
   }
 }
 
@@ -247,7 +326,7 @@ async function seedDatabase() {
       createdUserIds.push(adamUserRecord.uid); // Add Adam's ID to the array
       console.log(`Created specific user: ${adamUserRecord.uid}`);
 
-      // Create 3 specific videos for Adam
+      // Create 9 specific videos for Adam
       const adamVideos = [
         {
           title: 'Perfect Homemade Pizza',
@@ -273,24 +352,82 @@ async function seedDatabase() {
           ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
           instructions: ['Form patties', 'Season well', 'Grill to perfection'],
         },
+        {
+          title: 'Creamy Mac and Cheese',
+          description: 'The ultimate comfort food recipe',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/mac/300/300',
+          ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
+          instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
+        },
+        {
+          title: 'Chocolate Chip Cookies',
+          description: 'Soft and chewy chocolate chip cookies',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/cookies/300/300',
+          ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
+          instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
+        },
+        {
+          title: 'Spicy Thai Curry',
+          description: 'Authentic Thai red curry recipe',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/curry/300/300',
+          ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
+          instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
+        },
+        {
+          title: 'Fresh Sushi Rolls',
+          description: 'Learn to make sushi at home',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/sushi/300/300',
+          ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
+          instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
+        },
+        {
+          title: 'Homemade Bread',
+          description: 'Simple no-knead bread recipe',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/bread/300/300',
+          ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
+          instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
+        },
+        {
+          title: 'Grilled Steak',
+          description: 'Perfect steak every time',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/steak/300/300',
+          ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
+          instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],
+        }
       ];
 
+      const createdVideos = [];
       for (const videoData of adamVideos) {
         const videoDoc = await db.collection('videos').add({
           userId: adamUserRecord.uid,
           ...videoData,
           likes: 0,
           views: 0,
-          comments: 0,
+          commentCount: 0,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+
+        // Create the likes subcollection document
+        await videoDoc.collection('likes').doc('placeholder').set({
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        createdVideos.push({ id: videoDoc.id, ...videoData });
         console.log(`Created video for Adam: ${videoDoc.id}`);
       }
 
-      // Add this after the videos loop
       await db.collection('users').doc(adamUserRecord.uid).update({
         videoCount: adamVideos.length,
       });
+
+      // Pass the created videos to createAdamCollections
+      await createAdamCollections(adamUserRecord.uid, createdVideos);
     } catch (error) {
       console.error('Error creating Adam\'s account:', error);
       // Continue with creating other users even if Adam's account creation fails
