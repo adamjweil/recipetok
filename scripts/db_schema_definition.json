@@ -72,6 +72,21 @@
           "createdAt": "timestamp",
           "videoId": "string"
         }
+      },
+      "groups": {
+        "<groupId>": {
+          "name": "string",
+          "description": "string",
+          "imageUrl": "string",
+          "createdAt": "timestamp",
+          "updatedAt": "timestamp",
+          "videos": {
+            "<videoId>": {
+              "addedAt": "timestamp",
+              "videoId": "string"
+            }
+          }
+        }
       }
     }
   },
