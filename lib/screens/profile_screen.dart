@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../screens/edit_profile_screen.dart';
 import '../utils/custom_cache_manager.dart';
+import '../widgets/video_groups_section.dart';
+import './video_player_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -58,8 +60,36 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _buildStatColumn(followingCount.toString(), 'Following'),
-        _buildStatColumn(followersCount.toString(), 'Followers'),
+        GestureDetector(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => UserListModal(
+                title: 'Following',
+                userIds: following.cast<String>().toList(),
+                isFollowers: false,
+              ),
+            );
+          },
+          child: _buildStatColumn(followingCount.toString(), 'Following'),
+        ),
+        GestureDetector(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => UserListModal(
+                title: 'Followers',
+                userIds: followers.cast<String>().toList(),
+                isFollowers: true,
+              ),
+            );
+          },
+          child: _buildStatColumn(followersCount.toString(), 'Followers'),
+        ),
         _buildStatColumn(videoCount.toString(), 'Dishes'),
       ],
     );
@@ -464,66 +494,123 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Profile Info Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 40,
-                              backgroundColor: Colors.grey[200],
-                              backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
-                                  ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
-                                  : null,
-                              child: FirebaseAuth.instance.currentUser?.photoURL == null
-                                  ? const Icon(Icons.person, size: 40)
-                                  : null,
-                            ),
-                            if (_isUploading)
-                              const Positioned.fill(
-                                child: CircularProgressIndicator(),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildProfileStats(userData),
-                    const SizedBox(height: 16),
-                    Text(
-                      userData['bio'] ?? '',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildEditProfileButton(userData),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-              // Tabs Section
-              TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(icon: Icon(Icons.grid_on)),
-                  Tab(icon: Icon(Icons.bookmark_border)),
-                ],
-                indicatorColor: Colors.black,
-                unselectedLabelColor: Colors.grey,
-                labelColor: Colors.black,
-              ),
               Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildVideoGrid(),
-                    _buildBookmarkedVideosGrid(),
-                  ],
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Avatar and Stats row
+                              Row(
+                                children: [
+                                  // Avatar on the left
+                                  Stack(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 40,
+                                        backgroundColor: Colors.grey[200],
+                                        backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
+                                            ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!)
+                                            : null,
+                                        child: FirebaseAuth.instance.currentUser?.photoURL == null
+                                            ? const Icon(Icons.person, size: 40)
+                                            : null,
+                                      ),
+                                      if (_isUploading)
+                                        const Positioned.fill(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 24), // Space between avatar and stats
+                                  // Stats on the right
+                                  Expanded(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        _buildStatColumn(userData['videoCount']?.toString() ?? '0', 'Dishes'),
+                                        GestureDetector(
+                                          onTap: () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor: Colors.transparent,
+                                              builder: (context) => UserListModal(
+                                                title: 'Followers',
+                                                userIds: (userData['followers'] as List<dynamic>? ?? []).cast<String>(),
+                                                isFollowers: true,
+                                              ),
+                                            );
+                                          },
+                                          child: _buildStatColumn(
+                                            (userData['followers'] as List<dynamic>? ?? []).length.toString(),
+                                            'Followers',
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              backgroundColor: Colors.transparent,
+                                              builder: (context) => UserListModal(
+                                                title: 'Following',
+                                                userIds: (userData['following'] as List<dynamic>? ?? []).cast<String>(),
+                                                isFollowers: false,
+                                              ),
+                                            );
+                                          },
+                                          child: _buildStatColumn(
+                                            (userData['following'] as List<dynamic>? ?? []).length.toString(),
+                                            'Following',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                userData['bio'] ?? '',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildEditProfileButton(userData),
+                              const SizedBox(height: 12),
+                              const VideoGroupsSection(),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SliverPersistentHeader(
+                        pinned: true,
+                        delegate: _SliverAppBarDelegate(
+                          TabBar(
+                            controller: _tabController,
+                            tabs: const [
+                              Tab(icon: Icon(Icons.grid_on)),
+                              Tab(icon: Icon(Icons.bookmark_border)),
+                            ],
+                            indicatorColor: Colors.black,
+                            unselectedLabelColor: Colors.grey,
+                            labelColor: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ];
+                  },
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildVideoGrid(),
+                      _buildBookmarkedVideosGrid(),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -555,54 +642,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           ],
         );
       },
-    );
-  }
-}
-
-// Add this new screen for playing videos
-class VideoPlayerScreen extends StatelessWidget {
-  final Map<String, dynamic> videoData;
-  final String videoId;
-
-  const VideoPlayerScreen({
-    super.key,
-    required this.videoData,
-    required this.videoId,
-  });
-
-  // Add method to increment view count
-  Future<void> _incrementViewCount() async {
-    try {
-      // Update the view count in Firestore
-      await FirebaseFirestore.instance
-          .collection('videos')
-          .doc(videoId)
-          .update({
-        'views': FieldValue.increment(1),
-      });
-    } catch (e) {
-      print('Error incrementing view count: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: VideoCard(
-        videoData: videoData,
-        videoId: videoId,
-        onUserTap: () {},
-        onVideoPlay: _incrementViewCount, // Add this callback
-      ),
     );
   }
 }
@@ -862,5 +901,30 @@ String _formatViewCount(int viewCount) {
     return '${(viewCount / 1000).toStringAsFixed(1)}K';
   } else {
     return viewCount.toString();
+  }
+}
+
+// Add this class at the bottom of the file
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
   }
 } 
