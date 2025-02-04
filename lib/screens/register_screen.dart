@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:io' show InternetAddress;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -23,24 +27,77 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       try {
+        print('Starting user registration...');
+        
+        // Add the test calls here
+        print('Running Firebase connection tests...');
+        await _checkFirebaseConnection();
+        await _testFirestore();
+        
+        // Create user with email and password
         final userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
+        print('Firebase Auth account created successfully');
+        
+        // Verify user is authenticated
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          print('Error: User is not authenticated after registration');
+          throw Exception('User authentication failed');
+        }
+        print('Current user ID: ${user.uid}');
         
         // Update user profile with username
-        await userCredential.user?.updateDisplayName(_usernameController.text);
-        
-        // Navigate to profile screen and remove all previous routes
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/profile',
-            (route) => false,
+        await user.updateDisplayName(_usernameController.text);
+        print('Display name updated successfully');
+
+        try {
+          // Create user document in Firestore
+          print('Attempting to create Firestore document...');
+          print('User ID: ${user.uid}');
+          print('Is user authenticated? ${user != null}');
+          print('User email verified? ${user.emailVerified}');
+          print('User email: ${user.email}');
+          
+          // Wait a moment to ensure auth state is fully propagated
+          await Future.delayed(const Duration(seconds: 1));
+          
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'username': _usernameController.text,
+            'email': _emailController.text.trim(),
+            'createdAt': FieldValue.serverTimestamp(),
+            'followers': 0,
+            'following': 0,
+            'videoCount': 0,
+            'bio': '',
+            'profileImageUrl': user.photoURL ?? '',
+          });
+          print('Firestore document created successfully');
+          
+          // Navigate to main screen and remove all previous routes
+          if (mounted) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/main',
+              (route) => false,
+            );
+          }
+        } catch (firestoreError) {
+          print('Error creating Firestore document: $firestoreError');
+          print('Error details: ${firestoreError.toString()}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error creating user profile: $firestoreError')),
           );
         }
       } catch (e) {
+        print('Error in registration process: $e');
+        print('Error details: ${e.toString()}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
         );
@@ -72,12 +129,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       // Sign in with Firebase
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // Create or update user document in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'username': userCredential.user!.displayName ?? 'User',
+        'email': userCredential.user!.email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'followers': 0,
+        'following': 0,
+        'videoCount': 0,
+        'bio': '',
+        'profileImageUrl': userCredential.user!.photoURL ?? '',
+      });
 
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/profile',
+          '/main',
           (route) => false,
         );
       }
@@ -89,6 +161,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _testFirestore() async {
+    try {
+      print('Testing Firestore access...');
+      final testDoc = await FirebaseFirestore.instance
+          .collection('test')
+          .doc('test')
+          .set({
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      print('Firestore test successful');
+    } catch (e) {
+      print('Firestore test failed: $e');
+    }
+  }
+
+  Future<void> _checkFirebaseConnection() async {
+    try {
+      final result = await InternetAddress.lookup('firestore.googleapis.com');
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+        print('Network connection to Firebase available');
+      }
+    } catch (e) {
+      print('Network connection to Firebase failed: $e');
     }
   }
 
