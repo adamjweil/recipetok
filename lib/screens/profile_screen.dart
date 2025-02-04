@@ -108,11 +108,101 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Widget _buildVideoGrid() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videos')
+          .where('userId', isEqualTo: userId)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final videos = snapshot.data?.docs ?? [];
+
+        if (videos.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No videos uploaded yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+          ),
+          itemCount: videos.length,
+          itemBuilder: (context, index) {
+            final video = videos[index].data() as Map<String, dynamic>;
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(Icons.play_circle_outline, size: 32),
+                  Positioned(
+                    bottom: 4,
+                    left: 4,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.favorite, size: 12, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${video['likes'] ?? 0}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.logout),
+          onPressed: () => _showLogoutDialog(context),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _getUserData(),
         builder: (context, snapshot) {
@@ -131,8 +221,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
           final videoCount = userData['videoCount'] ?? 0;
-          final followersCount = userData['followers'] ?? 0;
-          final followingCount = userData['following'] ?? 0;
+          final followers = userData['followers'] ?? [];
+          final following = userData['following'] ?? [];
+
+          // Use the length of the arrays for the counts
+          final followersCount = followers is List ? followers.length : 0;
+          final followingCount = following is List ? following.length : 0;
 
           print('Video count: $videoCount');
           print('Followers count: $followersCount');
@@ -239,6 +333,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  Expanded(
+                    child: _buildVideoGrid(),
+                  ),
+                  const SizedBox(height: 24),
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.edit),
@@ -260,6 +358,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         },
       ),
+    );
+  }
+
+  Future<void> _showLogoutDialog(BuildContext context) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Logout'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _signOut(context);
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 } 
