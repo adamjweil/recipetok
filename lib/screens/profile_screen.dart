@@ -112,152 +112,154 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _getUserData(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          print('Error fetching user data: ${snapshot.error}');
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
+    return Scaffold(
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: _getUserData(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            print('Error fetching user data: ${snapshot.error}');
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
 
-        print('User data: ${snapshot.data?.data()}');
-        
-        final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-        final videoCount = userData['videoCount'] ?? 0;
-        final followersCount = userData['followersCount'] ?? 0;
-        final followingCount = userData['followingCount'] ?? 0;
+          print('User data: ${snapshot.data?.data()}');
+          
+          final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          final videoCount = userData['videoCount'] ?? 0;
+          final followersCount = userData['followers'] ?? 0;
+          final followingCount = userData['following'] ?? 0;
 
-        print('Video count: $videoCount');
-        print('Followers count: $followersCount');
-        print('Following count: $followingCount');
+          print('Video count: $videoCount');
+          print('Followers count: $followersCount');
+          print('Following count: $followingCount');
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).primaryColor,
-                          width: 2,
-                        ),
-                      ),
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: user?.photoURL != null
-                            ? NetworkImage(user!.photoURL!)
-                            : null,
-                        child: user?.photoURL == null
-                            ? const Icon(Icons.person, size: 60)
-                            : null,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Stack(
+                    children: [
+                      Container(
                         decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor,
                           shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Theme.of(context).primaryColor,
+                            width: 2,
+                          ),
                         ),
-                        child: _isUploading
-                            ? const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: user?.photoURL != null
+                              ? NetworkImage(user!.photoURL!)
+                              : null,
+                          child: user?.photoURL == null
+                              ? const Icon(Icons.person, size: 60)
+                              : null,
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isUploading
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: _updateProfilePhoto,
                                 ),
-                              )
-                            : IconButton(
-                                icon: const Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                ),
-                                onPressed: _updateProfilePhoto,
-                              ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  user?.displayName ?? 'User',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  user?.email ?? '',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey,
-                      ),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatItem('Videos', videoCount),
-                      Container(
-                        height: 24,
-                        width: 1,
-                        color: Colors.grey[300],
-                      ),
-                      _buildStatItem('Followers', followersCount),
-                      Container(
-                        height: 24,
-                        width: 1,
-                        color: Colors.grey[300],
-                      ),
-                      _buildStatItem('Following', followingCount),
                     ],
                   ),
-                ),
-                const SizedBox(height: 24),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.edit),
-                  title: const Text('Edit Profile'),
-                  onTap: () {
-                    // TODO: Implement edit profile functionality
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.settings),
-                  title: const Text('Settings'),
-                  onTap: () {
-                    // TODO: Implement settings functionality
-                  },
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  Text(
+                    user?.displayName ?? 'User',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    user?.email ?? '',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.grey,
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildStatItem('Videos', videoCount),
+                        Container(
+                          height: 24,
+                          width: 1,
+                          color: Colors.grey[300],
+                        ),
+                        _buildStatItem('Followers', followersCount),
+                        Container(
+                          height: 24,
+                          width: 1,
+                          color: Colors.grey[300],
+                        ),
+                        _buildStatItem('Following', followingCount),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Edit Profile'),
+                    onTap: () {
+                      // TODO: Implement edit profile functionality
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: const Text('Settings'),
+                    onTap: () {
+                      // TODO: Implement settings functionality
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 } 
