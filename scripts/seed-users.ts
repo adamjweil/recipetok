@@ -89,6 +89,11 @@ async function createVideo(userId: string) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Update the user's videoCount
+    await db.collection('users').doc(userId).update({
+      videoCount: admin.firestore.FieldValue.increment(1),
+    });
+
     console.log(`Created video with thumbnail: ${randomVideo.thumbnailUrl}`);
     return videoDoc.id;
   } catch (error) {
@@ -126,12 +131,94 @@ async function createRandomConnections(userIds: string[]) {
 
 async function seedDatabase() {
   try {
-    console.log('Starting database seeding...');
-    
-    // Store all created user IDs
+    // First create your specific user
+    const adamUser = {
+      email: 'adamjweil@gmail.com',
+      password: 'password',
+      displayName: 'Adam Weil',
+      username: 'adam',
+      bio: 'Food enthusiast and home chef',
+      avatarUrl: faker.image.avatar(),
+    };
+
     const createdUserIds: string[] = [];
 
-    // Create users
+    // Create auth user for Adam
+    try {
+      const adamUserRecord = await auth.createUser({
+        email: adamUser.email,
+        password: adamUser.password,
+        displayName: adamUser.displayName,
+        photoURL: adamUser.avatarUrl,
+      });
+
+      // Create user document in Firestore
+      await db.collection('users').doc(adamUserRecord.uid).set({
+        uid: adamUserRecord.uid,
+        email: adamUser.email,
+        displayName: adamUser.displayName,
+        username: adamUser.username,
+        bio: adamUser.bio,
+        avatarUrl: adamUser.avatarUrl,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        followers: [],
+        following: [],
+        videoCount: 0,
+      });
+
+      createdUserIds.push(adamUserRecord.uid); // Add Adam's ID to the array
+      console.log(`Created specific user: ${adamUserRecord.uid}`);
+
+      // Create 3 specific videos for Adam
+      const adamVideos = [
+        {
+          title: 'Perfect Homemade Pizza',
+          description: 'Learn how to make restaurant-quality pizza at home',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/pizza/300/300',
+          ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
+          instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
+        },
+        {
+          title: 'Classic Pasta Carbonara',
+          description: 'Authentic Italian carbonara recipe',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/pasta/300/300',
+          ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
+          instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
+        },
+        {
+          title: 'Ultimate Burger Guide',
+          description: 'How to make the perfect burger',
+          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+          thumbnailUrl: 'https://picsum.photos/seed/burger/300/300',
+          ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
+          instructions: ['Form patties', 'Season well', 'Grill to perfection'],
+        },
+      ];
+
+      for (const videoData of adamVideos) {
+        const videoDoc = await db.collection('videos').add({
+          userId: adamUserRecord.uid,
+          ...videoData,
+          likes: 0,
+          views: 0,
+          comments: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(`Created video for Adam: ${videoDoc.id}`);
+      }
+
+      // Add this after the videos loop
+      await db.collection('users').doc(adamUserRecord.uid).update({
+        videoCount: adamVideos.length,
+      });
+    } catch (error) {
+      console.error('Error creating Adam\'s account:', error);
+      // Continue with creating other users even if Adam's account creation fails
+    }
+
+    // Create random users
     for (let i = 0; i < 10; i++) {
       const userId = await createUser();
       createdUserIds.push(userId);
