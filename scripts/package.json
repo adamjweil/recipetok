@@ -1,0 +1,15 @@
+{
+  "name": "firebase-cleanup-scripts",
+  "version": "1.0.0",
+  "scripts": {
+    "clear-users": "ts-node clear-users.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1",
+    "@types/node": "^20.8.0"
+  }
+} 
