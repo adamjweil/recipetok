@@ -10,6 +10,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../screens/edit_profile_screen.dart';
+import '../utils/custom_cache_manager.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -292,6 +293,145 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
+  Widget _buildBookmarkedVideosGrid() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('bookmarks')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, bookmarkSnapshot) {
+        if (bookmarkSnapshot.hasError) {
+          return Center(child: Text('Error: ${bookmarkSnapshot.error}'));
+        }
+
+        if (bookmarkSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final bookmarks = bookmarkSnapshot.data?.docs ?? [];
+
+        if (bookmarks.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No saved dishes yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: Future.wait(
+            bookmarks.map((bookmark) {
+              final bookmarkData = bookmark.data() as Map<String, dynamic>;
+              final videoId = bookmarkData['videoId'] as String;
+              return FirebaseFirestore.instance
+                  .collection('videos')
+                  .doc(videoId)
+                  .get();
+            }),
+          ),
+          builder: (context, videoSnapshot) {
+            if (!videoSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final videos = videoSnapshot.data ?? [];
+
+            return GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 1,
+                mainAxisSpacing: 1,
+              ),
+              itemCount: videos.length,
+              itemBuilder: (context, index) {
+                final videoData = videos[index].data() as Map<String, dynamic>?;
+                if (videoData == null) return const SizedBox();
+
+                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VideoPlayerScreen(
+                          videoData: videoData,
+                          videoId: videos[index].id,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      thumbnailUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: thumbnailUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[200],
+                              ),
+                            )
+                          : Container(color: Colors.grey[200]),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.center,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.5),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        left: 8,
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.play_arrow,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatViewCount(videoData['views'] ?? 0),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -382,7 +522,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   controller: _tabController,
                   children: [
                     _buildVideoGrid(),
-                    const Center(child: Text('Coming soon')),
+                    _buildBookmarkedVideosGrid(),
                   ],
                 ),
               ),
@@ -713,20 +853,6 @@ class UserListItemSkeleton extends StatelessWidget {
       subtitle: LinearProgressIndicator(),
     );
   }
-}
-
-class CustomCacheManager {
-  static const key = 'customCacheKey';
-  static CacheManager instance = CacheManager(
-    Config(
-      key,
-      stalePeriod: const Duration(days: 7),
-      maxNrOfCacheObjects: 100,
-      repo: JsonCacheInfoRepository(databaseName: key),
-      fileSystem: IOFileSystem(key),
-      fileService: HttpFileService(),
-    ),
-  );
 }
 
 String _formatViewCount(int viewCount) {
