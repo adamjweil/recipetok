@@ -6,10 +6,14 @@ import '../utils/custom_cache_manager.dart';
 
 class SaveOptionsModal extends StatelessWidget {
   final String videoId;
+  final Map<String, dynamic> videoData;
+  final String currentUserId;
 
   const SaveOptionsModal({
     super.key,
     required this.videoId,
+    required this.videoData,
+    required this.currentUserId,
   });
 
   Future<void> _saveToBookmarks(BuildContext context) async {
@@ -67,6 +71,54 @@ class SaveOptionsModal extends StatelessWidget {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error saving: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _toggleGroup(BuildContext context, String groupId, bool isInGroup) async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      final groupRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .doc(groupId);
+
+      if (isInGroup) {
+        // Remove from group
+        await groupRef.update({
+          'videos.$videoId': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Removed from collection')),
+          );
+        }
+      } else {
+        // Add to group
+        await groupRef.update({
+          'videos.$videoId': {
+            'addedAt': FieldValue.serverTimestamp(),
+            'videoId': videoId,
+          },
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Added to collection')),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
       );
     }
   }
@@ -212,9 +264,7 @@ class SaveOptionsModal extends StatelessWidget {
                         isVideoInGroup ? Icons.check_circle : Icons.add_circle_outline,
                         color: isVideoInGroup ? Colors.green : Colors.grey,
                       ),
-                      onTap: isVideoInGroup
-                          ? null
-                          : () => _saveToGroup(context, groupId),
+                      onTap: () => _toggleGroup(context, groupId, isVideoInGroup),
                     );
                   },
                 );

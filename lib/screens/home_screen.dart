@@ -31,6 +31,78 @@ class _HomeScreenState extends State<HomeScreen> {
     return doc.data() ?? {};
   }
 
+  Future<void> _toggleVideoLike(String videoId) async {
+    try {
+      final videoRef = _firestore.collection('videos').doc(videoId);
+      final userLikeRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('videoLikes')
+          .doc(videoId);
+
+      final likeDoc = await userLikeRef.get();
+      final isLiked = likeDoc.exists;
+
+      if (isLiked) {
+        await videoRef.update({
+          'likes': FieldValue.increment(-1),
+        });
+        await userLikeRef.delete();
+      } else {
+        await videoRef.update({
+          'likes': FieldValue.increment(1),
+        });
+        await userLikeRef.set({
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleBookmark(String videoId, Map<String, dynamic> videoData) async {
+    try {
+      final userBookmarkRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('bookmarks')
+          .doc(videoId);
+
+      final bookmarkDoc = await userBookmarkRef.get();
+      final isBookmarked = bookmarkDoc.exists;
+
+      if (isBookmarked) {
+        await userBookmarkRef.delete();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Video removed from bookmarks')),
+          );
+        }
+      } else {
+        await userBookmarkRef.set({
+          'videoId': videoId,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Video added to bookmarks')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -95,6 +167,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 videoData: videoData,
                 videoId: videoId,
                 onUserTap: () {},
+                onLike: () => _toggleVideoLike(videoId),
+                onBookmark: () => _toggleBookmark(videoId, videoData),
+                currentUserId: currentUserId,
               );
             },
           );

@@ -50,6 +50,7 @@ dependencies:
   video_player: ^2.8.1
   path_provider: ^2.1.2
   sqflite: ^2.3.2
+  rxdart: ^0.27.7
 
 dev_dependencies:
   flutter_test:

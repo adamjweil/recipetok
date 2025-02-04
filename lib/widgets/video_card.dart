@@ -5,12 +5,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
 import './save_options_modal.dart';
+import 'package:rxdart/rxdart.dart';
 
 class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
   final VoidCallback onUserTap;
   final String videoId;
   final VoidCallback? onVideoPlay;
+  final VoidCallback? onLike;
+  final VoidCallback? onBookmark;
+  final String? currentUserId;
 
   const VideoCard({
     super.key,
@@ -18,6 +22,9 @@ class VideoCard extends StatefulWidget {
     required this.onUserTap,
     required this.videoId,
     this.onVideoPlay,
+    this.onLike,
+    this.onBookmark,
+    this.currentUserId,
   });
 
   @override
@@ -141,7 +148,11 @@ class _VideoCardState extends State<VideoCard> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SaveOptionsModal(videoId: widget.videoId),
+      builder: (context) => SaveOptionsModal(
+        videoId: widget.videoId,
+        videoData: widget.videoData,
+        currentUserId: widget.currentUserId ?? '',
+      ),
     );
   }
 
@@ -182,140 +193,174 @@ class _VideoCardState extends State<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('videos')
-          .doc(widget.videoId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final videoData = snapshot.data?.data() as Map<String, dynamic>? ?? widget.videoData;
-        
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_isInitialized)
-              GestureDetector(
-                onTap: _togglePlay,
-                child: VideoPlayer(_videoController!),
-              )
-            else
-              _buildPlaceholder(),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_isInitialized)
+          GestureDetector(
+            onTap: _togglePlay,
+            child: VideoPlayer(_videoController!),
+          )
+        else
+          _buildPlaceholder(),
 
-            // Video Info Overlay
-            Positioned(
-              left: 16,
-              right: 100,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    videoData['title'] ?? '',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    videoData['description'] ?? '',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    (videoData['ingredients'] as List?)?.join(', ') ?? '',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-
-            // Action Buttons
-            Positioned(
-              right: 16,
-              bottom: 100,
-              child: Column(
-                children: [
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser?.uid ?? '')
-                        .collection('likes')
-                        .doc(widget.videoId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final bool isLiked = snapshot.data?.exists ?? false;
-                      return _buildActionButton(
-                        icon: isLiked ? Icons.favorite : Icons.favorite_border,
-                        label: '${videoData['likes'] ?? 0}',
-                        onTap: () => _handleLike(context),
-                        color: isLiked ? Colors.red : Colors.white,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser?.uid ?? '')
-                        .collection('bookmarks')
-                        .doc(widget.videoId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final bool isBookmarked = snapshot.data?.exists ?? false;
-                      return _buildActionButton(
-                        icon: isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                        label: 'Save',
-                        onTap: () => _toggleBookmark(context),
-                        color: isBookmarked ? Theme.of(context).primaryColor : Colors.white,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildActionButton(
-                    icon: Icons.remove_red_eye,
-                    label: '${videoData['views'] ?? 0}',
-                    onTap: () {},
-                    color: Colors.white,
-                  ),
-                  const SizedBox(height: 16),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('videos')
-                        .doc(widget.videoId)
-                        .collection('comments')
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final commentCount = snapshot.data?.docs.length ?? 0;
-                      return _buildActionButton(
-                        icon: Icons.comment,
-                        label: '$commentCount',
-                        onTap: () => _showComments(context),
-                        color: Colors.white,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            if (!_isInitialized || !_videoController!.value.isPlaying)
-              Center(
-                child: IconButton(
-                  icon: Icon(
-                    _isInitialized ? Icons.play_circle_outline : Icons.error_outline,
-                    size: 64,
-                    color: Colors.white70,
-                  ),
-                  onPressed: _isInitialized ? _togglePlay : null,
+        // Video Info Overlay
+        Positioned(
+          left: 16,
+          right: 100,
+          bottom: 16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.videoData['title'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-          ],
-        );
-      },
+              const SizedBox(height: 8),
+              Text(
+                widget.videoData['description'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                (widget.videoData['ingredients'] as List?)?.join(', ') ?? '',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+
+        // Action Buttons
+        Positioned(
+          right: 16,
+          bottom: 100,
+          child: Column(
+            children: [
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(widget.currentUserId)
+                    .collection('videoLikes')
+                    .doc(widget.videoId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final isLiked = snapshot.data?.exists ?? false;
+                  return Column(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          isLiked ? Icons.favorite : Icons.favorite_border,
+                          color: isLiked ? Colors.red : Colors.white,
+                        ),
+                        onPressed: widget.onLike,
+                      ),
+                      Text(
+                        '${widget.videoData['likes'] ?? 0}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<bool>(
+                stream: Rx.combineLatest2(
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(widget.currentUserId)
+                      .collection('bookmarks')
+                      .doc(widget.videoId)
+                      .snapshots(),
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(widget.currentUserId)
+                      .collection('groups')
+                      .snapshots(),
+                  (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
+                    final isBookmarked = bookmarkDoc.exists;
+                    
+                    // Check if video exists in any group
+                    final isInGroup = groupsSnapshot.docs.any((groupDoc) {
+                      final videos = (groupDoc.data() as Map<String, dynamic>)['videos'] as Map<String, dynamic>?;
+                      return videos?.containsKey(widget.videoId) ?? false;
+                    });
+                    
+                    return isBookmarked || isInGroup;
+                  },
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Icon(Icons.error, color: Colors.red);
+                  }
+
+                  final isSaved = snapshot.data ?? false;
+                  
+                  return IconButton(
+                    icon: Icon(
+                      isSaved ? Icons.bookmark : Icons.bookmark_border,
+                      color: isSaved ? Colors.yellow : Colors.white,
+                    ),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => SaveOptionsModal(
+                          videoId: widget.videoId,
+                          videoData: widget.videoData,
+                          currentUserId: widget.currentUserId ?? '',
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildActionButton(
+                icon: Icons.remove_red_eye,
+                label: '${widget.videoData['views'] ?? 0}',
+                onTap: () {},
+                color: Colors.white,
+              ),
+              const SizedBox(height: 16),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('videos')
+                    .doc(widget.videoId)
+                    .collection('comments')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final commentCount = snapshot.data?.docs.length ?? 0;
+                  return _buildActionButton(
+                    icon: Icons.comment,
+                    label: '$commentCount',
+                    onTap: () => _showComments(context),
+                    color: Colors.white,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
+        if (!_isInitialized || !_videoController!.value.isPlaying)
+          Center(
+            child: IconButton(
+              icon: Icon(
+                _isInitialized ? Icons.play_circle_outline : Icons.error_outline,
+                size: 64,
+                color: Colors.white70,
+              ),
+              onPressed: _isInitialized ? _togglePlay : null,
+            ),
+          ),
+      ],
     );
   }
 
