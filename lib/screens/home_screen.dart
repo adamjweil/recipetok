@@ -175,16 +175,29 @@ class _HomeScreenState extends State<HomeScreen> {
             pageSnapping: true,
             allowImplicitScrolling: true,
             padEnds: false,
-            onPageChanged: (index) {
+            onPageChanged: (index) async {
+              // Pause previous video
               if (_currentlyPlayingVideo != null) {
                 _currentlyPlayingVideo?.pauseVideo();
                 _currentlyPlayingVideo = null;
+              }
+
+              // Get reference to the new video card
+              final videoKey = _videoKeys[videos[index].id];
+              if (videoKey?.currentState != null) {
+                // Play the new video and update current playing reference
+                final videoCard = videoKey!.currentState!;
+                videoCard.playVideo();
+                setState(() {
+                  _currentlyPlayingVideo = videoCard;
+                });
               }
             },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;
               final videoId = videos[index].id;
               
+              // Create or get existing key
               _videoKeys[videoId] ??= GlobalKey<VideoCardState>();
               
               return KeyedSubtree(
