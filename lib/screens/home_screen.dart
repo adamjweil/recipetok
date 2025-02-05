@@ -23,6 +23,28 @@ class _HomeScreenState extends State<HomeScreen> {
   List<QueryDocumentSnapshot>? _cachedVideos;
   final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
 
+  @override
+  void initState() {
+    super.initState();
+    // Add this to initialize the first video
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _playInitialVideo();
+    });
+  }
+
+  // Add this method to play the first video
+  void _playInitialVideo() {
+    if (_cachedVideos != null && _cachedVideos!.isNotEmpty) {
+      final firstVideoKey = _videoKeys[_cachedVideos!.first.id];
+      if (firstVideoKey?.currentState != null) {
+        firstVideoKey!.currentState!.playVideo();
+        setState(() {
+          _currentlyPlayingVideo = firstVideoKey.currentState;
+        });
+      }
+    }
+  }
+
   Stream<QuerySnapshot> _getVideosStream() {
     return _firestore
         .collection('videos')
@@ -121,6 +143,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    // Add this to cleanup videos
+    _currentlyPlayingVideo?.pauseVideo();
+    _videoKeys.values.forEach((key) {
+      key.currentState?.pauseVideo();
+    });
     _videoKeys.clear();
     _pageController.dispose();
     super.dispose();
@@ -145,6 +172,12 @@ class _HomeScreenState extends State<HomeScreen> {
           
           if (snapshot.hasData) {
             _cachedVideos = snapshot.data?.docs;
+            // Add this to play initial video when data first loads
+            if (_currentlyPlayingVideo == null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _playInitialVideo();
+              });
+            }
           }
 
           if (videos.isEmpty) {
@@ -158,11 +191,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     'No videos yet',
                     style: TextStyle(color: Colors.grey[600], fontSize: 16),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Videos will appear here once users start sharing',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                  ),
                 ],
               ),
             );
@@ -172,24 +200,18 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _pageController,
             scrollDirection: Axis.vertical,
             itemCount: videos.length,
-            pageSnapping: true,
-            allowImplicitScrolling: true,
-            padEnds: false,
-            onPageChanged: (index) async {
+            onPageChanged: (index) {
               // Pause previous video
               if (_currentlyPlayingVideo != null) {
-                _currentlyPlayingVideo?.pauseVideo();
-                _currentlyPlayingVideo = null;
+                _currentlyPlayingVideo!.pauseVideo();
               }
 
-              // Get reference to the new video card
+              // Play new video
               final videoKey = _videoKeys[videos[index].id];
               if (videoKey?.currentState != null) {
-                // Play the new video and update current playing reference
-                final videoCard = videoKey!.currentState!;
-                videoCard.playVideo();
+                videoKey!.currentState!.playVideo();
                 setState(() {
-                  _currentlyPlayingVideo = videoCard;
+                  _currentlyPlayingVideo = videoKey.currentState;
                 });
               }
             },
@@ -210,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   onLike: () => _toggleVideoLike(videoId),
                   onBookmark: () => _toggleBookmark(videoId, videoData),
                   currentUserId: currentUserId,
+                  autoPlay: _currentlyPlayingVideo == null && index == 0,
                 ),
               );
             },

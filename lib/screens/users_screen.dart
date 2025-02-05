@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/story.dart';
 import '../services/story_service.dart';
 import '../widgets/story_viewer.dart';
+import '../screens/profile_screen.dart';
+import '../screens/home_screen.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -250,8 +252,12 @@ class _UserListTile extends StatelessWidget {
               )
             : null,
         onTap: () {
-          // Navigate to user profile
-          // TODO: Implement navigation to user profile
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProfileScreen(userId: userData['uid']),
+            ),
+          );
         },
       ),
     );

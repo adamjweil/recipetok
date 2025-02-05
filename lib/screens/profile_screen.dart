@@ -20,7 +20,12 @@ import '../widgets/story_viewer.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final String? userId;
+
+  const ProfileScreen({
+    super.key,
+    this.userId,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -29,12 +34,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isUploading = false;
+  late final String profileUserId;
+  bool get isCurrentUserProfile => profileUserId == FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void initState() {
     super.initState();
+    profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     _tabController = TabController(
-      length: 2,
+      length: isCurrentUserProfile ? 2 : 1,
       vsync: this,
       initialIndex: 0,
     );
@@ -48,10 +56,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   // Add stream for user data
   Stream<DocumentSnapshot> _getUserData() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
     return FirebaseFirestore.instance
         .collection('users')
-        .doc(userId)
+        .doc(profileUserId)
         .snapshots();
   }
 
@@ -368,19 +375,31 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          FirebaseAuth.instance.currentUser?.displayName ?? '',
-          style: const TextStyle(color: Colors.black),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: _getUserData(),
+          builder: (context, snapshot) {
+            final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+            return AppBar(
+              leading: isCurrentUserProfile
+                  ? IconButton(
+                      icon: const Icon(Icons.menu, color: Colors.black),
+                      onPressed: () => _showLogoutDialog(context),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.black),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+              title: Text(
+                userData['displayName'] ?? '',
+                style: const TextStyle(color: Colors.black),
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+            );
+          },
         ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _getUserData(),
@@ -419,39 +438,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         style: const TextStyle(fontSize: 14),
                       ),
                       const SizedBox(height: 12),
-                      _buildEditProfileButton(userData),
+                      _buildProfileActions(userData),
                       const SizedBox(height: 12),
-                      const VideoGroupsSection(),
+                      VideoGroupsSection(
+                        showAddButton: isCurrentUserProfile,
+                        userId: profileUserId,
+                      ),
                     ],
                   ),
                 ),
                 
                 // Tab Bar
-                DefaultTabController(
-                  length: 2,
-                  child: Column(
-                    children: [
-                      TabBar(
-                        tabs: const [
-                          Tab(icon: Icon(Icons.grid_on)),
-                          Tab(icon: Icon(Icons.bookmark_border)),
-                        ],
-                        indicatorColor: Colors.black,
-                        unselectedLabelColor: Colors.grey,
-                        labelColor: Colors.black,
-                      ),
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height * 0.6, // Adjust this value as needed
-                        child: TabBarView(
-                          children: [
-                            _buildVideoGrid(),
-                            _buildBookmarkedVideosGrid(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildTabs(),
               ],
             ),
           );
@@ -486,10 +484,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildAvatarWithStory(Map<String, dynamic> userData) {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    
     return StreamBuilder<List<Story>>(
-      stream: StoryService().getUserActiveStories(userId),
+      stream: StoryService().getUserActiveStories(profileUserId),
       builder: (context, snapshot) {
         final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
         final timeRemaining = hasActiveStory 
@@ -535,19 +531,19 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     child: CircleAvatar(
                       radius: 40,
                       backgroundColor: Colors.grey[200],
-                      backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
+                      backgroundImage: userData['avatarUrl'] != null
                           ? CachedNetworkImageProvider(
-                              FirebaseAuth.instance.currentUser!.photoURL!,
+                              userData['avatarUrl'],
                               cacheManager: CustomCacheManager.instance,
                             )
                           : null,
-                      child: FirebaseAuth.instance.currentUser?.photoURL == null
+                      child: userData['avatarUrl'] == null
                           ? const Icon(Icons.person, size: 40)
                           : null,
                     ),
                   ),
                 ),
-                if (!hasActiveStory)
+                if (!hasActiveStory && isCurrentUserProfile)
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -741,13 +737,94 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
+  Widget _buildProfileActions(Map<String, dynamic> userData) {
+    if (isCurrentUserProfile) {
+      return _buildEditProfileButton(userData);
+    } else {
+      final List followers = userData['followers'] ?? [];
+      final bool isFollowing = followers.contains(FirebaseAuth.instance.currentUser?.uid);
+
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _toggleFollow(profileUserId),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isFollowing ? Colors.grey[200] : Theme.of(context).primaryColor,
+            foregroundColor: isFollowing ? Colors.black : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          child: Text(isFollowing ? 'Following' : 'Follow'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleFollow(String targetUserId) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    final userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+    final targetUserRef = FirebaseFirestore.instance.collection('users').doc(targetUserId);
+
+    final userDoc = await userRef.get();
+    final List following = userDoc.data()?['following'] ?? [];
+
+    if (following.contains(targetUserId)) {
+      // Unfollow
+      await userRef.update({
+        'following': FieldValue.arrayRemove([targetUserId])
+      });
+      await targetUserRef.update({
+        'followers': FieldValue.arrayRemove([currentUserId])
+      });
+    } else {
+      // Follow
+      await userRef.update({
+        'following': FieldValue.arrayUnion([targetUserId])
+      });
+      await targetUserRef.update({
+        'followers': FieldValue.arrayUnion([currentUserId])
+      });
+    }
+  }
+
+  Widget _buildTabs() {
+    return DefaultTabController(
+      length: isCurrentUserProfile ? 2 : 1,
+      child: Column(
+        children: [
+          TabBar(
+            tabs: [
+              const Tab(icon: Icon(Icons.grid_on)),
+              if (isCurrentUserProfile)
+                const Tab(icon: Icon(Icons.bookmark_border)),
+            ],
+            indicatorColor: Colors.black,
+            unselectedLabelColor: Colors.grey,
+            labelColor: Colors.black,
+          ),
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: TabBarView(
+              children: [
+                _buildVideoGrid(),
+                if (isCurrentUserProfile)
+                  _buildBookmarkedVideosGrid(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVideoGrid() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('videos')
-          .where('userId', isEqualTo: userId)
+          .where('userId', isEqualTo: profileUserId)
           .orderBy('isPinned', descending: true)
           .orderBy('createdAt', descending: true)
           .snapshots(),
@@ -778,139 +855,132 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           );
         }
 
-        return CustomScrollView(
-          slivers: [
-            SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 1,
-                mainAxisSpacing: 1,
-                childAspectRatio: 0.8,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final video = videos[index].data() as Map<String, dynamic>;
-                  final thumbnailUrl = video['thumbnailUrl'] as String?;
-                  final isPinned = video['isPinned'] ?? false;
+        return GridView.builder(
+          padding: const EdgeInsets.all(1),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 1,
+            mainAxisSpacing: 1,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: videos.length,
+          itemBuilder: (context, index) {
+            final video = videos[index].data() as Map<String, dynamic>;
+            final thumbnailUrl = video['thumbnailUrl'] as String?;
+            final isPinned = video['isPinned'] ?? false;
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoPlayerScreen(
-                            videoData: video,
-                            videoId: videos[index].id,
-                          ),
-                        ),
-                      );
-                    },
-                    onLongPress: () {
-                      final RenderBox box = context.findRenderObject() as RenderBox;
-                      final Offset center = box.size.center(box.localToGlobal(Offset.zero));
-                      _handleVideoLongPress(context, video, videos[index].id, center);
-                    },
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        thumbnailUrl != null
-                            ? CachedNetworkImage(
-                                imageUrl: thumbnailUrl,
-                                fit: BoxFit.cover,
-                                cacheManager: CustomCacheManager.instance,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[200],
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.error),
-                                ),
-                              )
-                            : Container(color: Colors.grey[200]),
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.center,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.5),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (isPinned)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Icon(
-                                Icons.push_pin,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          bottom: 8,
-                          left: 0,
-                          right: 0,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Views (left)
-                                Row(
-                                  children: [
-                                    const Icon(Icons.play_arrow, color: Colors.white, size: 14),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      _formatViewCount(video['views'] ?? 0),
-                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                    ),
-                                  ],
-                                ),
-                                // Comments (right)
-                                StreamBuilder<QuerySnapshot>(
-                                  stream: FirebaseFirestore.instance
-                                      .collection('videos')
-                                      .doc(videos[index].id)
-                                      .collection('comments')
-                                      .snapshots(),
-                                  builder: (context, snapshot) {
-                                    final commentCount = snapshot.data?.docs.length ?? 0;
-                                    return Row(
-                                      children: [
-                                        const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          _formatCount(commentCount),
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+            return GestureDetectorWithPosition(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoPlayerScreen(
+                      videoData: video,
+                      videoId: videos[index].id,
                     ),
-                  );
-                },
-                childCount: videos.length,
+                  ),
+                );
+              },
+              onLongPressWithPosition: (context, position) {
+                _handleVideoLongPress(context, video, videos[index].id, position);
+              },
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  thumbnailUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: thumbnailUrl,
+                          fit: BoxFit.cover,
+                          cacheManager: CustomCacheManager.instance,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[200],
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.error),
+                          ),
+                        )
+                      : Container(color: Colors.grey[200]),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.center,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.5),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (isPinned)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(
+                          Icons.push_pin,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    bottom: 8,
+                    left: 0,
+                    right: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Views (left)
+                          Row(
+                            children: [
+                              const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                              const SizedBox(width: 2),
+                              Text(
+                                _formatViewCount(video['views'] ?? 0),
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                          // Comments (right)
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('videos')
+                                .doc(videos[index].id)
+                                .collection('comments')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final commentCount = snapshot.data?.docs.length ?? 0;
+                              return Row(
+                                children: [
+                                  const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    _formatCount(commentCount),
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1214,38 +1284,6 @@ class UserListItem extends StatelessWidget {
     required this.isFollowers,
   });
 
-  Future<void> _toggleFollow(BuildContext context) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    final userRef = FirebaseFirestore.instance.collection('users').doc(currentUser.uid);
-    final otherUserRef = FirebaseFirestore.instance.collection('users').doc(userId);
-
-    // Get current user's following list
-    final userDoc = await userRef.get();
-    final following = List<String>.from(userDoc.data()?['following'] ?? []);
-    
-    final isFollowing = following.contains(userId);
-
-    if (isFollowing) {
-      // Unfollow
-      await userRef.update({
-        'following': FieldValue.arrayRemove([userId]),
-      });
-      await otherUserRef.update({
-        'followers': FieldValue.arrayRemove([currentUser.uid]),
-      });
-    } else {
-      // Follow
-      await userRef.update({
-        'following': FieldValue.arrayUnion([userId]),
-      });
-      await otherUserRef.update({
-        'followers': FieldValue.arrayUnion([currentUser.uid]),
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -1270,7 +1308,6 @@ class UserListItem extends StatelessWidget {
                 ? CachedNetworkImageProvider(
                     userData['avatarUrl'],
                     cacheManager: CustomCacheManager.instance,
-                    errorListener: (error) => print('Error loading user avatar: $error'),
                   )
                 : null,
             child: userData['avatarUrl'] == null
@@ -1315,9 +1352,49 @@ class UserListItem extends StatelessWidget {
                     ),
                   ),
                 ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProfileScreen(userId: userId),
+              ),
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _toggleFollow(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userRef = FirebaseFirestore.instance.collection('users').doc(currentUser.uid);
+    final otherUserRef = FirebaseFirestore.instance.collection('users').doc(userId);
+
+    // Get current user's following list
+    final userDoc = await userRef.get();
+    final following = List<String>.from(userDoc.data()?['following'] ?? []);
+    
+    final isFollowing = following.contains(userId);
+
+    if (isFollowing) {
+      // Unfollow
+      await userRef.update({
+        'following': FieldValue.arrayRemove([userId]),
+      });
+      await otherUserRef.update({
+        'followers': FieldValue.arrayRemove([currentUser.uid]),
+      });
+    } else {
+      // Follow
+      await userRef.update({
+        'following': FieldValue.arrayUnion([userId]),
+      });
+      await otherUserRef.update({
+        'followers': FieldValue.arrayUnion([currentUser.uid]),
+      });
+    }
   }
 }
 
@@ -1380,5 +1457,30 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
     return false;
+  }
+}
+
+// Add this helper widget at the bottom of the file
+class GestureDetectorWithPosition extends StatelessWidget {
+  final Widget child;
+  final Function(BuildContext, Offset) onLongPressWithPosition;
+  final VoidCallback onTap;
+
+  const GestureDetectorWithPosition({
+    super.key,
+    required this.child,
+    required this.onLongPressWithPosition,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPressStart: (details) {
+        onLongPressWithPosition(context, details.globalPosition);
+      },
+      child: child,
+    );
   }
 } 
