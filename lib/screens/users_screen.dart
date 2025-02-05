@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/story.dart';
+import '../services/story_service.dart';
+import '../widgets/story_viewer.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -160,20 +163,59 @@ class _UserListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCurrentUser = userData['uid'] == currentUserId;
-    
-    // Handle both cases: when followers is an int or a List
     final dynamic followersData = userData['followers'];
     final List followers = followersData is List ? followersData : [];
     final bool isFollowing = followers.contains(currentUserId);
 
+    // Add these debug prints here
+    print('User data fields: ${userData.keys.toList()}');
+    print('User ID value: ${userData['id']}');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundImage: CachedNetworkImageProvider(
-            userData['avatarUrl'] ?? 'https://placeholder.com/150',
-          ),
+        leading: StreamBuilder<List<Story>>(
+          stream: StoryService().getUserActiveStories(userData['id'] ?? ''),
+          builder: (context, snapshot) {
+            // Add this debug print here
+            print('Stories for user ${userData['id']}: ${snapshot.data?.length ?? 0}');
+            
+            final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
+            
+            return GestureDetector(
+              onTap: () {
+                if (hasActiveStory) {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.black,
+                    builder: (context) => StoryViewer(story: snapshot.data!.first),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: hasActiveStory ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: const [
+                      Colors.purple,
+                      Colors.pink,
+                      Colors.orange,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ) : null,
+                child: CircleAvatar(
+                  radius: hasActiveStory ? 24 : 25,
+                  backgroundImage: CachedNetworkImageProvider(
+                    userData['avatarUrl'] ?? 'https://placeholder.com/150',
+                  ),
+                ),
+              ),
+            );
+          },
         ),
         title: Text(
           userData['displayName'] ?? 'Unknown User',

@@ -37,6 +37,7 @@ class VideoCardState extends State<VideoCard> {
   bool _isInitialized = false;
   bool _hasRecordedView = false;
   int? _nextIndex;
+  bool _isMuted = true;
 
   @override
   void initState() {
@@ -65,6 +66,7 @@ class VideoCardState extends State<VideoCard> {
       
       if (mounted) {
         _videoController?.setLooping(true);
+        _videoController?.setVolume(0.0);
         setState(() {
           _isInitialized = true;
         });
@@ -439,6 +441,32 @@ class VideoCardState extends State<VideoCard> {
               onPressed: _isInitialized ? togglePlay : null,
             ),
           ),
+
+        // Add volume control button
+        Positioned(
+          left: 16,
+          bottom: 120,
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _isMuted = !_isMuted;
+                _videoController?.setVolume(_isMuted ? 0.0 : 1.0);
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _isMuted ? Icons.volume_off : Icons.volume_up,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }

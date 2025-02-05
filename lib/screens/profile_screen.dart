@@ -552,55 +552,57 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Avatar and Stats row
-                    Row(
-                      children: [
-                        _buildAvatarWithStory(userData),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: _buildProfileStats(userData),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      userData['bio'] ?? '',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildEditProfileButton(userData),
-                    const SizedBox(height: 12),
-                    const VideoGroupsSection(),
-                  ],
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAvatarWithStory(userData),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: _buildProfileStats(userData),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        userData['bio'] ?? '',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildEditProfileButton(userData),
+                      const SizedBox(height: 12),
+                      const VideoGroupsSection(),
+                    ],
+                  ),
                 ),
-              ),
-              TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(icon: Icon(Icons.grid_on)),
-                  Tab(icon: Icon(Icons.bookmark_border)),
-                ],
-                indicatorColor: Colors.black,
-                unselectedLabelColor: Colors.grey,
-                labelColor: Colors.black,
-              ),
-              Expanded(
-                child: TabBarView(
+                TabBar(
                   controller: _tabController,
-                  children: [
-                    _buildVideoGrid(),
-                    _buildBookmarkedVideosGrid(),
+                  tabs: const [
+                    Tab(icon: Icon(Icons.grid_on)),
+                    Tab(icon: Icon(Icons.bookmark_border)),
                   ],
+                  indicatorColor: Colors.black,
+                  unselectedLabelColor: Colors.grey,
+                  labelColor: Colors.black,
                 ),
-              ),
-            ],
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildVideoGrid(),
+                      _buildBookmarkedVideosGrid(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
