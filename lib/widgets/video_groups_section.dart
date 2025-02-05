@@ -43,45 +43,21 @@ class VideoGroupsSection extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Collections',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (showAddButton)
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () {
-                      _showCreateGroupModal(context);
-                    },
-                  ),
-              ],
-            ),
-            SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: groups.length + (showAddButton ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == groups.length && showAddButton) {
-                    return _buildCreateGroupButton(context);
-                  }
+        return SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: groups.length + (showAddButton ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (index == groups.length && showAddButton) {
+                return _buildCreateGroupButton(context);
+              }
 
-                  final group = groups[index].data() as Map<String, dynamic>;
-                  return _buildGroupItem(context, group, groups[index].id);
-                },
-              ),
-            ),
-          ],
+              final group = groups[index].data() as Map<String, dynamic>;
+              return _buildGroupItem(context, group, groups[index].id);
+            },
+          ),
         );
       },
     );
