@@ -252,9 +252,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             crossAxisCount: 3,
             crossAxisSpacing: 1,
             mainAxisSpacing: 1,
-            childAspectRatio: 0.5625,
+            childAspectRatio: 0.8,
           ),
           itemCount: videos.length,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
           itemBuilder: (context, index) {
             final video = videos[index].data() as Map<String, dynamic>;
             final thumbnailUrl = video['thumbnailUrl'] as String?;
@@ -416,8 +418,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 crossAxisCount: 3,
                 crossAxisSpacing: 1,
                 mainAxisSpacing: 1,
+                childAspectRatio: 0.8,
               ),
               itemCount: videos.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               itemBuilder: (context, index) {
                 final videoData = videos[index].data() as Map<String, dynamic>?;
                 if (videoData == null) return const SizedBox();
@@ -553,57 +558,80 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          _buildAvatarWithStory(userData),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildProfileStats(userData),
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                _buildAvatarWithStory(userData),
+                                const SizedBox(width: 24),
+                                Expanded(
+                                  child: _buildProfileStats(userData),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              userData['bio'] ?? '',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildEditProfileButton(userData),
+                            const SizedBox(height: 12),
+                            const VideoGroupsSection(),
+                          ],
+                        ),
+                      ),
+                      TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(icon: Icon(Icons.grid_on)),
+                          Tab(icon: Icon(Icons.bookmark_border)),
                         ],
+                        indicatorColor: Colors.black,
+                        unselectedLabelColor: Colors.grey,
+                        labelColor: Colors.black,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        userData['bio'] ?? '',
-                        style: const TextStyle(fontSize: 14),
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('videos')
+                            .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                            .orderBy('createdAt', descending: true)
+                            .snapshots(),
+                        builder: (context, videoSnapshot) {
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              final videos = videoSnapshot.data?.docs ?? [];
+                              final rowCount = (videos.length / 3).ceil(); // 3 is the crossAxisCount
+                              final gridHeight = rowCount * (constraints.maxWidth / 3 * (1/0.8)); // Calculate height based on aspect ratio
+                              
+                              return SizedBox(
+                                height: gridHeight,
+                                child: TabBarView(
+                                  controller: _tabController,
+                                  children: [
+                                    _buildVideoGrid(),
+                                    _buildBookmarkedVideosGrid(),
+                                  ],
+                                ),
+                              );
+                            }
+                          );
+                        }
                       ),
-                      const SizedBox(height: 12),
-                      _buildEditProfileButton(userData),
-                      const SizedBox(height: 12),
-                      const VideoGroupsSection(),
                     ],
                   ),
                 ),
-                TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(icon: Icon(Icons.grid_on)),
-                    Tab(icon: Icon(Icons.bookmark_border)),
-                  ],
-                  indicatorColor: Colors.black,
-                  unselectedLabelColor: Colors.grey,
-                  labelColor: Colors.black,
-                ),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildVideoGrid(),
-                      _buildBookmarkedVideosGrid(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
