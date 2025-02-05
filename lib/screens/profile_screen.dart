@@ -252,6 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             crossAxisCount: 3,
             crossAxisSpacing: 1,
             mainAxisSpacing: 1,
+            childAspectRatio: 0.5625,
           ),
           itemCount: videos.length,
           itemBuilder: (context, index) {
