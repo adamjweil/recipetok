@@ -17,6 +17,7 @@ import '../models/story.dart';
 import '../services/story_service.dart';
 import 'package:video_compress/video_compress.dart';
 import '../widgets/story_viewer.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -211,320 +212,156 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     }
   }
 
-  Widget _buildVideoGrid() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
+  Future<void> _handleVideoLongPress(BuildContext context, Map<String, dynamic> video, String videoId, Offset tapPosition) async {
+    final isPinned = video['isPinned'] ?? false;
     
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('videos')
-          .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
+    // Get count of currently pinned videos
+    final pinnedVideosSnapshot = await FirebaseFirestore.instance
+        .collection('videos')
+        .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+        .where('isPinned', isEqualTo: true)
+        .get();
+    
+    final pinnedCount = pinnedVideosSnapshot.docs.length;
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final videos = snapshot.data?.docs ?? [];
-
-        if (videos.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No posts yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 1,
-            mainAxisSpacing: 1,
-            childAspectRatio: 0.8,
-          ),
-          itemCount: videos.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemBuilder: (context, index) {
-            final video = videos[index].data() as Map<String, dynamic>;
-            final thumbnailUrl = video['thumbnailUrl'] as String?;
-
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => VideoPlayerScreen(
-                      videoData: video,
-                      videoId: videos[index].id,
-                    ),
-                  ),
-                );
-              },
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  thumbnailUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: thumbnailUrl,
-                          fit: BoxFit.cover,
-                          cacheManager: CustomCacheManager.instance,
-                          placeholder: (context, url) => Container(
-                            color: Colors.grey[200],
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[200],
-                            child: const Icon(Icons.error),
-                          ),
-                        )
-                      : Container(color: Colors.grey[200]),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.center,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.5),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Views (left)
-                          Row(
-                            children: [
-                              const Icon(Icons.play_arrow, color: Colors.white, size: 14),
-                              const SizedBox(width: 2),
-                              Text(
-                                _formatViewCount(video['views'] ?? 0),
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                          // Comments (right)
-                          StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('videos')
-                                .doc(videos[index].id)
-                                .collection('comments')
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              final commentCount = snapshot.data?.docs.length ?? 0;
-                              return Row(
-                                children: [
-                                  const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    _formatCount(commentCount),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromLTWH(
+        tapPosition.dx,
+        tapPosition.dy,
+        0,
+        0,
+      ),
+      Offset.zero & overlay.size,
     );
-  }
 
-  Widget _buildBookmarkedVideosGrid() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('bookmarks')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, bookmarkSnapshot) {
-        if (bookmarkSnapshot.hasError) {
-          return Center(child: Text('Error: ${bookmarkSnapshot.error}'));
-        }
-
-        if (bookmarkSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final bookmarks = bookmarkSnapshot.data?.docs ?? [];
-
-        if (bookmarks.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No saved dishes yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
+    await showMenu(
+      context: context,
+      position: position,
+      items: [
+        if (!isPinned && pinnedCount < 3)
+          PopupMenuItem(
+            child: Row(
+              children: const [
+                Icon(Icons.push_pin),
+                SizedBox(width: 8),
+                Text('Pin to profile'),
               ],
             ),
-          );
-        }
-
-        return FutureBuilder<List<DocumentSnapshot>>(
-          future: Future.wait(
-            bookmarks.map((bookmark) {
-              final bookmarkData = bookmark.data() as Map<String, dynamic>;
-              final videoId = bookmarkData['videoId'] as String;
-              return FirebaseFirestore.instance
+            onTap: () async {
+              await FirebaseFirestore.instance
                   .collection('videos')
                   .doc(videoId)
-                  .get();
-            }),
-          ),
-          builder: (context, videoSnapshot) {
-            if (!videoSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final videos = videoSnapshot.data ?? [];
-
-            return GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 1,
-                mainAxisSpacing: 1,
-                childAspectRatio: 0.8,
-              ),
-              itemCount: videos.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemBuilder: (context, index) {
-                final videoData = videos[index].data() as Map<String, dynamic>?;
-                if (videoData == null) return const SizedBox();
-
-                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(
-                          videoData: videoData,
-                          videoId: videos[index].id,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      thumbnailUrl != null
-                          ? CachedNetworkImage(
-                              imageUrl: thumbnailUrl,
-                              fit: BoxFit.cover,
-                              cacheManager: CustomCacheManager.instance,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[200],
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.error),
-                              ),
-                            )
-                          : Container(color: Colors.grey[200]),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.center,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.5),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        left: 0,
-                        right: 0,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Views (left)
-                              Row(
-                                children: [
-                                  const Icon(Icons.play_arrow, color: Colors.white, size: 14),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    _formatViewCount(videoData['views'] ?? 0),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              ),
-                              // Comments (right)
-                              StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('videos')
-                                    .doc(videos[index].id)
-                                    .collection('comments')
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  final commentCount = snapshot.data?.docs.length ?? 0;
-                                  return Row(
-                                    children: [
-                                      const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        _formatCount(commentCount),
-                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  .update({'isPinned': true});
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Video pinned to profile'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.only(
+                      top: 20,
+                      right: 20,
+                      left: 20,
+                    ),
                   ),
                 );
-              },
-            );
+              }
+            },
+          ),
+        if (isPinned)
+          PopupMenuItem(
+            child: Row(
+              children: const [
+                Icon(Icons.push_pin_outlined),
+                SizedBox(width: 8),
+                Text('Unpin from profile'),
+              ],
+            ),
+            onTap: () async {
+              await FirebaseFirestore.instance
+                  .collection('videos')
+                  .doc(videoId)
+                  .update({'isPinned': false});
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Video unpinned from profile'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.only(
+                      top: 20,
+                      right: 20,
+                      left: 20,
+                    ),
+                  ),
+                );
+              }
+            },
+          ),
+        PopupMenuItem(
+          child: Row(
+            children: const [
+              Icon(Icons.share),
+              SizedBox(width: 8),
+              Text('Share'),
+            ],
+          ),
+          onTap: () {
+            Share.share('Check out this video: ${video['videoUrl']}');
           },
-        );
-      },
+        ),
+        PopupMenuItem(
+          child: Row(
+            children: const [
+              Icon(Icons.delete, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Delete', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+          onTap: () async {
+            // Show confirmation dialog
+            if (mounted) {
+              bool? confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Video'),
+                  content: const Text('Are you sure you want to delete this video? This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      child: const Text('Cancel'),
+                      onPressed: () => Navigator.of(context).pop(false),
+                    ),
+                    TextButton(
+                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                      onPressed: () => Navigator.of(context).pop(true),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await FirebaseFirestore.instance
+                    .collection('videos')
+                    .doc(videoId)
+                    .delete();
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Video deleted'),
+                      behavior: SnackBarBehavior.floating,
+                      margin: EdgeInsets.only(
+                        top: 20,
+                        right: 20,
+                        left: 20,
+                      ),
+                    ),
+                  );
+                }
+              }
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -558,40 +395,43 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
 
-          return Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // Profile Info Section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _buildAvatarWithStory(userData),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: _buildProfileStats(userData),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        userData['bio'] ?? '',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildEditProfileButton(userData),
+                      const SizedBox(height: 12),
+                      const VideoGroupsSection(),
+                    ],
+                  ),
+                ),
+                
+                // Tab Bar
+                DefaultTabController(
+                  length: 2,
                   child: Column(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                _buildAvatarWithStory(userData),
-                                const SizedBox(width: 24),
-                                Expanded(
-                                  child: _buildProfileStats(userData),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              userData['bio'] ?? '',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildEditProfileButton(userData),
-                            const SizedBox(height: 12),
-                            const VideoGroupsSection(),
-                          ],
-                        ),
-                      ),
                       TabBar(
-                        controller: _tabController,
                         tabs: const [
                           Tab(icon: Icon(Icons.grid_on)),
                           Tab(icon: Icon(Icons.bookmark_border)),
@@ -600,38 +440,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         unselectedLabelColor: Colors.grey,
                         labelColor: Colors.black,
                       ),
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('videos')
-                            .where('userId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                            .orderBy('createdAt', descending: true)
-                            .snapshots(),
-                        builder: (context, videoSnapshot) {
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              final videos = videoSnapshot.data?.docs ?? [];
-                              final rowCount = (videos.length / 3).ceil(); // 3 is the crossAxisCount
-                              final gridHeight = rowCount * (constraints.maxWidth / 3 * (1/0.8)); // Calculate height based on aspect ratio
-                              
-                              return SizedBox(
-                                height: gridHeight,
-                                child: TabBarView(
-                                  controller: _tabController,
-                                  children: [
-                                    _buildVideoGrid(),
-                                    _buildBookmarkedVideosGrid(),
-                                  ],
-                                ),
-                              );
-                            }
-                          );
-                        }
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6, // Adjust this value as needed
+                        child: TabBarView(
+                          children: [
+                            _buildVideoGrid(),
+                            _buildBookmarkedVideosGrid(),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -914,6 +736,353 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 child: Text(userData['bio']),
               ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoGrid() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videos')
+          .where('userId', isEqualTo: userId)
+          .orderBy('isPinned', descending: true)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final videos = snapshot.data?.docs ?? [];
+
+        if (videos.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No posts yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return CustomScrollView(
+          slivers: [
+            SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 1,
+                mainAxisSpacing: 1,
+                childAspectRatio: 0.8,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final video = videos[index].data() as Map<String, dynamic>;
+                  final thumbnailUrl = video['thumbnailUrl'] as String?;
+                  final isPinned = video['isPinned'] ?? false;
+
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VideoPlayerScreen(
+                            videoData: video,
+                            videoId: videos[index].id,
+                          ),
+                        ),
+                      );
+                    },
+                    onLongPress: () {
+                      final RenderBox box = context.findRenderObject() as RenderBox;
+                      final Offset center = box.size.center(box.localToGlobal(Offset.zero));
+                      _handleVideoLongPress(context, video, videos[index].id, center);
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        thumbnailUrl != null
+                            ? CachedNetworkImage(
+                                imageUrl: thumbnailUrl,
+                                fit: BoxFit.cover,
+                                cacheManager: CustomCacheManager.instance,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[200],
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.error),
+                                ),
+                              )
+                            : Container(color: Colors.grey[200]),
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.center,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.5),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (isPinned)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Icon(
+                                Icons.push_pin,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          bottom: 8,
+                          left: 0,
+                          right: 0,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Views (left)
+                                Row(
+                                  children: [
+                                    const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      _formatViewCount(video['views'] ?? 0),
+                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                                // Comments (right)
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: FirebaseFirestore.instance
+                                      .collection('videos')
+                                      .doc(videos[index].id)
+                                      .collection('comments')
+                                      .snapshots(),
+                                  builder: (context, snapshot) {
+                                    final commentCount = snapshot.data?.docs.length ?? 0;
+                                    return Row(
+                                      children: [
+                                        const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          _formatCount(commentCount),
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                childCount: videos.length,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBookmarkedVideosGrid() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('bookmarks')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, bookmarkSnapshot) {
+        if (bookmarkSnapshot.hasError) {
+          return Center(child: Text('Error: ${bookmarkSnapshot.error}'));
+        }
+
+        if (bookmarkSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final bookmarks = bookmarkSnapshot.data?.docs ?? [];
+
+        if (bookmarks.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No saved dishes yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: Future.wait(
+            bookmarks.map((bookmark) {
+              final bookmarkData = bookmark.data() as Map<String, dynamic>;
+              final videoId = bookmarkData['videoId'] as String;
+              return FirebaseFirestore.instance
+                  .collection('videos')
+                  .doc(videoId)
+                  .get();
+            }),
+          ),
+          builder: (context, videoSnapshot) {
+            if (!videoSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final videos = videoSnapshot.data ?? [];
+
+            return CustomScrollView(
+              slivers: [
+                SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 1,
+                    mainAxisSpacing: 1,
+                    childAspectRatio: 0.8,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final videoData = videos[index].data() as Map<String, dynamic>?;
+                      if (videoData == null) return const SizedBox();
+
+                      final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => VideoPlayerScreen(
+                                videoData: videoData,
+                                videoId: videos[index].id,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            thumbnailUrl != null
+                                ? CachedNetworkImage(
+                                    imageUrl: thumbnailUrl,
+                                    fit: BoxFit.cover,
+                                    cacheManager: CustomCacheManager.instance,
+                                    placeholder: (context, url) => Container(
+                                      color: Colors.grey[200],
+                                    ),
+                                    errorWidget: (context, url, error) => Container(
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.error),
+                                    ),
+                                  )
+                                : Container(color: Colors.grey[200]),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.center,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.5),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 8,
+                              left: 0,
+                              right: 0,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          _formatViewCount(videoData['views'] ?? 0),
+                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                    StreamBuilder<QuerySnapshot>(
+                                      stream: FirebaseFirestore.instance
+                                          .collection('videos')
+                                          .doc(videos[index].id)
+                                          .collection('comments')
+                                          .snapshots(),
+                                      builder: (context, snapshot) {
+                                        final commentCount = snapshot.data?.docs.length ?? 0;
+                                        return Row(
+                                          children: [
+                                            const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              _formatCount(commentCount),
+                                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    childCount: videos.length,
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
