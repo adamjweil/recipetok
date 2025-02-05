@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../utils/custom_cache_manager.dart';
 import '../widgets/video_card.dart';
 import './video_player_screen.dart';
+import 'dart:async' show unawaited;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
   VideoCardState? _currentlyPlayingVideo;
+  List<QueryDocumentSnapshot>? _cachedVideos;
+  final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
 
   Stream<QuerySnapshot> _getVideosStream() {
     return _firestore
@@ -44,19 +47,31 @@ class _HomeScreenState extends State<HomeScreen> {
       final likeDoc = await userLikeRef.get();
       final isLiked = likeDoc.exists;
 
+      // Use a batch to perform both operations atomically
+      final batch = _firestore.batch();
+
       if (isLiked) {
-        await videoRef.update({
+        batch.update(videoRef, {
           'likes': FieldValue.increment(-1),
         });
-        await userLikeRef.delete();
+        batch.delete(userLikeRef);
       } else {
-        await videoRef.update({
+        batch.update(videoRef, {
           'likes': FieldValue.increment(1),
         });
-        await userLikeRef.set({
+        batch.set(userLikeRef, {
           'timestamp': FieldValue.serverTimestamp(),
         });
       }
+
+      // Commit the batch in the background
+      unawaited(batch.commit().catchError((e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${e.toString()}')),
+          );
+        }
+      }));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _videoKeys.clear();
     _pageController.dispose();
     super.dispose();
   }
@@ -113,22 +129,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: StreamBuilder<QuerySnapshot>(
         stream: _getVideosStream(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(
-              child: Text('Error: ${snapshot.error}'),
-            );
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+          if (snapshot.connectionState == ConnectionState.waiting && _cachedVideos == null) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final videos = snapshot.data?.docs ?? [];
+          final videos = snapshot.data?.docs ?? _cachedVideos ?? [];
+          
+          if (snapshot.hasData) {
+            _cachedVideos = snapshot.data?.docs;
+          }
 
           if (videos.isEmpty) {
             return Center(
@@ -139,18 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
                   Text(
                     'No videos yet',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Videos will appear here once users start sharing',
-                    style: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.grey[500], fontSize: 14),
                   ),
                 ],
               ),
@@ -169,25 +180,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 _currentlyPlayingVideo?.pauseVideo();
                 _currentlyPlayingVideo = null;
               }
-
-              final videoKey = GlobalKey<VideoCardState>();
-              final videoCard = videoKey.currentState;
-              if (videoCard != null) {
-                videoCard.playVideo();
-                _currentlyPlayingVideo = videoCard;
-              }
             },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;
               final videoId = videos[index].id;
-              return VideoCard(
-                key: GlobalKey<VideoCardState>(),
-                videoData: videoData,
-                videoId: videoId,
-                onUserTap: () {},
-                onLike: () => _toggleVideoLike(videoId),
-                onBookmark: () => _toggleBookmark(videoId, videoData),
-                currentUserId: currentUserId,
+              
+              _videoKeys[videoId] ??= GlobalKey<VideoCardState>();
+              
+              return KeyedSubtree(
+                key: ValueKey(videoId),
+                child: VideoCard(
+                  key: _videoKeys[videoId],
+                  videoData: videoData,
+                  videoId: videoId,
+                  onUserTap: () {},
+                  onLike: () => _toggleVideoLike(videoId),
+                  onBookmark: () => _toggleBookmark(videoId, videoData),
+                  currentUserId: currentUserId,
+                ),
               );
             },
           );
