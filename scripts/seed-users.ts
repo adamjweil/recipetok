@@ -206,6 +206,7 @@ async function createVideo(userId: string) {
       likes: 0,
       views: 0,
       commentCount: 0,
+      isPinned: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -410,6 +411,7 @@ async function seedDatabase() {
           likes: 0,
           views: 0,
           commentCount: 0,
+          isPinned: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
