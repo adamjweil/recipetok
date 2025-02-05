@@ -9,6 +9,7 @@ import 'package:recipetok/screens/main_navigation_screen.dart';
 import 'package:recipetok/firebase_options.dart';
 import 'package:recipetok/screens/auth_wrapper.dart';
 import 'package:recipetok/utils/custom_cache_manager.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +17,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await CustomCacheManager.initCache();
+  
+  // Initialize cache before running app
+  final cacheDir = await getTemporaryDirectory();
+  await CustomCacheManager.init(cacheDir);
+  
   print('Firebase initialized successfully');
   runApp(const MyApp());
 }
