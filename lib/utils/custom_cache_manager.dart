@@ -1,6 +1,7 @@
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'dart:io';
 
 class CustomCacheManager {
   static const key = 'customCache';
@@ -11,7 +12,7 @@ class CustomCacheManager {
       Config(
         key,
         stalePeriod: const Duration(days: 7),
-        maxNrOfCacheObjects: 200,
+        maxNrOfCacheObjects: 100,
         repo: JsonCacheInfoRepository(databaseName: key),
         fileSystem: IOFileSystem(key),
         fileService: HttpFileService(),
@@ -25,20 +26,14 @@ class CustomCacheManager {
     await _instance?.emptyCache();
   }
 
-  // Initialize cache with proper permissions
-  static Future<void> initCache() async {
+  static Future<void> init(Directory cacheDir) async {
     try {
-      final cacheDir = await getTemporaryDirectory();
-      final dbPath = p.join(cacheDir.path, '$key.db');
-      
-      // Ensure the directory exists and has write permissions
       await cacheDir.create(recursive: true);
-      
       _instance = CacheManager(
         Config(
           key,
           stalePeriod: const Duration(days: 7),
-          maxNrOfCacheObjects: 200,
+          maxNrOfCacheObjects: 100,
           repo: JsonCacheInfoRepository(databaseName: key),
           fileSystem: IOFileSystem(key),
           fileService: HttpFileService(),
