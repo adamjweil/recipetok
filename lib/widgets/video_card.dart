@@ -41,6 +41,7 @@ class VideoCardState extends State<VideoCard> {
   bool _isMuted = true;
   late int _localLikeCount;
   late bool _localIsLiked;
+  late int _localViewCount;
 
   // Add stream subscription
   StreamSubscription<DocumentSnapshot>? _likeSubscription;
@@ -48,6 +49,7 @@ class VideoCardState extends State<VideoCard> {
   @override
   void initState() {
     super.initState();
+    _localViewCount = widget.videoData['views'] ?? 0;
     _localLikeCount = widget.videoData['likes'] ?? 0;
     _localIsLiked = false;
     _initializeVideo();
@@ -97,7 +99,7 @@ class VideoCardState extends State<VideoCard> {
           _isInitialized = true;
         });
         
-        // Auto-play the first video
+        // Just play the video, view will be recorded when playVideo is called
         _videoController?.play();
         
         _preloadNextVideo();
@@ -171,13 +173,11 @@ class VideoCardState extends State<VideoCard> {
     }
   }
 
-  // Add this method to play video directly
   void playVideo() {
-    if (_isInitialized && mounted && !_videoController!.value.isPlaying) {
+    if (_isInitialized && mounted) {
       _videoController!.play();
-      if (!_hasRecordedView) {
-        _recordView();
-      }
+      // Always try to record the view when explicitly playing
+      _recordView();
     }
   }
 
@@ -189,23 +189,31 @@ class VideoCardState extends State<VideoCard> {
   }
 
   Future<void> _recordView() async {
-    if (!mounted) return;
+    if (!mounted || _hasRecordedView) return;
     
     try {
       final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
       if (currentUserId.isEmpty) return;
 
-      await FirebaseFirestore.instance
-          .collection('videos')
-          .doc(widget.videoId)
-          .update({
-        'views': FieldValue.increment(1),
+      // Update local state immediately
+      setState(() {
+        _localViewCount += 1;
+        _hasRecordedView = true;
       });
 
-      if (mounted) {
-        setState(() => _hasRecordedView = true);
-        widget.onVideoPlay?.call();
-      }
+      // Update Firestore in the background
+      unawaited(
+        FirebaseFirestore.instance
+            .collection('videos')
+            .doc(widget.videoId)
+            .update({
+          'views': FieldValue.increment(1),
+        }).then((_) {
+          widget.onVideoPlay?.call();
+        }).catchError((e) {
+          print('Error recording view: $e');
+        })
+      );
     } catch (e) {
       print('Error recording view: $e');
     }
@@ -361,7 +369,7 @@ class VideoCardState extends State<VideoCard> {
                     // Views count
                     _buildActionButton(
                       icon: Icons.remove_red_eye,
-                      label: '${widget.videoData['views'] ?? 0}',
+                      label: '$_localViewCount',
                       onTap: () {},
                       color: Colors.white,
                     ),
