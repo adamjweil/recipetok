@@ -16,7 +16,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await CustomCacheManager.initialize();
+  await CustomCacheManager.initCache();
   print('Firebase initialized successfully');
   runApp(const MyApp());
 }
