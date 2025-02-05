@@ -28,13 +28,15 @@ class VideoCard extends StatefulWidget {
   });
 
   @override
-  State<VideoCard> createState() => _VideoCardState();
+  State<VideoCard> createState() => VideoCardState();
 }
 
-class _VideoCardState extends State<VideoCard> {
+class VideoCardState extends State<VideoCard> {
   VideoPlayerController? _videoController;
+  VideoPlayerController? _nextVideoController;
   bool _isInitialized = false;
   bool _hasRecordedView = false;
+  int? _nextIndex;
 
   @override
   void initState() {
@@ -44,7 +46,10 @@ class _VideoCardState extends State<VideoCard> {
 
   @override
   void dispose() {
+    _videoController?.pause();
     _videoController?.dispose();
+    _nextVideoController?.pause();
+    _nextVideoController?.dispose();
     super.dispose();
   }
 
@@ -63,6 +68,11 @@ class _VideoCardState extends State<VideoCard> {
         setState(() {
           _isInitialized = true;
         });
+        
+        // Auto-play the first video
+        _videoController?.play();
+        
+        _preloadNextVideo();
       }
     } catch (e) {
       print('Error initializing video: $e');
@@ -74,22 +84,85 @@ class _VideoCardState extends State<VideoCard> {
     }
   }
 
-  void _togglePlay() {
-    if (!_isInitialized || !mounted) return;
+  Future<void> _preloadNextVideo() async {
+    try {
+      final nextVideoSnapshot = await FirebaseFirestore.instance
+          .collection('videos')
+          .orderBy('createdAt', descending: true)
+          .where('createdAt', isLessThan: widget.videoData['createdAt'])
+          .limit(1)
+          .get();
 
-    setState(() {
-      if (_videoController!.value.isPlaying) {
-        _videoController!.pause();
-      } else {
-        _videoController!.play();
-        if (!_hasRecordedView) {
-          _recordView();
+      if (nextVideoSnapshot.docs.isNotEmpty) {
+        final nextVideoData = nextVideoSnapshot.docs.first.data();
+        final nextVideoUrl = nextVideoData['videoUrl'] as String?;
+        
+        if (nextVideoUrl != null && nextVideoUrl.isNotEmpty) {
+          _nextVideoController = VideoPlayerController.network(nextVideoUrl);
+          await _nextVideoController?.initialize();
+          _nextVideoController?.setVolume(0);
+          _nextVideoController?.setLooping(true);
         }
       }
-    });
+    } catch (e) {
+      print('Error preloading next video: $e');
+    }
+  }
+
+  void _switchToNextVideo() {
+    if (!mounted) return;
+    if (_nextVideoController != null) {
+      _videoController?.pause();
+      _videoController?.dispose();
+      
+      _videoController = _nextVideoController;
+      _nextVideoController = null;
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+      _preloadNextVideo();
+    }
+  }
+
+  void togglePlay() {
+    if (!_isInitialized || !mounted) return;
+
+    if (_videoController!.value.isPlaying) {
+      _videoController!.pause();
+    } else {
+      _videoController!.play();
+      if (!_hasRecordedView) {
+        _recordView();
+      }
+    }
+    
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // Add this method to play video directly
+  void playVideo() {
+    if (_isInitialized && mounted && !_videoController!.value.isPlaying) {
+      _videoController!.play();
+      if (!_hasRecordedView) {
+        _recordView();
+      }
+    }
+  }
+
+  // Update the pauseVideo method
+  void pauseVideo() {
+    if (_isInitialized && mounted && _videoController!.value.isPlaying) {
+      _videoController!.pause();
+    }
   }
 
   Future<void> _recordView() async {
+    if (!mounted) return;
+    
     try {
       final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
       if (currentUserId.isEmpty) return;
@@ -101,8 +174,10 @@ class _VideoCardState extends State<VideoCard> {
         'views': FieldValue.increment(1),
       });
 
-      setState(() => _hasRecordedView = true);
-      widget.onVideoPlay?.call();
+      if (mounted) {
+        setState(() => _hasRecordedView = true);
+        widget.onVideoPlay?.call();
+      }
     } catch (e) {
       print('Error recording view: $e');
     }
@@ -198,7 +273,7 @@ class _VideoCardState extends State<VideoCard> {
       children: [
         if (_isInitialized)
           GestureDetector(
-            onTap: _togglePlay,
+            onTap: togglePlay,
             child: VideoPlayer(_videoController!),
           )
         else
@@ -287,15 +362,18 @@ class _VideoCardState extends State<VideoCard> {
                     
                     // Check if video exists in any group
                     final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                      final videos = (groupDoc.data() as Map<String, dynamic>)['videos'] as Map<String, dynamic>?;
+                      final groupData = groupDoc.data() as Map<String, dynamic>;
+                      final videos = groupData['videos'] as Map<String, dynamic>?;
                       return videos?.containsKey(widget.videoId) ?? false;
                     });
                     
+                    // Return true if either bookmarked OR in any group
                     return isBookmarked || isInGroup;
                   },
-                ),
+                ).distinct(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
+                    print('Bookmark stream error: ${snapshot.error}');
                     return const Icon(Icons.error, color: Colors.red);
                   }
 
@@ -304,7 +382,8 @@ class _VideoCardState extends State<VideoCard> {
                   return IconButton(
                     icon: Icon(
                       isSaved ? Icons.bookmark : Icons.bookmark_border,
-                      color: isSaved ? Colors.yellow : Colors.white,
+                      color: Colors.white,
+                      size: 28,
                     ),
                     onPressed: () {
                       showModalBottomSheet(
@@ -357,7 +436,7 @@ class _VideoCardState extends State<VideoCard> {
                 size: 64,
                 color: Colors.white70,
               ),
-              onPressed: _isInitialized ? _togglePlay : null,
+              onPressed: _isInitialized ? togglePlay : null,
             ),
           ),
       ],
@@ -365,17 +444,32 @@ class _VideoCardState extends State<VideoCard> {
   }
 
   Widget _buildPlaceholder() {
+    final thumbnailUrl = widget.videoData['thumbnailUrl'] as String?;
+    
+    if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: thumbnailUrl,
+        fit: BoxFit.cover,
+        cacheManager: CustomCacheManager.instance,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[900],
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+        errorWidget: (context, url, error) => _buildErrorPlaceholder(),
+      );
+    }
+    
+    return _buildErrorPlaceholder();
+  }
+
+  Widget _buildErrorPlaceholder() {
     return Container(
       color: Colors.grey[900],
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.video_library,
-              size: 48,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.video_library, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 8),
             Text(
               'Video thumbnail not available',
@@ -389,6 +483,9 @@ class _VideoCardState extends State<VideoCard> {
       ),
     );
   }
+
+  // Make _videoController accessible
+  VideoPlayerController? get videoController => _videoController;
 }
 
 class CommentsSheet extends StatefulWidget {
@@ -409,6 +506,33 @@ class _CommentsSheetState extends State<CommentsSheet> {
   final TextEditingController _commentController = TextEditingController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  // Add this list of quick comments
+  final List<String> quickComments = [
+    "Looks delicious! 😋",
+    "Great recipe! 👨‍🍳",
+    "Can't wait to try this! 🔥",
+    "Amazing work! ⭐️",
+    "Thanks for sharing! 🙏",
+    "Saved for later! 📌",
+  ];
+
+  // Add this method to handle quick comment selection
+  void _insertQuickComment(String comment) {
+    final currentText = _commentController.text;
+    final currentPosition = _commentController.selection.baseOffset;
+    final newPosition = currentPosition + comment.length;
+
+    if (currentText.isEmpty) {
+      _commentController.text = comment;
+    } else {
+      final beforeCursor = currentText.substring(0, currentPosition);
+      final afterCursor = currentText.substring(currentPosition);
+      _commentController.text = beforeCursor + comment + afterCursor;
+    }
+
+    _commentController.selection = TextSelection.collapsed(offset: newPosition);
+  }
 
   @override
   void dispose() {
@@ -471,7 +595,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
+              stream: FirebaseFirestore.instance
                   .collection('videos')
                   .doc(widget.videoId)
                   .collection('comments')
@@ -515,8 +639,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   itemCount: comments.length,
                   itemBuilder: (context, index) {
                     final comment = comments[index].data() as Map<String, dynamic>;
-                    final timestamp = comment['createdAt'] as Timestamp?;
-                    final dateTime = timestamp?.toDate();
+                    final commentId = comments[index].id;
+                    final dateTime = (comment['createdAt'] as Timestamp?)?.toDate();
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
@@ -525,11 +649,12 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         children: [
                           CircleAvatar(
                             radius: 16,
+                            backgroundColor: Colors.grey[200],
                             backgroundImage: comment['userImage'] != null
                                 ? NetworkImage(comment['userImage'])
                                 : null,
                             child: comment['userImage'] == null
-                                ? const Icon(Icons.person)
+                                ? const Icon(Icons.person, color: Colors.grey)
                                 : null,
                           ),
                           const SizedBox(width: 12),
@@ -538,7 +663,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  comment['username'] ?? 'User',
+                                  comment['username'] ?? 'Anonymous',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -556,22 +681,41 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
-                                    Text(
-                                      '${comment['likes'] ?? 0} likes',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
+                                    StreamBuilder<DocumentSnapshot>(
+                                      stream: FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(currentUserId)
+                                          .collection('commentLikes')
+                                          .doc(commentId)
+                                          .snapshots(),
+                                      builder: (context, snapshot) {
+                                        final isLiked = snapshot.data?.exists ?? false;
+                                        return Row(
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () => _toggleCommentLike(commentId),
+                                              child: Icon(
+                                                isLiked ? Icons.favorite : Icons.favorite_border,
+                                                size: 16,
+                                                color: isLiked ? Colors.red : Colors.grey[600],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${comment['likes'] ?? 0}',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
                               ],
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.favorite_border),
-                            onPressed: () {},
-                            color: Colors.grey[600],
                           ),
                         ],
                       ),
@@ -581,28 +725,117 @@ class _CommentsSheetState extends State<CommentsSheet> {
               },
             ),
           ),
-          Padding(
+
+          // Add Quick Comments Section
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              border: Border(
+                top: BorderSide(
+                  color: Colors.grey[200]!,
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Quick Comments',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: quickComments.map((comment) {
+                    return InkWell(
+                      onTap: () => _insertQuickComment(comment),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Theme.of(context).primaryColor.withOpacity(0.3),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          comment,
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+
+          // Comment Input Section
+          Container(
             padding: EdgeInsets.only(
               left: 16,
               right: 16,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              top: 16,
+              top: 12,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  offset: const Offset(0, -1),
+                  spreadRadius: 1,
+                  blurRadius: 1,
+                ),
+              ],
             ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _commentController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Add a comment...',
-                      border: OutlineInputBorder(),
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                     ),
                     maxLines: null,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.send),
+                  icon: const Icon(Icons.send_rounded),
                   onPressed: _postComment,
                   color: Theme.of(context).primaryColor,
                 ),
@@ -630,6 +863,45 @@ class _CommentsSheetState extends State<CommentsSheet> {
       return '${difference.inMinutes}m';
     } else {
       return 'now';
+    }
+  }
+
+  Future<void> _toggleCommentLike(String commentId) async {
+    try {
+      final commentRef = _firestore
+          .collection('videos')
+          .doc(widget.videoId)
+          .collection('comments')
+          .doc(commentId);
+
+      final userLikeRef = _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('commentLikes')
+          .doc(commentId);
+
+      final likeDoc = await userLikeRef.get();
+      final isLiked = likeDoc.exists;
+
+      if (isLiked) {
+        await commentRef.update({
+          'likes': FieldValue.increment(-1),
+        });
+        await userLikeRef.delete();
+      } else {
+        await commentRef.update({
+          'likes': FieldValue.increment(1),
+        });
+        await userLikeRef.set({
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     }
   }
 } 

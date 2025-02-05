@@ -18,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _pageController = PageController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+  VideoCardState? _currentlyPlayingVideo;
 
   Stream<QuerySnapshot> _getVideosStream() {
     return _firestore
@@ -160,10 +161,27 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _pageController,
             scrollDirection: Axis.vertical,
             itemCount: videos.length,
+            pageSnapping: true,
+            allowImplicitScrolling: true,
+            padEnds: false,
+            onPageChanged: (index) {
+              if (_currentlyPlayingVideo != null) {
+                _currentlyPlayingVideo?.pauseVideo();
+                _currentlyPlayingVideo = null;
+              }
+
+              final videoKey = GlobalKey<VideoCardState>();
+              final videoCard = videoKey.currentState;
+              if (videoCard != null) {
+                videoCard.playVideo();
+                _currentlyPlayingVideo = videoCard;
+              }
+            },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;
               final videoId = videos[index].id;
               return VideoCard(
+                key: GlobalKey<VideoCardState>(),
                 videoData: videoData,
                 videoId: videoId,
                 onUserTap: () {},
