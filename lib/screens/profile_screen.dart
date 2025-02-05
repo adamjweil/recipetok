@@ -13,6 +13,10 @@ import '../screens/edit_profile_screen.dart';
 import '../utils/custom_cache_manager.dart';
 import '../widgets/video_groups_section.dart';
 import './video_player_screen.dart';
+import '../models/story.dart';
+import '../services/story_service.dart';
+import 'package:video_compress/video_compress.dart';
+import '../widgets/story_viewer.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -550,127 +554,50 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           return Column(
             children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Avatar and Stats row
+                    Row(
+                      children: [
+                        _buildAvatarWithStory(userData),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: _buildProfileStats(userData),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      userData['bio'] ?? '',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildEditProfileButton(userData),
+                    const SizedBox(height: 12),
+                    const VideoGroupsSection(),
+                  ],
+                ),
+              ),
+              TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.grid_on)),
+                  Tab(icon: Icon(Icons.bookmark_border)),
+                ],
+                indicatorColor: Colors.black,
+                unselectedLabelColor: Colors.grey,
+                labelColor: Colors.black,
+              ),
               Expanded(
-                child: NestedScrollView(
-                  headerSliverBuilder: (context, innerBoxIsScrolled) {
-                    return [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Avatar and Stats row
-                              Row(
-                                children: [
-                                  // Avatar on the left
-                                  Stack(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 40,
-                                        backgroundColor: Colors.grey[200],
-                                        backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
-                                            ? CachedNetworkImageProvider(
-                                                FirebaseAuth.instance.currentUser!.photoURL!,
-                                                cacheManager: CustomCacheManager.instance,
-                                                errorListener: (error) => print('Error loading profile image: $error'),
-                                              )
-                                            : null,
-                                        child: FirebaseAuth.instance.currentUser?.photoURL == null
-                                            ? const Icon(Icons.person, size: 40)
-                                            : null,
-                                      ),
-                                      if (_isUploading)
-                                        const Positioned.fill(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(width: 24), // Space between avatar and stats
-                                  // Stats on the right
-                                  Expanded(
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        _buildStatColumn(userData['videoCount']?.toString() ?? '0', 'Dishes'),
-                                        GestureDetector(
-                                          onTap: () {
-                                            showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              backgroundColor: Colors.transparent,
-                                              builder: (context) => UserListModal(
-                                                title: 'Followers',
-                                                userIds: (userData['followers'] as List<dynamic>? ?? []).cast<String>(),
-                                                isFollowers: true,
-                                              ),
-                                            );
-                                          },
-                                          child: _buildStatColumn(
-                                            (userData['followers'] as List<dynamic>? ?? []).length.toString(),
-                                            'Followers',
-                                          ),
-                                        ),
-                                        GestureDetector(
-                                          onTap: () {
-                                            showModalBottomSheet(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              backgroundColor: Colors.transparent,
-                                              builder: (context) => UserListModal(
-                                                title: 'Following',
-                                                userIds: (userData['following'] as List<dynamic>? ?? []).cast<String>(),
-                                                isFollowers: false,
-                                              ),
-                                            );
-                                          },
-                                          child: _buildStatColumn(
-                                            (userData['following'] as List<dynamic>? ?? []).length.toString(),
-                                            'Following',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                userData['bio'] ?? '',
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              const SizedBox(height: 12),
-                              _buildEditProfileButton(userData),
-                              const SizedBox(height: 12),
-                              const VideoGroupsSection(),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _SliverAppBarDelegate(
-                          TabBar(
-                            controller: _tabController,
-                            tabs: const [
-                              Tab(icon: Icon(Icons.grid_on)),
-                              Tab(icon: Icon(Icons.bookmark_border)),
-                            ],
-                            indicatorColor: Colors.black,
-                            unselectedLabelColor: Colors.grey,
-                            labelColor: Colors.black,
-                          ),
-                        ),
-                      ),
-                    ];
-                  },
-                  body: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildVideoGrid(),
-                      _buildBookmarkedVideosGrid(),
-                    ],
-                  ),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildVideoGrid(),
+                    _buildBookmarkedVideosGrid(),
+                  ],
                 ),
               ),
             ],
@@ -699,6 +626,262 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 _signOut(context);
               },
             ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAvatarWithStory(Map<String, dynamic> userData) {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+    
+    return StreamBuilder<List<Story>>(
+      stream: StoryService().getUserActiveStories(userId),
+      builder: (context, snapshot) {
+        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
+        final timeRemaining = hasActiveStory 
+            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
+            : '';
+        
+        return Column(
+          children: [
+            if (hasActiveStory)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  timeRemaining,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: hasActiveStory ? BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: const [
+                        Colors.purple,
+                        Colors.pink,
+                        Colors.orange,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ) : null,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (hasActiveStory) {
+                        _showStoryModal(context, snapshot.data!.first);
+                      }
+                    },
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
+                          ? CachedNetworkImageProvider(
+                              FirebaseAuth.instance.currentUser!.photoURL!,
+                              cacheManager: CustomCacheManager.instance,
+                            )
+                          : null,
+                      child: FirebaseAuth.instance.currentUser?.photoURL == null
+                          ? const Icon(Icons.person, size: 40)
+                          : null,
+                    ),
+                  ),
+                ),
+                if (!hasActiveStory)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _addStory,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addStory() async {
+    final ImagePicker picker = ImagePicker();
+    
+    try {
+      final XFile? media = await showDialog<XFile>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add Story'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Take Photo'),
+                onTap: () async {
+                  Navigator.pop(
+                    context,
+                    await picker.pickImage(source: ImageSource.camera),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_camera_back),
+                title: const Text('Record Video'),
+                onTap: () async {
+                  Navigator.pop(
+                    context,
+                    await picker.pickVideo(
+                      source: ImageSource.camera,
+                      maxDuration: const Duration(seconds: 10),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from Gallery'),
+                onTap: () async {
+                  Navigator.pop(
+                    context,
+                    await picker.pickImage(source: ImageSource.gallery),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (media == null) return;
+
+      setState(() => _isUploading = true);
+      
+      final mediaType = media.name.endsWith('.mp4') ? 'video' : 'image';
+      print('Selected media type: $mediaType'); // Debug log
+      print('File path: ${media.path}'); // Debug log
+      
+      try {
+        await StoryService().uploadStory(File(media.path), mediaType);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Story uploaded successfully'),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(
+                top: 20,
+                right: 20,
+                left: 20,
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error uploading story: $e'); // Debug log
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error uploading story: $e'),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(
+                top: 20,
+                right: 20,
+                left: 20,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error in _addStory: $e'); // Debug log
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  void _showStoryModal(BuildContext context, Story story) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      builder: (context) => StoryViewer(story: story),
+    );
+  }
+
+  // Add this helper method to format the remaining time
+  String _formatTimeRemaining(DateTime expiresAt) {
+    final now = DateTime.now();
+    final difference = expiresAt.difference(now);
+    
+    if (difference.inMinutes < 1) {
+      return '(<1m)';
+    } else {
+      return '(${difference.inMinutes}m)';
+    }
+  }
+
+  // Update the profile section where the name is displayed
+  Widget _buildProfileInfo(Map<String, dynamic> userData) {
+    return StreamBuilder<List<Story>>(
+      stream: StoryService().getUserActiveStories(FirebaseAuth.instance.currentUser!.uid),
+      builder: (context, snapshot) {
+        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
+        final timeRemaining = hasActiveStory 
+            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
+            : '';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  userData['displayName'] ?? 'User',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (hasActiveStory) 
+                  Text(
+                    ' $timeRemaining',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+              ],
+            ),
+            if (userData['bio'] != null && userData['bio'].toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(userData['bio']),
+              ),
           ],
         );
       },

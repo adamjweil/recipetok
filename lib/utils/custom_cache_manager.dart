@@ -3,7 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 class CustomCacheManager {
-  static const key = 'customCacheKey';
+  static const key = 'customCache';
   static CacheManager? _instance;
 
   static CacheManager get instance {
@@ -20,10 +20,33 @@ class CustomCacheManager {
     return _instance!;
   }
 
-  // Add a method to clear cache if needed
+  // Clear the cache
   static Future<void> clearCache() async {
     await _instance?.emptyCache();
-    _instance = null;
+  }
+
+  // Initialize cache with proper permissions
+  static Future<void> initCache() async {
+    try {
+      final cacheDir = await getTemporaryDirectory();
+      final dbPath = p.join(cacheDir.path, '$key.db');
+      
+      // Ensure the directory exists and has write permissions
+      await cacheDir.create(recursive: true);
+      
+      _instance = CacheManager(
+        Config(
+          key,
+          stalePeriod: const Duration(days: 7),
+          maxNrOfCacheObjects: 200,
+          repo: JsonCacheInfoRepository(databaseName: key),
+          fileSystem: IOFileSystem(key),
+          fileService: HttpFileService(),
+        ),
+      );
+    } catch (e) {
+      print('Error initializing cache: $e');
+    }
   }
 
   // Add error handling for database operations
@@ -44,15 +67,6 @@ class CustomCacheManager {
         // For other errors, just log them
         print('Cache operation failed: $e');
       }
-    }
-  }
-
-  static Future<void> initialize() async {
-    try {
-      // Clear the cache on app start to prevent database errors
-      await instance.emptyCache();
-    } catch (e) {
-      print('Error initializing cache: $e');
     }
   }
 } 

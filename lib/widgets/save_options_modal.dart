@@ -16,31 +16,79 @@ class SaveOptionsModal extends StatelessWidget {
     required this.currentUserId,
   });
 
+  void _showTopSnackBar(BuildContext context, String message, {bool isError = false}) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 20,
+        left: 20,
+        right: 20,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(10),
+          color: isError ? Colors.red : Colors.black87,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+    Future.delayed(const Duration(seconds: 2), () {
+      overlayEntry.remove();
+    });
+  }
+
   Future<void> _saveToBookmarks(BuildContext context) async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
-      await FirebaseFirestore.instance
+      final bookmarkRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('bookmarks')
-          .doc(videoId)
-          .set({
-        'createdAt': FieldValue.serverTimestamp(),
-        'videoId': videoId,
-      });
+          .doc(videoId);
 
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved to bookmarks')),
-        );
+      // Check if already bookmarked
+      final bookmarkDoc = await bookmarkRef.get();
+      
+      if (bookmarkDoc.exists) {
+        // Remove bookmark
+        await bookmarkRef.delete();
+        if (context.mounted) {
+          Navigator.pop(context);
+          _showTopSnackBar(context, 'Removed from bookmarks');
+        }
+      } else {
+        // Add bookmark
+        await bookmarkRef.set({
+          'createdAt': FieldValue.serverTimestamp(),
+          'videoId': videoId,
+        });
+
+        if (context.mounted) {
+          Navigator.pop(context);
+          _showTopSnackBar(context, 'Saved to bookmarks');
+        }
       }
+
+      // Force a refresh
+      await bookmarkRef.get();
+
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
+      }
     }
   }
 
@@ -64,14 +112,12 @@ class SaveOptionsModal extends StatelessWidget {
 
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Added to collection')),
-        );
+        _showTopSnackBar(context, 'Added to collection');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
+      }
     }
   }
 
@@ -93,11 +139,16 @@ class SaveOptionsModal extends StatelessWidget {
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
+        // Force a refresh of the groups collection
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('groups')
+            .get();
+
         if (context.mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Removed from collection')),
-          );
+          _showTopSnackBar(context, 'Removed from collection');
         }
       } else {
         // Add to group
@@ -109,17 +160,22 @@ class SaveOptionsModal extends StatelessWidget {
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
+        // Force a refresh of the groups collection
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('groups')
+            .get();
+
         if (context.mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Added to collection')),
-          );
+          _showTopSnackBar(context, 'Added to collection');
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      if (context.mounted) {
+        _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
+      }
     }
   }
 
@@ -166,13 +222,28 @@ class SaveOptionsModal extends StatelessWidget {
             ),
           ),
           // Bookmarks option
-          ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: Colors.grey,
-              child: Icon(Icons.bookmark, color: Colors.white),
-            ),
-            title: const Text('Bookmarks'),
-            onTap: () => _saveToBookmarks(context),
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('bookmarks')
+                .doc(videoId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final isBookmarked = snapshot.data?.exists ?? false;
+              return ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.grey,
+                  child: Icon(Icons.bookmark, color: Colors.white),
+                ),
+                title: const Text('Bookmarks'),
+                trailing: Icon(
+                  isBookmarked ? Icons.check_circle : Icons.add_circle_outline,
+                  color: isBookmarked ? Colors.green : Colors.grey,
+                ),
+                onTap: () => _saveToBookmarks(context),
+              );
+            },
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),

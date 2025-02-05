@@ -5,53 +5,43 @@ rules_version = '2';
 //    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    match /user_avatars/{userId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
     }
     
-    match /video_thumbnails/{videoId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    match /videos/{videoId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Default rule
+    // Default deny
     match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Allow access to stories and all subfolders
+    match /stories/{userId}/{type}/{filename} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isOwner(userId);
+    }
+
+    // Allow access to user avatars
+    match /user_avatars/{userId}/{allImages=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // Allow access to video uploads
+    match /videos/{userId}/{allVideos=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // Allow access to thumbnails
+    match /thumbnails/{userId}/{allThumbnails=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
     }
   }
 }
 
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // User document rules
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow access to all subcollections under user document
-      match /{allSubcollections=**} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if request.auth != null && request.auth.uid == userId;
-      }
-    }
-
-    // Video document rules
-    match /videos/{videoId} {
-      allow read: if request.auth != null;
-      allow update: if request.auth != null;  // Allow updates for view counts
-      allow create, delete: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      
-      match /{allSubcollections=**} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null;
-      }
-    }
-  }
-}
