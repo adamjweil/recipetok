@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/video_card.dart';  // We'll need to create this too
+import 'package:firebase_auth/firebase_auth.dart';
 
 class VideoPlayerScreen extends StatelessWidget {
   final Map<String, dynamic> videoData;
@@ -41,7 +42,10 @@ class VideoPlayerScreen extends StatelessWidget {
         videoData: videoData,
         videoId: videoId,
         onUserTap: () {},
-        onVideoPlay: _incrementViewCount,
+        onLike: _incrementViewCount,
+        onBookmark: () {},
+        currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        autoPlay: true,
       ),
     );
   }

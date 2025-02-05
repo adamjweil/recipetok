@@ -10,22 +10,22 @@ import 'package:rxdart/rxdart.dart';
 
 class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
-  final VoidCallback onUserTap;
   final String videoId;
-  final VoidCallback? onVideoPlay;
-  final VoidCallback? onLike;
-  final VoidCallback? onBookmark;
-  final String? currentUserId;
+  final VoidCallback onUserTap;
+  final VoidCallback onLike;
+  final VoidCallback onBookmark;
+  final String currentUserId;
+  final bool autoPlay;
 
   const VideoCard({
     super.key,
     required this.videoData,
-    required this.onUserTap,
     required this.videoId,
-    this.onVideoPlay,
-    this.onLike,
-    this.onBookmark,
-    this.currentUserId,
+    required this.onUserTap,
+    required this.onLike,
+    required this.onBookmark,
+    required this.currentUserId,
+    this.autoPlay = false,
   });
 
   @override
@@ -33,8 +33,7 @@ class VideoCard extends StatefulWidget {
 }
 
 class VideoCardState extends State<VideoCard> {
-  VideoPlayerController? _videoController;
-  VideoPlayerController? _nextVideoController;
+  late VideoPlayerController _videoController;
   bool _isInitialized = false;
   bool _hasRecordedView = false;
   int? _nextIndex;
@@ -75,116 +74,53 @@ class VideoCardState extends State<VideoCard> {
   @override
   void dispose() {
     _likeSubscription?.cancel();
-    _videoController?.pause();
-    _videoController?.dispose();
-    _nextVideoController?.pause();
-    _nextVideoController?.dispose();
+    _videoController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeVideo() async {
-    if (!mounted) return;
-    
-    final videoUrl = widget.videoData['videoUrl'] as String?;
-    if (videoUrl == null || videoUrl.isEmpty) return;
-
+    _videoController = VideoPlayerController.network(widget.videoData['videoUrl']);
     try {
-      _videoController = VideoPlayerController.network(videoUrl);
-      await _videoController?.initialize();
+      await _videoController.initialize();
+      setState(() {
+        _isInitialized = true;
+      });
       
-      if (mounted) {
-        _videoController?.setLooping(true);
-        _videoController?.setVolume(0.0);
-        setState(() {
-          _isInitialized = true;
-        });
-        
-        // Just play the video, view will be recorded when playVideo is called
-        _videoController?.play();
-        
-        _preloadNextVideo();
-      }
-    } catch (e) {
-      print('Error initializing video: $e');
-      if (mounted) {
-        setState(() {
-          _isInitialized = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _preloadNextVideo() async {
-    try {
-      final nextVideoSnapshot = await FirebaseFirestore.instance
-          .collection('videos')
-          .orderBy('createdAt', descending: true)
-          .where('createdAt', isLessThan: widget.videoData['createdAt'])
-          .limit(1)
-          .get();
-
-      if (nextVideoSnapshot.docs.isNotEmpty) {
-        final nextVideoData = nextVideoSnapshot.docs.first.data();
-        final nextVideoUrl = nextVideoData['videoUrl'] as String?;
-        
-        if (nextVideoUrl != null && nextVideoUrl.isNotEmpty) {
-          _nextVideoController = VideoPlayerController.network(nextVideoUrl);
-          await _nextVideoController?.initialize();
-          _nextVideoController?.setVolume(0);
-          _nextVideoController?.setLooping(true);
+      // Add this check to start playing if autoPlay is true
+      if (widget.autoPlay && mounted) {
+        _videoController.play();
+        _videoController.setLooping(true);
+        if (!_hasRecordedView) {
+          _recordView();
         }
       }
     } catch (e) {
-      print('Error preloading next video: $e');
-    }
-  }
-
-  void _switchToNextVideo() {
-    if (!mounted) return;
-    if (_nextVideoController != null) {
-      _videoController?.pause();
-      _videoController?.dispose();
-      
-      _videoController = _nextVideoController;
-      _nextVideoController = null;
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-      _preloadNextVideo();
-    }
-  }
-
-  void togglePlay() {
-    if (!_isInitialized || !mounted) return;
-
-    if (_videoController!.value.isPlaying) {
-      _videoController!.pause();
-    } else {
-      _videoController!.play();
-      if (!_hasRecordedView) {
-        _recordView();
-      }
-    }
-    
-    if (mounted) {
-      setState(() {});
+      print('Error initializing video: $e');
     }
   }
 
   void playVideo() {
     if (_isInitialized && mounted) {
-      _videoController!.play();
-      // Always try to record the view when explicitly playing
-      _recordView();
+      _videoController.play();
+      _videoController.setLooping(true);
+      if (!_hasRecordedView) {
+        _recordView();
+      }
     }
   }
 
-  // Update the pauseVideo method
   void pauseVideo() {
-    if (_isInitialized && mounted && _videoController!.value.isPlaying) {
-      _videoController!.pause();
+    if (_isInitialized && mounted) {
+      _videoController.pause();
+    }
+  }
+
+  @override
+  void didUpdateWidget(VideoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Add this to handle changes in autoPlay
+    if (widget.autoPlay && !oldWidget.autoPlay && _isInitialized && mounted) {
+      playVideo();
     }
   }
 
@@ -207,12 +143,11 @@ class VideoCardState extends State<VideoCard> {
             .collection('videos')
             .doc(widget.videoId)
             .update({
-          'views': FieldValue.increment(1),
-        }).then((_) {
-          widget.onVideoPlay?.call();
-        }).catchError((e) {
-          print('Error recording view: $e');
-        })
+              'views': FieldValue.increment(1),
+            })
+            .catchError((e) {
+              print('Error recording view: $e');
+            })
       );
     } catch (e) {
       print('Error recording view: $e');
@@ -225,7 +160,7 @@ class VideoCardState extends State<VideoCard> {
       _localLikeCount += _localIsLiked ? 1 : -1;
     });
 
-    widget.onLike?.call();
+    widget.onLike.call();
   }
 
   void _toggleBookmark(BuildContext context) {
@@ -259,22 +194,29 @@ class VideoCardState extends State<VideoCard> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final aspectRatio = _videoController!.value.aspectRatio;
+    final aspectRatio = _videoController.value.aspectRatio;
     
     return Container(
       color: Colors.black,
       child: Stack(
         children: [
-          // Video
+          // Video with tap gesture
           Center(
             child: GestureDetector(
-              onTap: togglePlay,
+              onTap: () {
+                // Toggle video play/pause
+                if (_videoController.value.isPlaying) {
+                  pauseVideo();
+                } else {
+                  playVideo();
+                }
+              },
               child: AspectRatio(
                 aspectRatio: aspectRatio,
                 child: Stack(
                   children: [
-                    VideoPlayer(_videoController!),
-                    if (!_videoController!.value.isPlaying)
+                    VideoPlayer(_videoController),
+                    if (!_videoController.value.isPlaying)
                       Container(
                         color: Colors.black26,
                         child: const Center(
@@ -294,7 +236,7 @@ class VideoCardState extends State<VideoCard> {
           // Interaction buttons - vertical column on right
           Positioned(
             right: 8,
-            bottom: 0, // Increased the bottom value to move buttons down
+            bottom: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Material(
@@ -302,11 +244,11 @@ class VideoCardState extends State<VideoCard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Like button - simplified without StreamBuilder
+                    // Like button
                     _buildActionButton(
                       icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
                       label: '$_localLikeCount',
-                      onTap: _handleLike,
+                      onTap: _handleLike,  // This is now separate from video play/pause
                       color: _localIsLiked ? Colors.red : Colors.white,
                     ),
                     const SizedBox(height: 16),
@@ -457,9 +399,6 @@ class VideoCardState extends State<VideoCard> {
       ),
     );
   }
-
-  // Make _videoController accessible
-  VideoPlayerController? get videoController => _videoController;
 }
 
 class CommentsSheet extends StatefulWidget {
