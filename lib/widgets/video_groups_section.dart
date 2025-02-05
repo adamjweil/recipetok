@@ -7,45 +7,83 @@ import './create_group_modal.dart';
 import './group_details_modal.dart';
 
 class VideoGroupsSection extends StatelessWidget {
-  const VideoGroupsSection({super.key});
+  final bool showAddButton;
+  final String? userId;
+
+  const VideoGroupsSection({
+    super.key,
+    this.showAddButton = true,
+    this.userId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 100,
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(FirebaseAuth.instance.currentUser?.uid)
-            .collection('groups')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
+    final String profileUserId = userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(profileUserId)
+          .collection('groups')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const SizedBox.shrink(); // Hide on error
+        }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          final groups = snapshot.data?.docs ?? [];
+        final groups = snapshot.data?.docs ?? [];
 
-          return ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: groups.length + 1, // +1 for the "Create" button
-            itemBuilder: (context, index) {
-              if (index == groups.length) {
-                return _buildCreateGroupButton(context);
-              }
+        // If there are no groups and this isn't the current user's profile, hide the section
+        if (groups.isEmpty && !showAddButton) {
+          return const SizedBox.shrink();
+        }
 
-              final group = groups[index].data() as Map<String, dynamic>;
-              return _buildGroupItem(context, group, groups[index].id);
-            },
-          );
-        },
-      ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Collections',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (showAddButton)
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () {
+                      _showCreateGroupModal(context);
+                    },
+                  ),
+              ],
+            ),
+            SizedBox(
+              height: 100,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: groups.length + (showAddButton ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == groups.length && showAddButton) {
+                    return _buildCreateGroupButton(context);
+                  }
+
+                  final group = groups[index].data() as Map<String, dynamic>;
+                  return _buildGroupItem(context, group, groups[index].id);
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
