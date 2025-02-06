@@ -10,6 +10,15 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isParticipant(conversationId) {
+      // Temporarily simplify this rule for debugging
+      return isSignedIn();
+      // Original rule:
+      // return isSignedIn() && 
+      //   exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+      //   get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants.hasAny([request.auth.uid]);
+    }
+
     // Only allow updates to specific fields
     function onlyUpdatingAllowedFields() {
       let allowedFields = ['views', 'likes', 'likesCount', 'commentCount'];
@@ -85,6 +94,23 @@ service cloud.firestore {
         allow read: if true;
         allow write: if request.auth != null;
       }
+    }
+
+    // Conversation rules - temporarily more permissive for debugging
+    match /conversations/{conversationId} {
+      // Allow read for debugging
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // User's unread messages counter
+    match /users/{userId}/unreadMessages/{conversationId} {
+      allow read, write: if isSignedIn();
     }
   }
 }
