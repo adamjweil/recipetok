@@ -237,4 +237,39 @@ class MessageService {
       print('DEBUG: Stack trace: $stackTrace');
     }
   }
+
+  Future<void> deleteConversation(String conversationId) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) throw Exception('Not authenticated');
+
+    // Get a reference to the conversation
+    final conversationRef = _firestore.collection('conversations').doc(conversationId);
+    
+    // Start a batch write
+    final batch = _firestore.batch();
+
+    // Delete all messages in the conversation
+    final messagesSnapshot = await conversationRef
+        .collection('messages')
+        .get();
+    
+    for (var doc in messagesSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // Delete the conversation document
+    batch.delete(conversationRef);
+
+    // Delete unread messages counter
+    final unreadRef = _firestore
+        .collection('users')
+        .doc(currentUserId)
+        .collection('unreadMessages')
+        .doc(conversationId);
+    
+    batch.delete(unreadRef);
+
+    // Commit the batch
+    await batch.commit();
+  }
 } 
