@@ -4,17 +4,21 @@ import '../utils/custom_cache_manager.dart';
 
 class Video {
   final String id;
-  final String thumbnailUrl;
   final String videoUrl;
+  final String thumbnailUrl;
+  final String title;
   final int views;
   final String userId;
+  final DateTime createdAt;
 
   Video({
     required this.id,
-    required this.thumbnailUrl,
     required this.videoUrl,
+    required this.thumbnailUrl,
+    required this.title,
     required this.views,
     required this.userId,
+    required this.createdAt,
   });
 
   // Add factory constructor to create Video from Firestore document
@@ -22,11 +26,25 @@ class Video {
     final data = doc.data() as Map<String, dynamic>;
     return Video(
       id: doc.id,
-      thumbnailUrl: data['thumbnailUrl'] ?? '',
       videoUrl: data['videoUrl'] ?? '',
+      thumbnailUrl: data['thumbnailUrl'] ?? '',
+      title: data['title'] ?? 'Untitled',
       views: data['views'] ?? 0,
       userId: data['userId'] ?? '',
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'videoUrl': videoUrl,
+      'thumbnailUrl': thumbnailUrl,
+      'title': title,
+      'views': views,
+      'userId': userId,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
   }
 }
 

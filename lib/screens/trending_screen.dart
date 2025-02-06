@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/video_service.dart';
 import '../utils/custom_cache_manager.dart';
-import '../services/user_service.dart';
+import '../services/user_service.dart' as app_services;
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
+import '../widgets/video_card.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TrendingScreen extends StatefulWidget {
   const TrendingScreen({super.key});
@@ -156,18 +160,41 @@ class _ForYouTabState extends State<_ForYouTab> {
       backgroundColor: Colors.black,
       builder: (context) {
         return Container(
-          height: MediaQuery.of(context).size.height * 0.9,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          height: MediaQuery.of(context).size.height,
+          child: Stack(
             children: [
-              // TODO: Implement video player here
-              Text(
-                'Video ${video.id}',
-                style: const TextStyle(color: Colors.white),
+              // Video player
+              VideoCard(
+                videoData: video.toMap(),
+                videoId: video.id,
+                onUserTap: () {},
+                onLike: () {},
+                onBookmark: () {},
+                currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                autoPlay: true,
               ),
-              Text(
-                '${video.views} views',
-                style: const TextStyle(color: Colors.white70),
+              // Close button
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -183,8 +210,8 @@ class _AccountsTab extends StatefulWidget {
 }
 
 class _AccountsTabState extends State<_AccountsTab> {
-  final UserService _userService = UserService();
-  List<User> _users = [];
+  final app_services.UserService _userService = app_services.UserService();
+  List<app_services.User> _users = [];
   bool _isLoading = false;
 
   @override
