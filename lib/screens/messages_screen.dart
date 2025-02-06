@@ -115,8 +115,74 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 return ListView.builder(
                   itemCount: filteredConversations.length,
                   itemBuilder: (context, index) {
-                    return _ConversationTile(
-                      conversation: filteredConversations[index],
+                    final conversation = filteredConversations[index];
+                    return Dismissible(
+                      key: Key(conversation['conversationId']),
+                      direction: DismissDirection.endToStart, // Only allow right to left swipe
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20.0),
+                        color: Colors.red,
+                        child: const Icon(
+                          Icons.delete,
+                          color: Colors.white,
+                        ),
+                      ),
+                      confirmDismiss: (direction) async {
+                        // Show confirmation dialog
+                        return await showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              title: const Text('Delete Conversation'),
+                              content: const Text('Are you sure you want to delete this conversation?'),
+                              actions: <Widget>[
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(true),
+                                  child: const Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                      onDismissed: (direction) async {
+                        try {
+                          // Delete the conversation
+                          await _messageService.deleteConversation(conversation['conversationId']);
+                          
+                          // Show success message
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Conversation deleted'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          // Show error message
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error deleting conversation: $e'),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: _ConversationTile(
+                        conversation: conversation,
+                      ),
                     );
                   },
                 );
