@@ -20,6 +20,7 @@ import '../widgets/story_viewer.dart';
 import 'package:share_plus/share_plus.dart';
 import '../screens/messages_screen.dart';
 import '../services/message_service.dart';
+import '../screens/chat_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -131,29 +132,36 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildEditProfileButton(Map<String, dynamic> userData) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EditProfileScreen(
-                userData: userData,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => EditProfileScreen(userData: userData),
               ),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            foregroundColor: Colors.black,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: Colors.grey[300]!),
             ),
-          );
-        },
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
+            minimumSize: const Size(0, 36),
           ),
-          side: const BorderSide(color: Colors.grey),
-        ),
-        child: const Text(
-          'Edit profile',
-          style: TextStyle(
-            color: Colors.black,
+          child: const Text(
+            'Edit Profile',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -403,19 +411,22 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 if (isCurrentUserProfile)
                   Stack(
                     children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.send_outlined,
-                          color: Colors.black,
+                      Transform.rotate(
+                        angle: -35 * (3.14159 / 180),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.send_outlined,
+                            color: Colors.black,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MessagesScreen(),
+                              ),
+                            );
+                          },
                         ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const MessagesScreen(),
-                            ),
-                          );
-                        },
                       ),
                       StreamBuilder<int>(
                         stream: MessageService().getTotalUnreadCount(),
@@ -800,19 +811,70 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       final List followers = userData['followers'] ?? [];
       final bool isFollowing = followers.contains(FirebaseAuth.instance.currentUser?.uid);
 
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: () => _toggleFollow(profileUserId),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isFollowing ? Colors.grey[200] : Theme.of(context).primaryColor,
-            foregroundColor: isFollowing ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (!isCurrentUserProfile) ...[
+            // Follow/Unfollow Button
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ElevatedButton(
+                  onPressed: () {
+                    _toggleFollow(userData['uid']);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
+                    foregroundColor: isFollowing ? Colors.black : Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: isFollowing 
+                          ? BorderSide(color: Colors.grey[300]!)
+                          : BorderSide.none,
+                    ),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  child: Text(
+                    isFollowing ? 'Following' : 'Follow',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          child: Text(isFollowing ? 'Following' : 'Follow'),
-        ),
+            // Message Button
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ElevatedButton(
+                  onPressed: () => _openChat(userData),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[100],
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  child: const Text(
+                    'Message',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       );
     }
   }
@@ -843,6 +905,60 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       await targetUserRef.update({
         'followers': FieldValue.arrayUnion([currentUserId])
       });
+    }
+  }
+
+  Future<void> _openChat(Map<String, dynamic> otherUserData) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      // Create conversation ID by sorting user IDs and joining them
+      final userIds = [currentUser.uid, otherUserData['uid']];
+      userIds.sort(); // Sort the IDs
+      final conversationId = userIds.join('_'); // Join them with underscore
+
+      // Check if conversation exists
+      final conversationDoc = await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(conversationId)
+          .get();
+
+      // If conversation doesn't exist, create it
+      if (!conversationDoc.exists) {
+        await FirebaseFirestore.instance
+            .collection('conversations')
+            .doc(conversationId)
+            .set({
+          'participants': [currentUser.uid, otherUserData['uid']],
+          'lastMessage': '',
+          'lastMessageTimestamp': FieldValue.serverTimestamp(),
+          'lastMessageSenderId': '',
+        });
+      }
+
+      if (!mounted) return;
+
+      // Navigate to chat screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            conversationId: conversationId,
+            otherUser: {
+              'userId': otherUserData['uid'],
+              'displayName': otherUserData['displayName'],
+              'username': otherUserData['username'],
+              'avatarUrl': otherUserData['avatarUrl'],
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening chat: $e')),
+      );
     }
   }
 
@@ -881,8 +997,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       stream: FirebaseFirestore.instance
           .collection('videos')
           .where('userId', isEqualTo: profileUserId)
-          .orderBy('isPinned', descending: true)
-          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -900,10 +1014,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
-                  'No posts yet',
+                  'No videos yet',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
@@ -911,132 +1025,59 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           );
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(1),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 1,
-            mainAxisSpacing: 1,
-            childAspectRatio: 0.8,
-          ),
-          itemCount: videos.length,
-          itemBuilder: (context, index) {
-            final video = videos[index].data() as Map<String, dynamic>;
-            final thumbnailUrl = video['thumbnailUrl'] as String?;
-            final isPinned = video['isPinned'] ?? false;
-
-            return GestureDetectorWithPosition(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => VideoPlayerScreen(
-                      videoData: video,
-                      videoId: videos[index].id,
-                    ),
-                  ),
-                );
-              },
-              onLongPressWithPosition: (context, position) {
-                _handleVideoLongPress(context, video, videos[index].id, position);
-              },
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  thumbnailUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: thumbnailUrl,
-                          fit: BoxFit.cover,
-                          cacheManager: CustomCacheManager.instance,
-                          placeholder: (context, url) => Container(
-                            color: Colors.grey[200],
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[200],
-                            child: const Icon(Icons.error),
-                          ),
-                        )
-                      : Container(color: Colors.grey[200]),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.center,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.5),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (isPinned)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.push_pin,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    bottom: 8,
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Views (left)
-                          Row(
-                            children: [
-                              const Icon(Icons.play_arrow, color: Colors.white, size: 14),
-                              const SizedBox(width: 2),
-                              Text(
-                                _formatViewCount(video['views'] ?? 0),
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                          // Comments (right)
-                          StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('videos')
-                                .doc(videos[index].id)
-                                .collection('comments')
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              final commentCount = snapshot.data?.docs.length ?? 0;
-                              return Row(
-                                children: [
-                                  const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    _formatCount(commentCount),
-                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+        return CustomScrollView(
+          slivers: [
+            SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 1,
+                mainAxisSpacing: 1,
+                childAspectRatio: 0.8,
               ),
-            );
-          },
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final videoData = videos[index].data() as Map<String, dynamic>?;
+                  if (videoData == null) return const SizedBox();
+
+                  final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VideoPlayerScreen(
+                            videoData: videoData,
+                            videoId: videos[index].id,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        thumbnailUrl != null
+                            ? CachedNetworkImage(
+                                imageUrl: thumbnailUrl,
+                                fit: BoxFit.cover,
+                                cacheManager: CustomCacheManager.instance,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[200],
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.error),
+                                ),
+                              )
+                            : Container(color: Colors.grey[200]),
+                      ],
+                    ),
+                  );
+                },
+                childCount: videos.length,
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1142,63 +1183,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                     ),
                                   )
                                 : Container(color: Colors.grey[200]),
-                            Positioned.fill(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.center,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withOpacity(0.5),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 8,
-                              left: 0,
-                              right: 0,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.play_arrow, color: Colors.white, size: 14),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          _formatViewCount(videoData['views'] ?? 0),
-                                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                        ),
-                                      ],
-                                    ),
-                                    StreamBuilder<QuerySnapshot>(
-                                      stream: FirebaseFirestore.instance
-                                          .collection('videos')
-                                          .doc(videos[index].id)
-                                          .collection('comments')
-                                          .snapshots(),
-                                      builder: (context, snapshot) {
-                                        final commentCount = snapshot.data?.docs.length ?? 0;
-                                        return Row(
-                                          children: [
-                                            const Icon(Icons.chat_bubble, color: Colors.white, size: 14),
-                                            const SizedBox(width: 2),
-                                            Text(
-                                              _formatCount(commentCount),
-                                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       );
