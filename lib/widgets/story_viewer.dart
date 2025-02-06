@@ -61,13 +61,21 @@ class _StoryViewerState extends State<StoryViewer> {
                   ? _buildVideoPlayer()
                   : _buildImage(),
             ),
-            // Close Button
+            // Close Button - Adjusted position
             Positioned(
-              top: 16,
-              right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
+              top: 68, // Reduced from the top (was likely 8)
+              right: 12, // Increased from the right (was likely 8)
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 24), // Increased size from 20
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
             ),
             // Sound Control for Videos
