@@ -18,6 +18,8 @@ import '../services/story_service.dart';
 import 'package:video_compress/video_compress.dart';
 import '../widgets/story_viewer.dart';
 import 'package:share_plus/share_plus.dart';
+import '../screens/messages_screen.dart';
+import '../services/message_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -397,6 +399,60 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
               backgroundColor: Colors.transparent,
               elevation: 0,
+              actions: [
+                if (isCurrentUserProfile)
+                  Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.send_outlined,
+                          color: Colors.black,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MessagesScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      StreamBuilder<int>(
+                        stream: MessageService().getTotalUnreadCount(),
+                        builder: (context, snapshot) {
+                          final unreadCount = snapshot.data ?? 0;
+                          if (unreadCount == 0) {
+                            return const SizedBox.shrink();
+                          }
+                          
+                          return Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 14,
+                                minHeight: 14,
+                              ),
+                              child: Text(
+                                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+              ],
             );
           },
         ),

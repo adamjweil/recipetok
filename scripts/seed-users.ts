@@ -139,6 +139,20 @@ const adamCollections = [
   },
 ];
 
+// Add this after other sample data arrays
+const sampleMessages = [
+  "Hey, loved your latest recipe!",
+  "Could you share more details about the ingredients?",
+  "Thanks for the cooking tips!",
+  "Your videos are so helpful",
+  "What temperature do you recommend?",
+  "I tried this recipe, it was amazing!",
+  "How long should I cook it for?",
+  "Where do you get your ingredients?",
+  "Great presentation!",
+  "Can I substitute any ingredients?"
+];
+
 async function createUser() {
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
@@ -287,6 +301,74 @@ async function createAdamCollections(userId: string, adamVideos: any[]) {
   }
 }
 
+// Add this function after createAdamCollections
+async function createConversations(adamId: string, otherUserIds: string[]) {
+  console.log('Creating conversations for Adam...');
+  
+  // Create conversations with 3 random users
+  const selectedUsers = otherUserIds
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3);
+
+  for (const otherUserId of selectedUsers) {
+    // Create conversation ID by sorting user IDs
+    const conversationId = [adamId, otherUserId].sort().join('_');
+    
+    // Create conversation document
+    await db.collection('conversations').doc(conversationId).set({
+      participants: [adamId, otherUserId],
+      lastMessage: '',
+      lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+      lastMessageSenderId: '',
+    });
+
+    // Add 5-10 messages to each conversation
+    const messageCount = Math.floor(Math.random() * 6) + 5;
+    let lastMessage = '';
+    let lastSenderId = '';
+
+    for (let i = 0; i < messageCount; i++) {
+      // Alternate between Adam and other user
+      const senderId = i % 2 === 0 ? adamId : otherUserId;
+      const message = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+      
+      // Add message
+      await db.collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .add({
+          text: message,
+          senderId: senderId,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          read: false,
+        });
+
+      lastMessage = message;
+      lastSenderId = senderId;
+
+      // If message is from other user, increment Adam's unread count
+      if (senderId !== adamId) {
+        await db.collection('users')
+          .doc(adamId)
+          .collection('unreadMessages')
+          .doc(conversationId)
+          .set({
+            count: admin.firestore.FieldValue.increment(1),
+          }, { merge: true });
+      }
+    }
+
+    // Update conversation with last message info
+    await db.collection('conversations').doc(conversationId).update({
+      lastMessage: lastMessage,
+      lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+      lastMessageSenderId: lastSenderId,
+    });
+
+    console.log(`Created conversation between Adam and user ${otherUserId}`);
+  }
+}
+
 async function seedDatabase() {
   try {
     // First create your specific user
@@ -300,6 +382,7 @@ async function seedDatabase() {
     };
 
     const createdUserIds: string[] = [];
+    let adamId: string; // Define adamId at the top level of the try block
 
     // Create auth user for Adam
     try {
@@ -309,6 +392,8 @@ async function seedDatabase() {
         displayName: adamUser.displayName,
         photoURL: adamUser.avatarUrl,
       });
+
+      adamId = adamUserRecord.uid; // Store the ID
 
       // Create user document in Firestore
       await db.collection('users').doc(adamUserRecord.uid).set({
@@ -324,7 +409,7 @@ async function seedDatabase() {
         videoCount: 0,
       });
 
-      createdUserIds.push(adamUserRecord.uid); // Add Adam's ID to the array
+      createdUserIds.push(adamUserRecord.uid);
       console.log(`Created specific user: ${adamUserRecord.uid}`);
 
       // Create 9 specific videos for Adam
@@ -432,7 +517,7 @@ async function seedDatabase() {
       await createAdamCollections(adamUserRecord.uid, createdVideos);
     } catch (error) {
       console.error('Error creating Adam\'s account:', error);
-      // Continue with creating other users even if Adam's account creation fails
+      throw error; // Re-throw the error to stop the seeding process
     }
 
     // Create random users
@@ -451,6 +536,10 @@ async function seedDatabase() {
 
     // Create random follow connections between users
     await createRandomConnections(createdUserIds);
+
+    // Create conversations using adamId instead of adamUserRecord
+    const otherUserIds = createdUserIds.filter(id => id !== adamId);
+    await createConversations(adamId, otherUserIds);
 
     console.log('Database seeding completed successfully');
     process.exit(0);
