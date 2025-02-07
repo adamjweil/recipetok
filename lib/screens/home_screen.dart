@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   VideoCardState? _currentlyPlayingVideo;
   List<QueryDocumentSnapshot>? _cachedVideos;
   final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
+  int _currentVideoIndex = -1;
 
   @override
   void initState() {
@@ -32,16 +33,30 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Add this method to play the first video
+  // Update this method
   void _playInitialVideo() {
     if (_cachedVideos != null && _cachedVideos!.isNotEmpty) {
       final firstVideoKey = _videoKeys[_cachedVideos!.first.id];
       if (firstVideoKey?.currentState != null) {
-        firstVideoKey!.currentState!.playVideo();
+        firstVideoKey!.currentState!.videoPlayer.playVideo();
         setState(() {
           _currentlyPlayingVideo = firstVideoKey.currentState;
         });
       }
+    }
+  }
+
+  void _playCurrentVideo() {
+    if (_videoKeys.isNotEmpty && _currentVideoIndex >= 0) {
+      final videoCardKey = _videoKeys[_currentVideoIndex];
+      videoCardKey?.currentState?.videoPlayer.playVideo();
+    }
+  }
+
+  void _pauseCurrentVideo() {
+    if (_videoKeys.isNotEmpty && _currentVideoIndex >= 0) {
+      final videoCardKey = _videoKeys[_currentVideoIndex];
+      videoCardKey?.currentState?.videoPlayer.pauseVideo();
     }
   }
 
@@ -74,12 +89,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (isLiked) {
         batch.update(videoRef, {
-          'likes': FieldValue.increment(-1),
+          'likes': FieldValue.arrayRemove([currentUserId]), // Remove user from likes array
         });
         batch.delete(userLikeRef);
       } else {
         batch.update(videoRef, {
-          'likes': FieldValue.increment(1),
+          'likes': FieldValue.arrayUnion([currentUserId]), // Add user to likes array
         });
         batch.set(userLikeRef, {
           'timestamp': FieldValue.serverTimestamp(),
@@ -143,10 +158,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    // Add this to cleanup videos
-    _currentlyPlayingVideo?.pauseVideo();
+    // Update this section
+    _currentlyPlayingVideo?.videoPlayer.pauseVideo();
     _videoKeys.values.forEach((key) {
-      key.currentState?.pauseVideo();
+      key.currentState?.videoPlayer.pauseVideo();
     });
     _videoKeys.clear();
     _pageController.dispose();
@@ -201,19 +216,21 @@ class _HomeScreenState extends State<HomeScreen> {
             scrollDirection: Axis.vertical,
             itemCount: videos.length,
             onPageChanged: (index) {
-              // Pause previous video
-              if (_currentlyPlayingVideo != null) {
-                _currentlyPlayingVideo!.pauseVideo();
-              }
+              setState(() {
+                // Pause the previous video
+                if (_currentVideoIndex >= 0 && _currentVideoIndex < _videoKeys.length) {
+                  final previousVideoKey = _videoKeys[_currentVideoIndex];
+                  previousVideoKey?.currentState?.videoPlayer.pauseVideo();
+                }
 
-              // Play new video
-              final videoKey = _videoKeys[videos[index].id];
-              if (videoKey?.currentState != null) {
-                videoKey!.currentState!.playVideo();
-                setState(() {
-                  _currentlyPlayingVideo = videoKey.currentState;
-                });
-              }
+                _currentVideoIndex = index;
+                
+                // Play the new video
+                if (index >= 0 && index < _videoKeys.length) {
+                  final currentVideoKey = _videoKeys[index];
+                  currentVideoKey?.currentState?.videoPlayer.playVideo();
+                }
+              });
             },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;

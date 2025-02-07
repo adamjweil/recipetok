@@ -1,58 +1,58 @@
 import * as admin from 'firebase-admin';
 import * as serviceAccount from './serviceAccountKey.json';
 import { faker } from '@faker-js/faker';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Initialize Firebase Admin
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-  storageBucket: "recipetok-acc07.appspot.com"
+  storageBucket: "recipetok-acc07.firebasestorage.app"
 });
 
 const db = admin.firestore();
 const auth = admin.auth();
+const bucket = admin.storage().bucket();
 
-const sampleVideos = [
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerFun.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerJoyrides.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerMeltdowns.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg',
+async function getSignedUrl(filePath: string) {
+  const file = bucket.file(filePath);
+  const [signedUrl] = await file.getSignedUrl({
+    action: 'read',
+    expires: '2100-01-01'
+  });
+  return signedUrl;
+}
+
+async function getSampleVideos() {
+  // Helper function to get signed URL
+  async function getVideoSignedUrl(sampleNumber: number) {
+    const file = bucket.file(`videos/sample${sampleNumber}/playlist.m3u8`);
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: '2100-01-01'
+    });
+    return signedUrl;
   }
-];
+
+  return Promise.all([1, 2, 3, 4, 5].map(async (num) => ({
+    videoUrl: await getVideoSignedUrl(num),
+    mp4Fallback: `https://storage.googleapis.com/gtv-videos-bucket/sample/${
+      num === 1 ? 'ForBiggerBlazes' :
+      num === 2 ? 'ForBiggerEscapes' :
+      num === 3 ? 'ForBiggerFun' :
+      num === 4 ? 'ForBiggerJoyrides' :
+      'ForBiggerMeltdowns'
+    }.mp4`,
+    thumbnailUrl: `https://storage.googleapis.com/gtv-videos-bucket/sample/images/${
+      num === 1 ? 'ForBiggerBlazes' :
+      num === 2 ? 'ForBiggerEscapes' :
+      num === 3 ? 'ForBiggerFun' :
+      num === 4 ? 'ForBiggerJoyrides' :
+      'ForBiggerMeltdowns'
+    }.jpg`,
+    qualities: ['720p', '480p']
+  })));
+}
 
 // Add these arrays at the top of the file
 const recipeTitles = [
@@ -191,8 +191,8 @@ async function createUser() {
   }
 }
 
-async function createVideo(userId: string) {
-  const randomVideo = sampleVideos[Math.floor(Math.random() * sampleVideos.length)];
+async function createVideo(userId: string, videos: any[]) {
+  const randomVideo = videos[Math.floor(Math.random() * videos.length)];
   
   // Get 3-5 random ingredients
   const numIngredients = Math.floor(Math.random() * 3) + 3;
@@ -212,21 +212,19 @@ async function createVideo(userId: string) {
     const videoDoc = await db.collection('videos').add({
       userId,
       videoUrl: randomVideo.videoUrl,
+      mp4Fallback: randomVideo.mp4Fallback,
+      qualities: randomVideo.qualities,
+      format: 'hls',
       thumbnailUrl: randomVideo.thumbnailUrl,
       title: recipeTitles[Math.floor(Math.random() * recipeTitles.length)],
       description: recipeDescriptions[Math.floor(Math.random() * recipeDescriptions.length)],
       ingredients,
       instructions,
-      likes: 0,
+      likes: [],
       views: 0,
       commentCount: 0,
       isPinned: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // Create the likes subcollection document
-    await videoDoc.collection('likes').doc('placeholder').set({
-      timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Update the user's videoCount
@@ -371,7 +369,10 @@ async function createConversations(adamId: string, otherUserIds: string[]) {
 
 async function seedDatabase() {
   try {
-    // First create your specific user
+    const videos = await getSampleVideos();
+    const createdUserIds: string[] = [];
+
+    // First create Adam's user
     const adamUser = {
       email: 'adamjweil@gmail.com',
       password: 'password',
@@ -381,143 +382,42 @@ async function seedDatabase() {
       avatarUrl: faker.image.avatar(),
     };
 
-    const createdUserIds: string[] = [];
-    let adamId: string; // Define adamId at the top level of the try block
-
     // Create auth user for Adam
-    try {
-      const adamUserRecord = await auth.createUser({
-        email: adamUser.email,
-        password: adamUser.password,
-        displayName: adamUser.displayName,
-        photoURL: adamUser.avatarUrl,
-      });
+    const adamUserRecord = await auth.createUser({
+      email: adamUser.email,
+      password: adamUser.password,
+      displayName: adamUser.displayName,
+      photoURL: adamUser.avatarUrl,
+    });
 
-      adamId = adamUserRecord.uid; // Store the ID
+    const adamId = adamUserRecord.uid;
 
-      // Create user document in Firestore
-      await db.collection('users').doc(adamUserRecord.uid).set({
-        uid: adamUserRecord.uid,
-        email: adamUser.email,
-        displayName: adamUser.displayName,
-        username: adamUser.username,
-        bio: adamUser.bio,
-        avatarUrl: adamUser.avatarUrl,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        followers: [],
-        following: [],
-        videoCount: 0,
-      });
+    // Create user document in Firestore
+    await db.collection('users').doc(adamId).set({
+      uid: adamId,
+      email: adamUser.email,
+      displayName: adamUser.displayName,
+      username: adamUser.username,
+      bio: adamUser.bio,
+      avatarUrl: adamUser.avatarUrl,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      followers: [],
+      following: [],
+      videoCount: 0,
+    });
 
-      createdUserIds.push(adamUserRecord.uid);
-      console.log(`Created specific user: ${adamUserRecord.uid}`);
+    createdUserIds.push(adamId);
+    console.log(`Created Adam's account: ${adamId}`);
 
-      // Create 9 specific videos for Adam
-      const adamVideos = [
-        {
-          title: 'Perfect Homemade Pizza',
-          description: 'Learn how to make restaurant-quality pizza at home',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/pizza/300/300',
-          ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
-          instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
-        },
-        {
-          title: 'Classic Pasta Carbonara',
-          description: 'Authentic Italian carbonara recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/pasta/300/300',
-          ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
-          instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
-        },
-        {
-          title: 'Ultimate Burger Guide',
-          description: 'How to make the perfect burger',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/burger/300/300',
-          ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
-          instructions: ['Form patties', 'Season well', 'Grill to perfection'],
-        },
-        {
-          title: 'Creamy Mac and Cheese',
-          description: 'The ultimate comfort food recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/mac/300/300',
-          ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
-          instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
-        },
-        {
-          title: 'Chocolate Chip Cookies',
-          description: 'Soft and chewy chocolate chip cookies',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/cookies/300/300',
-          ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
-          instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
-        },
-        {
-          title: 'Spicy Thai Curry',
-          description: 'Authentic Thai red curry recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/curry/300/300',
-          ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
-          instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
-        },
-        {
-          title: 'Fresh Sushi Rolls',
-          description: 'Learn to make sushi at home',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/sushi/300/300',
-          ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
-          instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
-        },
-        {
-          title: 'Homemade Bread',
-          description: 'Simple no-knead bread recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/bread/300/300',
-          ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
-          instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
-        },
-        {
-          title: 'Grilled Steak',
-          description: 'Perfect steak every time',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/steak/300/300',
-          ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
-          instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],
-        }
-      ];
+    // After creating Adam's account and before creating videos
+    await createAdamCollections(adamId, videos);
+    console.log('Created collections for Adam');
 
-      const createdVideos = [];
-      for (const videoData of adamVideos) {
-        const videoDoc = await db.collection('videos').add({
-          userId: adamUserRecord.uid,
-          ...videoData,
-          likes: 0,
-          views: 0,
-          commentCount: 0,
-          isPinned: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        // Create the likes subcollection document
-        await videoDoc.collection('likes').doc('placeholder').set({
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        createdVideos.push({ id: videoDoc.id, ...videoData });
-        console.log(`Created video for Adam: ${videoDoc.id}`);
-      }
-
-      await db.collection('users').doc(adamUserRecord.uid).update({
-        videoCount: adamVideos.length,
-      });
-
-      // Pass the created videos to createAdamCollections
-      await createAdamCollections(adamUserRecord.uid, createdVideos);
-    } catch (error) {
-      console.error('Error creating Adam\'s account:', error);
-      throw error; // Re-throw the error to stop the seeding process
+    // Create videos for Adam
+    const numAdamVideos = 3;
+    for (let i = 0; i < numAdamVideos; i++) {
+      const videoId = await createVideo(adamId, videos);
+      console.log(`Created video ${i + 1}/${numAdamVideos} for Adam: ${videoId}`);
     }
 
     // Create random users
@@ -529,7 +429,7 @@ async function seedDatabase() {
       // Create 1-2 videos for each user
       const numVideos = Math.random() < 0.5 ? 1 : 2;
       for (let j = 0; j < numVideos; j++) {
-        const videoId = await createVideo(userId);
+        const videoId = await createVideo(userId, videos);
         console.log(`Created video ${j + 1}/${numVideos} for user ${userId}: ${videoId}`);
       }
     }
@@ -537,7 +437,7 @@ async function seedDatabase() {
     // Create random follow connections between users
     await createRandomConnections(createdUserIds);
 
-    // Create conversations using adamId instead of adamUserRecord
+    // Create conversations
     const otherUserIds = createdUserIds.filter(id => id !== adamId);
     await createConversations(adamId, otherUserIds);
 
@@ -549,4 +449,5 @@ async function seedDatabase() {
   }
 }
 
-seedDatabase(); 
+// Start the seeding process
+seedDatabase().catch(console.error); 

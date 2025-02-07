@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
 import './save_options_modal.dart';
 import 'package:rxdart/rxdart.dart';
+import './hls_video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
@@ -33,7 +35,7 @@ class VideoCard extends StatefulWidget {
 }
 
 class VideoCardState extends State<VideoCard> {
-  late VideoPlayerController _videoController;
+  late HLSVideoPlayer videoPlayer;
   bool _isInitialized = false;
   bool _hasRecordedView = false;
   int? _nextIndex;
@@ -41,6 +43,7 @@ class VideoCardState extends State<VideoCard> {
   late int _localLikeCount;
   late bool _localIsLiked;
   late int _localViewCount;
+  bool _isVisible = true;
 
   // Add stream subscription
   StreamSubscription<DocumentSnapshot>? _likeSubscription;
@@ -49,24 +52,29 @@ class VideoCardState extends State<VideoCard> {
   void initState() {
     super.initState();
     _localViewCount = widget.videoData['views'] ?? 0;
-    _localLikeCount = widget.videoData['likes'] ?? 0;
-    _localIsLiked = false;
+    final likes = widget.videoData['likes'] as List<dynamic>? ?? [];
+    _localLikeCount = likes.length;  // Convert array length to count
+    _localIsLiked = likes.contains(widget.currentUserId);  // Check if user ID is in array
     _initializeVideo();
     _initializeLikeStream();
   }
 
   void _initializeLikeStream() {
     _likeSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.currentUserId)
-        .collection('videoLikes')
+        .collection('videos')
         .doc(widget.videoId)
         .snapshots()
         .listen((snapshot) {
-      if (mounted && _localIsLiked != snapshot.exists) {
-        setState(() {
-          _localIsLiked = snapshot.exists;
-        });
+      if (!mounted) return;
+      
+      if (snapshot.exists) {
+        final likes = snapshot.data()?['likes'] as List<dynamic>? ?? [];
+        if (mounted) {
+          setState(() {
+            _localLikeCount = likes.length;
+            _localIsLiked = likes.contains(widget.currentUserId);
+          });
+        }
       }
     });
   }
@@ -74,45 +82,25 @@ class VideoCardState extends State<VideoCard> {
   @override
   void dispose() {
     _likeSubscription?.cancel();
-    _videoController.dispose();
+    videoPlayer.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeVideo() async {
-    _videoController = VideoPlayerController.network(widget.videoData['videoUrl']);
-    try {
-      await _videoController.initialize();
-      setState(() {
-        _isInitialized = true;
-      });
-      
-      // Add this check to start playing if autoPlay is true
-      if (widget.autoPlay && mounted) {
-        _videoController.play();
-        _videoController.setLooping(true);
+  void _initializeVideo() {
+    videoPlayer = HLSVideoPlayer(
+      videoUrl: widget.videoData['videoUrl'],
+      mp4Fallback: widget.videoData['mp4Fallback'],
+      qualities: List<String>.from(widget.videoData['qualities'] ?? []),
+      autoPlay: widget.autoPlay,
+      onPlay: () {
         if (!_hasRecordedView) {
           _recordView();
         }
-      }
-    } catch (e) {
-      print('Error initializing video: $e');
-    }
-  }
-
-  void playVideo() {
-    if (_isInitialized && mounted) {
-      _videoController.play();
-      _videoController.setLooping(true);
-      if (!_hasRecordedView) {
-        _recordView();
-      }
-    }
-  }
-
-  void pauseVideo() {
-    if (_isInitialized && mounted) {
-      _videoController.pause();
-    }
+      },
+    );
+    setState(() {
+      _isInitialized = true;
+    });
   }
 
   @override
@@ -120,8 +108,36 @@ class VideoCardState extends State<VideoCard> {
     super.didUpdateWidget(oldWidget);
     // Add this to handle changes in autoPlay
     if (widget.autoPlay && !oldWidget.autoPlay && _isInitialized && mounted) {
-      playVideo();
+      videoPlayer.playVideo();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkVisibility();
+  }
+
+  void _checkVisibility() {
+    if (!mounted) return;
+    
+    final bool isVisible = ModalRoute.of(context)?.isCurrent ?? false;
+    if (_isVisible != isVisible) {
+      if (mounted) {
+        setState(() {
+          _isVisible = isVisible;
+        });
+        if (!isVisible) {
+          videoPlayer.pauseVideo();
+        }
+      }
+    }
+  }
+
+  @override
+  void deactivate() {
+    videoPlayer.pauseVideo();
+    super.deactivate();
   }
 
   Future<void> _recordView() async {
@@ -155,9 +171,10 @@ class VideoCardState extends State<VideoCard> {
   }
 
   Future<void> _handleLike() async {
+    final likes = widget.videoData['likes'] as List<dynamic>? ?? [];
     setState(() {
       _localIsLiked = !_localIsLiked;
-      _localLikeCount += _localIsLiked ? 1 : -1;
+      _localLikeCount = likes.length + (_localIsLiked ? 1 : -1);
     });
 
     widget.onLike.call();
@@ -194,133 +211,116 @@ class VideoCardState extends State<VideoCard> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final aspectRatio = _videoController.value.aspectRatio;
-    
-    return Container(
-      color: Colors.black,
-      child: Stack(
-        children: [
-          // Video with tap gesture
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                // Toggle video play/pause
-                if (_videoController.value.isPlaying) {
-                  pauseVideo();
-                } else {
-                  playVideo();
-                }
-              },
-              child: AspectRatio(
-                aspectRatio: aspectRatio,
-                child: Stack(
-                  children: [
-                    VideoPlayer(_videoController),
-                    if (!_videoController.value.isPlaying)
-                      Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: Icon(
-                            Icons.play_arrow,
-                            color: Colors.white,
-                            size: 64,
-                          ),
-                        ),
+    // Add visibility listener
+    return VisibilityDetector(
+      key: Key(widget.videoId),
+      onVisibilityChanged: (visibilityInfo) {
+        if (visibilityInfo.visibleFraction == 0) {
+          // Use post-frame callback to avoid build phase issues
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              videoPlayer.pauseVideo();
+            }
+          });
+        }
+      },
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          children: [
+            Center(
+              child: videoPlayer,
+            ),
+
+            // Interaction buttons - vertical column on right
+            Positioned(
+              right: 8,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Like button
+                      _buildActionButton(
+                        icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
+                        label: '$_localLikeCount',
+                        onTap: _handleLike,  // This is now separate from video play/pause
+                        color: _localIsLiked ? Colors.red : Colors.white,
                       ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+                      const SizedBox(height: 16),
 
-          // Interaction buttons - vertical column on right
-          Positioned(
-            right: 8,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Like button
-                    _buildActionButton(
-                      icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
-                      label: '$_localLikeCount',
-                      onTap: _handleLike,  // This is now separate from video play/pause
-                      color: _localIsLiked ? Colors.red : Colors.white,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Comments button
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('videos')
-                          .doc(widget.videoId)
-                          .collection('comments')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        final commentCount = snapshot.data?.docs.length ?? 0;
-                        return _buildActionButton(
-                          icon: Icons.comment,
-                          label: '$commentCount',
-                          onTap: () => _showComments(context),
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Bookmark button
-                    StreamBuilder<bool>(
-                      stream: Rx.combineLatest2(
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('bookmarks')
+                      // Comments button
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('videos')
                             .doc(widget.videoId)
+                            .collection('comments')
                             .snapshots(),
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('groups')
-                            .snapshots(),
-                        (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                          final isBookmarked = bookmarkDoc.exists;
-                          final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                            final groupData = groupDoc.data() as Map<String, dynamic>;
-                            final videos = groupData['videos'] as Map<String, dynamic>?;
-                            return videos?.containsKey(widget.videoId) ?? false;
-                          });
-                          return isBookmarked || isInGroup;
+                        builder: (context, snapshot) {
+                          final commentCount = snapshot.data?.docs.length ?? 0;
+                          return _buildActionButton(
+                            icon: Icons.comment,
+                            label: '$commentCount',
+                            onTap: () => _showComments(context),
+                            color: Colors.white,
+                          );
                         },
-                      ).distinct(),
-                      builder: (context, snapshot) {
-                        final isSaved = snapshot.data ?? false;
-                        return _buildActionButton(
-                          icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          label: '',
-                          onTap: () => _toggleBookmark(context),
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Views count
-                    _buildActionButton(
-                      icon: Icons.remove_red_eye,
-                      label: '$_localViewCount',
-                      onTap: () {},
-                      color: Colors.white,
-                    ),
-                  ],
+                      // Bookmark button
+                      StreamBuilder<bool>(
+                        stream: Rx.combineLatest2(
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.currentUserId)
+                              .collection('bookmarks')
+                              .doc(widget.videoId)
+                              .snapshots(),
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.currentUserId)
+                              .collection('groups')
+                              .snapshots(),
+                          (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
+                            final isBookmarked = bookmarkDoc.exists;
+                            final isInGroup = groupsSnapshot.docs.any((groupDoc) {
+                              final groupData = groupDoc.data() as Map<String, dynamic>;
+                              final videos = groupData['videos'] as Map<String, dynamic>?;
+                              return videos?.containsKey(widget.videoId) ?? false;
+                            });
+                            return isBookmarked || isInGroup;
+                          },
+                        ).distinct(),
+                        builder: (context, snapshot) {
+                          final isSaved = snapshot.data ?? false;
+                          return _buildActionButton(
+                            icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                            label: '',
+                            onTap: () => _toggleBookmark(context),
+                            color: Colors.white,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Views count
+                      _buildActionButton(
+                        icon: Icons.remove_red_eye,
+                        label: '$_localViewCount',
+                        onTap: () {},
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

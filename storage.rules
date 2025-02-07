@@ -14,9 +14,26 @@ service firebase.storage {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Default deny
+    // Allow public read access to all video files and segments
+    match /videos/{videoId}/{fileName} {
+      allow read: if true;  // Allow public read access to all video files
+      allow write: if request.auth != null;
+      
+      // Explicitly allow access to HLS segments and playlists
+      match /{allSegments=**} {
+        allow read: if true;
+      }
+    }
+
+    // Allow access to all HLS segments
+    match /videos/{videoId}/{quality}/{segment} {
+      allow read: if true;  // Allow public read access to all segments
+      allow write: if request.auth != null;
+    }
+
+    // Default rule for everything else
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
 
     // Allow access to stories and all subfolders
@@ -27,12 +44,6 @@ service firebase.storage {
 
     // Allow access to user avatars
     match /user_avatars/{userId}/{allImages=**} {
-      allow read: if true;
-      allow write: if isOwner(userId);
-    }
-
-    // Allow access to video uploads
-    match /videos/{userId}/{allVideos=**} {
       allow read: if true;
       allow write: if isOwner(userId);
     }
