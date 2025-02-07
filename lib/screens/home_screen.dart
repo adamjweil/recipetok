@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   VideoCardState? _currentlyPlayingVideo;
   List<QueryDocumentSnapshot>? _cachedVideos;
   final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
+  final Map<String, bool> _preloadedVideos = {};
 
   @override
   void initState() {
@@ -42,6 +43,21 @@ class _HomeScreenState extends State<HomeScreen> {
           _currentlyPlayingVideo = firstVideoKey.currentState;
         });
       }
+    }
+  }
+
+  // Add this method to preload the next video
+  void _preloadNextVideo(List<QueryDocumentSnapshot> videos, int currentIndex) {
+    if (currentIndex + 1 >= videos.length) return;
+    
+    final nextVideoId = videos[currentIndex + 1].id;
+    if (_preloadedVideos[nextVideoId] == true) return;
+    
+    print('Preloading next video: $nextVideoId');
+    final nextVideoKey = _videoKeys[nextVideoId];
+    if (nextVideoKey?.currentState != null) {
+      _preloadedVideos[nextVideoId] = true;
+      nextVideoKey!.currentState!.preloadVideo();
     }
   }
 
@@ -143,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    // Add this to cleanup videos
+    // Clean up all video controllers
     _currentlyPlayingVideo?.pauseVideo();
     _videoKeys.values.forEach((key) {
       key.currentState?.pauseVideo();
@@ -200,40 +216,54 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _pageController,
             scrollDirection: Axis.vertical,
             itemCount: videos.length,
-            onPageChanged: (index) {
-              // Pause previous video
-              if (_currentlyPlayingVideo != null) {
-                _currentlyPlayingVideo!.pauseVideo();
-              }
+            onPageChanged: (index) async {
+              try {
+                print('Page changed to index: $index');
+                
+                // Pause previous video
+                if (_currentlyPlayingVideo != null) {
+                  print('Pausing previous video');
+                  _currentlyPlayingVideo!.pauseVideo();
+                }
 
-              // Play new video
-              final videoKey = _videoKeys[videos[index].id];
-              if (videoKey?.currentState != null) {
-                videoKey!.currentState!.playVideo();
-                setState(() {
-                  _currentlyPlayingVideo = videoKey.currentState;
-                });
+                // Play current video
+                final videoId = videos[index].id;
+                final videoKey = _videoKeys[videoId];
+                if (videoKey?.currentState != null) {
+                  await videoKey!.currentState!.initializeAndPlay();
+                  setState(() {
+                    _currentlyPlayingVideo = videoKey.currentState;
+                  });
+                }
+
+                // Preload next video
+                _preloadNextVideo(videos, index);
+                
+              } catch (e) {
+                print('Error in onPageChanged: $e');
               }
             },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;
               final videoId = videos[index].id;
               
-              // Create or get existing key
-              _videoKeys[videoId] ??= GlobalKey<VideoCardState>();
+              print('Building video card for index: $index, videoId: $videoId');
               
-              return KeyedSubtree(
-                key: ValueKey(videoId),
-                child: VideoCard(
-                  key: _videoKeys[videoId],
-                  videoData: videoData,
-                  videoId: videoId,
-                  onUserTap: () {},
-                  onLike: () => _toggleVideoLike(videoId),
-                  onBookmark: () => _toggleBookmark(videoId, videoData),
-                  currentUserId: currentUserId,
-                  autoPlay: _currentlyPlayingVideo == null && index == 0,
-                ),
+              // Create new key for each video
+              if (_videoKeys[videoId] == null) {
+                print('Creating new key for video: $videoId');
+                _videoKeys[videoId] = GlobalKey<VideoCardState>();
+              }
+              
+              return VideoCard(
+                key: _videoKeys[videoId],
+                videoData: videoData,
+                videoId: videoId,
+                onUserTap: () {},
+                onLike: () => _toggleVideoLike(videoId),
+                onBookmark: () => _toggleBookmark(videoId, videoData),
+                currentUserId: currentUserId,
+                autoPlay: _currentlyPlayingVideo == null && index == 0,
               );
             },
           );

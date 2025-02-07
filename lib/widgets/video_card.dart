@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
 import './save_options_modal.dart';
 import 'package:rxdart/rxdart.dart';
+import 'dart:math' show max;
 
 class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
@@ -41,18 +42,30 @@ class VideoCardState extends State<VideoCard> {
   late int _localLikeCount;
   late bool _localIsLiked;
   late int _localViewCount;
-
-  // Add stream subscription
   StreamSubscription<DocumentSnapshot>? _likeSubscription;
+  bool _showIngredients = false;
+  bool _showInstructions = false;
+  bool _isPreloaded = false;
 
   @override
   void initState() {
     super.initState();
-    _localViewCount = widget.videoData['views'] ?? 0;
-    _localLikeCount = widget.videoData['likes'] ?? 0;
+    final user = FirebaseAuth.instance.currentUser;
+    print('Current user: ${user?.uid ?? 'Not authenticated'}');
+    
+    _localViewCount = _parseCount(widget.videoData['views']);
+    _localLikeCount = _parseCount(widget.videoData['likes']);
     _localIsLiked = false;
     _initializeVideo();
     _initializeLikeStream();
+  }
+
+  int _parseCount(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is List) return value.length;
+    return 0;
   }
 
   void _initializeLikeStream() {
@@ -73,34 +86,50 @@ class VideoCardState extends State<VideoCard> {
 
   @override
   void dispose() {
+    print('Disposing video controller for ${widget.videoId}');
+    _isPreloaded = false;
     _likeSubscription?.cancel();
     _videoController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeVideo() async {
-    _videoController = VideoPlayerController.network(widget.videoData['videoUrl']);
     try {
-      await _videoController.initialize();
-      setState(() {
-        _isInitialized = true;
-      });
+      if (_isInitialized) {
+        print('Video already initialized: ${widget.videoId}');
+        return;
+      }
+    
+      final videoUrl = widget.videoData['videoUrl'];
+      print('Starting video initialization for ${widget.videoId} from URL: $videoUrl');
+    
+      _videoController = VideoPlayerController.network(videoUrl);
       
-      // Add this check to start playing if autoPlay is true
-      if (widget.autoPlay && mounted) {
-        _videoController.play();
-        _videoController.setLooping(true);
-        if (!_hasRecordedView) {
-          _recordView();
+      await _videoController.initialize();
+      print('Video initialized successfully: ${widget.videoId}');
+      
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+        
+        if (widget.autoPlay) {
+          print('AutoPlaying video: ${widget.videoId}');
+          _videoController.play();
+          _videoController.setLooping(true);
+          if (!_hasRecordedView) {
+            _recordView();
+          }
         }
       }
     } catch (e) {
-      print('Error initializing video: $e');
+      print('Error initializing video ${widget.videoId}: $e');
     }
   }
 
   void playVideo() {
     if (_isInitialized && mounted) {
+      print('Playing video via playVideo: ${widget.videoId}');
       _videoController.play();
       _videoController.setLooping(true);
       if (!_hasRecordedView) {
@@ -111,6 +140,7 @@ class VideoCardState extends State<VideoCard> {
 
   void pauseVideo() {
     if (_isInitialized && mounted) {
+      print('Pausing video: ${widget.videoId}');
       _videoController.pause();
     }
   }
@@ -120,6 +150,7 @@ class VideoCardState extends State<VideoCard> {
     super.didUpdateWidget(oldWidget);
     // Add this to handle changes in autoPlay
     if (widget.autoPlay && !oldWidget.autoPlay && _isInitialized && mounted) {
+      print('AutoPlay changed, playing video: ${widget.videoId}');
       playVideo();
     }
   }
@@ -195,165 +226,303 @@ class VideoCardState extends State<VideoCard> {
     }
 
     final aspectRatio = _videoController.value.aspectRatio;
+    final screenHeight = MediaQuery.of(context).size.height;
     
     return Container(
       color: Colors.black,
-      child: Stack(
-        children: [
-          // Video with tap gesture
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                // Toggle video play/pause
-                if (_videoController.value.isPlaying) {
-                  pauseVideo();
-                } else {
-                  playVideo();
-                }
-              },
-              child: AspectRatio(
-                aspectRatio: aspectRatio,
-                child: Stack(
-                  children: [
-                    VideoPlayer(_videoController),
-                    if (!_videoController.value.isPlaying)
-                      Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: Icon(
-                            Icons.play_arrow,
-                            color: Colors.white,
-                            size: 64,
-                          ),
-                        ),
+      height: screenHeight,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(height: screenHeight * 0.05),
+
+            // Ingredients Panel (collapsible)
+            if (widget.videoData['ingredients'] != null)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: _showIngredients ? null : 56,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    width: MediaQuery.of(context).size.width,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.9),
+                          Colors.black.withOpacity(0.7),
+                        ],
                       ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Interaction buttons - vertical column on right
-          Positioned(
-            right: 8,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Like button
-                    _buildActionButton(
-                      icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
-                      label: '$_localLikeCount',
-                      onTap: _handleLike,  // This is now separate from video play/pause
-                      color: _localIsLiked ? Colors.red : Colors.white,
                     ),
-                    const SizedBox(height: 16),
-
-                    // Comments button
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('videos')
-                          .doc(widget.videoId)
-                          .collection('comments')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        final commentCount = snapshot.data?.docs.length ?? 0;
-                        return _buildActionButton(
-                          icon: Icons.comment,
-                          label: '$commentCount',
-                          onTap: () => _showComments(context),
-                          color: Colors.white,
-                        );
-                      },
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Make the header row tappable
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _showIngredients = !_showIngredients;
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.restaurant_outlined,
+                                  color: Colors.white70,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Ingredients',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Icon(
+                                  _showIngredients 
+                                    ? Icons.keyboard_arrow_up 
+                                    : Icons.keyboard_arrow_down,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_showIngredients) ...[
+                            const SizedBox(height: 8),
+                            ...List<Widget>.from(
+                              (widget.videoData['ingredients'] as List).map(
+                                (ingredient) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 4,
+                                          height: 4,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor.withOpacity(0.8),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            ingredient,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Bookmark button
-                    StreamBuilder<bool>(
-                      stream: Rx.combineLatest2(
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('bookmarks')
-                            .doc(widget.videoId)
-                            .snapshots(),
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('groups')
-                            .snapshots(),
-                        (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                          final isBookmarked = bookmarkDoc.exists;
-                          final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                            final groupData = groupDoc.data() as Map<String, dynamic>;
-                            final videos = groupData['videos'] as Map<String, dynamic>?;
-                            return videos?.containsKey(widget.videoId) ?? false;
-                          });
-                          return isBookmarked || isInGroup;
-                        },
-                      ).distinct(),
-                      builder: (context, snapshot) {
-                        final isSaved = snapshot.data ?? false;
-                        return _buildActionButton(
-                          icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          label: '',
-                          onTap: () => _toggleBookmark(context),
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Views count
-                    _buildActionButton(
-                      icon: Icons.remove_red_eye,
-                      label: '$_localViewCount',
-                      onTap: () {},
-                      color: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color color = Colors.white,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color),
-              if (label.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 12,
                   ),
                 ),
-              ],
-            ],
-          ),
+              ),
+
+            // Video Section with Overlay Buttons
+            Container(
+              height: max(
+                MediaQuery.of(context).size.width / aspectRatio,
+                MediaQuery.of(context).size.height * 0.5,
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AspectRatio(
+                    aspectRatio: aspectRatio,
+                    child: VideoPlayer(_videoController),
+                  ),
+                  
+                  // Interaction buttons overlay
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _localIsLiked ? Icons.favorite : Icons.favorite_border,
+                              color: _localIsLiked ? Colors.red : Colors.white,
+                              size: 24,
+                            ),
+                            onPressed: _handleLike,
+                          ),
+                          Text(
+                            '$_localLikeCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.bookmark_border,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            onPressed: () => _toggleBookmark(context),
+                          ),
+                          const SizedBox(height: 8),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.comment,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            onPressed: () => _showComments(context),
+                          ),
+                          Text(
+                            '0',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Icon(
+                            Icons.remove_red_eye,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          Text(
+                            '$_localViewCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Instructions Section (collapsible)
+            if (widget.videoData['instructions'] != null)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: _showInstructions ? null : 56,
+                child: Container(
+                  width: MediaQuery.of(context).size.width,
+                  color: Colors.black,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Instructions Header - Always visible
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showInstructions = !_showInstructions;
+                            });
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.menu_book_outlined,
+                                color: Colors.white70,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Instructions',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                _showInstructions 
+                                  ? Icons.keyboard_arrow_up 
+                                  : Icons.keyboard_arrow_down,
+                                color: Colors.white70,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Instructions Content - Only visible when expanded
+                        if (_showInstructions) ...[
+                          const SizedBox(height: 12),
+                          ...List<Widget>.from(
+                            (widget.videoData['instructions'] as List)
+                                .asMap()
+                                .entries
+                                .map((entry) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${entry.key + 1}.',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        entry.value.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            SizedBox(height: screenHeight * 0.05),
+          ],
         ),
       ),
     );
@@ -398,6 +567,49 @@ class VideoCardState extends State<VideoCard> {
         ),
       ),
     );
+  }
+
+  // Add this new public method
+  bool isPlaying() {
+    return _isInitialized && _videoController.value.isPlaying;
+  }
+
+  Future<void> preloadVideo() async {
+    if (_isInitialized || _isPreloaded) return;
+    
+    try {
+      print('Preloading video: ${widget.videoId}');
+      final videoUrl = widget.videoData['videoUrl'];
+      _videoController = VideoPlayerController.network(videoUrl);
+      await _videoController.initialize();
+      _isPreloaded = true;
+      print('Successfully preloaded video: ${widget.videoId}');
+    } catch (e) {
+      print('Error preloading video ${widget.videoId}: $e');
+    }
+  }
+
+  Future<void> initializeAndPlay() async {
+    try {
+      if (!_isInitialized && !_isPreloaded) {
+        await _initializeVideo();
+      } else if (_isPreloaded && !_isInitialized) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+      
+      if (_isInitialized && mounted) {
+        print('Playing video: ${widget.videoId}');
+        await _videoController.play();
+        _videoController.setLooping(true);
+        if (!_hasRecordedView) {
+          _recordView();
+        }
+      }
+    } catch (e) {
+      print('Error in initializeAndPlay: $e');
+    }
   }
 }
 
