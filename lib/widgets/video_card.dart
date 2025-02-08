@@ -201,32 +201,25 @@ class VideoCardState extends State<VideoCard> {
     final aspectRatio = _videoController.value.aspectRatio;
     
     return Container(
-      color: Colors.black,
+      color: Colors.grey[600],
       child: Stack(
         children: [
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Top black section with centered ingredients
+              // Add black space above video
               Container(
-                constraints: BoxConstraints(
-                  minHeight: 60,
-                  maxHeight: _isIngredientsExpanded 
-                    ? MediaQuery.of(context).size.height * 0.4
-                    : 60,
-                ),
+                height: 64,
                 color: Colors.black,
-                child: SingleChildScrollView(
-                  child: _buildIngredientsSection(),
-                ),
               ),
 
               // Video Container with interaction buttons
               Flexible(
-                child: Stack(
+                child: Column(
                   children: [
-                    // Video with tap gesture
-                    Center(
+                    // Video player
+                    AspectRatio(
+                      aspectRatio: aspectRatio,
                       child: GestureDetector(
                         onTap: () {
                           if (_videoController.value.isPlaying) {
@@ -235,235 +228,289 @@ class VideoCardState extends State<VideoCard> {
                             playVideo();
                           }
                         },
-                        child: AspectRatio(
-                          aspectRatio: aspectRatio,
-                          child: Stack(
-                            children: [
-                              VideoPlayer(_videoController),
-                              if (!_videoController.value.isPlaying)
-                                Container(
-                                  color: Colors.black26,
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.play_arrow,
-                                      color: Colors.white,
-                                      size: 64,
-                                    ),
+                        child: Stack(
+                          children: [
+                            VideoPlayer(_videoController),
+                            if (!_videoController.value.isPlaying)
+                              Container(
+                                color: Colors.black26,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.play_arrow,
+                                    color: Colors.white,
+                                    size: 64,
                                   ),
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
 
-                    // Move interaction buttons to overlay on video
-                    Positioned(
-                      right: 8,
-                      bottom: MediaQuery.of(context).size.height * 0.23,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Like button
-                              _buildActionButton(
-                                icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
-                                label: '$_localLikeCount',
-                                onTap: _handleLike,
-                                color: _localIsLiked ? Colors.red : Colors.white,
-                              ),
-                              const SizedBox(height: 4),
-
-                              // Comments button
-                              StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('videos')
-                                    .doc(widget.videoId)
-                                    .collection('comments')
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  final commentCount = snapshot.data?.docs.length ?? 0;
-                                  return _buildActionButton(
-                                    icon: Icons.comment,
-                                    label: '$commentCount',
-                                    onTap: () => _showComments(context),
-                                    color: Colors.white,
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 4),
-
-                              // Bookmark button
-                              StreamBuilder<bool>(
-                                stream: Rx.combineLatest2(
-                                  FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(widget.currentUserId)
-                                      .collection('bookmarks')
-                                      .doc(widget.videoId)
-                                      .snapshots(),
-                                  FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(widget.currentUserId)
-                                      .collection('groups')
-                                      .snapshots(),
-                                  (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                                    final isBookmarked = bookmarkDoc.exists;
-                                    final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                                      final groupData = groupDoc.data() as Map<String, dynamic>;
-                                      final videos = groupData['videos'] as Map<String, dynamic>?;
-                                      return videos?.containsKey(widget.videoId) ?? false;
-                                    });
-                                    return isBookmarked || isInGroup;
-                                  },
-                                ).distinct(),
-                                builder: (context, snapshot) {
-                                  final isSaved = snapshot.data ?? false;
-                                  return _buildActionButton(
-                                    icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-                                    label: '',
-                                    onTap: () => _toggleBookmark(context),
-                                    color: Colors.white,
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 4),
-
-                              // Views count
-                              _buildActionButton(
-                                icon: Icons.remove_red_eye,
-                                label: '$_localViewCount',
-                                onTap: () {},
-                                color: Colors.white,
-                              ),
-                            ],
+                    // Title and description section
+                    Container(
+                      width: double.infinity,
+                      color: Colors.black,
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title
+                          Text(
+                            widget.videoData['title'] ?? 'Untitled Recipe',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          
+                          // Description
+                          Text(
+                            widget.videoData['description'] ?? '',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          
+                          // Optional: "Show more" button if description is long
+                          if ((widget.videoData['description'] ?? '').length > 100)
+                            TextButton(
+                              onPressed: () {
+                                // Show full description in a modal or expand in place
+                                showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.black87,
+                                  builder: (context) => SingleChildScrollView(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          widget.videoData['title'] ?? 'Untitled Recipe',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          widget.videoData['description'] ?? '',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 16,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 32),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 0),
+                                minimumSize: Size.zero,
+                              ),
+                              child: const Text(
+                                'Show more',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          
+                          // Add a subtle divider
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Divider(
+                              height: 1,
+                              thickness: 0.5,
+                              color: Colors.white12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Interaction buttons row
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      color: Colors.black,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          // Like button
+                          Expanded(
+                            child: _buildActionButtonHorizontal(
+                              icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
+                              label: '$_localLikeCount',
+                              onTap: _handleLike,
+                              color: _localIsLiked ? Colors.red : Colors.white,
+                            ),
+                          ),
+
+                          // Comments button
+                          Expanded(
+                            child: StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('videos')
+                                  .doc(widget.videoId)
+                                  .collection('comments')
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                final commentCount = snapshot.data?.docs.length ?? 0;
+                                return _buildActionButtonHorizontal(
+                                  icon: Icons.comment,
+                                  label: '$commentCount',
+                                  onTap: () => _showComments(context),
+                                  color: Colors.white,
+                                );
+                              },
+                            ),
+                          ),
+
+                          // Bookmark button
+                          Expanded(
+                            child: StreamBuilder<bool>(
+                              stream: Rx.combineLatest2(
+                                FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(widget.currentUserId)
+                                    .collection('bookmarks')
+                                    .doc(widget.videoId)
+                                    .snapshots(),
+                                FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(widget.currentUserId)
+                                    .collection('groups')
+                                    .snapshots(),
+                                (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
+                                  final isBookmarked = bookmarkDoc.exists;
+                                  final isInGroup = groupsSnapshot.docs.any((groupDoc) {
+                                    final groupData = groupDoc.data() as Map<String, dynamic>;
+                                    final videos = groupData['videos'] as Map<String, dynamic>?;
+                                    return videos?.containsKey(widget.videoId) ?? false;
+                                  });
+                                  return isBookmarked || isInGroup;
+                                },
+                              ).distinct(),
+                              builder: (context, snapshot) {
+                                final isSaved = snapshot.data ?? false;
+                                return _buildActionButtonHorizontal(
+                                  icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                                  label: '',
+                                  onTap: () => _toggleBookmark(context),
+                                  color: Colors.white,
+                                );
+                              },
+                            ),
+                          ),
+
+                          // Views count
+                          Expanded(
+                            child: _buildActionButtonHorizontal(
+                              icon: Icons.remove_red_eye,
+                              label: '$_localViewCount',
+                              onTap: () {},
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Ingredients and Instructions sections
+                    Container(
+                      color: Colors.grey[600],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Ingredients Button
+                          _buildIngredientsButton(),
+                          // Ingredients List (when expanded)
+                          if (_isIngredientsExpanded)
+                            Container(
+                              constraints: BoxConstraints(
+                                maxHeight: MediaQuery.of(context).size.height * 0.4,
+                              ),
+                              child: SingleChildScrollView(
+                                child: _buildIngredientsList(),
+                              ),
+                            ),
+                          // Instructions Button
+                          _buildInstructionsButton(),
+                          // Instructions List (when expanded)
+                          if (_isInstructionsExpanded)
+                            Container(
+                              constraints: BoxConstraints(
+                                maxHeight: MediaQuery.of(context).size.height * 0.4,
+                              ),
+                              child: SingleChildScrollView(
+                                child: _buildInstructionsList(),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-
-              // Bottom black section with just the instructions button
-              Container(
-                height: 60,  // Fixed height for the button
-                color: Colors.black,
-                child: _buildInstructionsButton(),  // New method to build just the button
-              ),
             ],
           ),
-
-          // Instructions expandable section
-          if (_isInstructionsExpanded)
-            Positioned(
-              bottom: 60,  // Height of the button container
-              left: 0,
-              right: 0,
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.4,
-                ),
-                color: Colors.black,
-                child: SingleChildScrollView(
-                  child: _buildInstructionsList(),  // New method to build just the list
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildIngredientsSection() {
-    final ingredients = (widget.videoData['ingredients'] as List<dynamic>?) ?? [];
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Ingredients Button
-        InkWell(
-          onTap: () => setState(() => _isIngredientsExpanded = !_isIngredientsExpanded),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                const Icon(Icons.restaurant_menu, color: Colors.white70),
-                const SizedBox(width: 8),
-                const Text(
-                  'Ingredients',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  _isIngredientsExpanded 
-                      ? Icons.keyboard_arrow_up 
-                      : Icons.keyboard_arrow_down,
-                  color: Colors.white70,
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Expandable Ingredients List
-        if (_isIngredientsExpanded)
-          Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.3,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: ingredients.map<Widget>((ingredient) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '•',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            ingredient.toString(),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+  Widget _buildIngredientsButton() {
+    return InkWell(
+      onTap: _toggleIngredients,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const Icon(Icons.restaurant_menu, color: Colors.white70),
+            const SizedBox(width: 8),
+            const Text(
+              'Ingredients',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ),
-      ],
+            const SizedBox(width: 8),
+            Icon(
+              _isIngredientsExpanded 
+                  ? Icons.keyboard_arrow_up 
+                  : Icons.keyboard_arrow_down,
+              color: Colors.white70,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildInstructionsButton() {
     return InkWell(
-      onTap: () => setState(() => _isInstructionsExpanded = !_isInstructionsExpanded),
+      onTap: _toggleInstructions,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             const Icon(Icons.format_list_numbered, color: Colors.white70),
             const SizedBox(width: 8),
@@ -484,6 +531,30 @@ class VideoCardState extends State<VideoCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildIngredientsList() {
+    final ingredients = (widget.videoData['ingredients'] as List<dynamic>?) ?? [];
+    
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 8, 16, 16),
+      child: Wrap(
+        spacing: 4,
+        alignment: WrapAlignment.start,
+        crossAxisAlignment: WrapCrossAlignment.start,
+        children: ingredients.asMap().entries.map<Widget>((entry) {
+          final isLast = entry.key == ingredients.length - 1;
+          return Text(
+            isLast ? '${entry.value}' : '${entry.value}, ',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -535,133 +606,11 @@ class VideoCardState extends State<VideoCard> {
             ),
           );
         }).toList(),
-
-          // Video with tap gesture
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                // Toggle video play/pause
-                if (_videoController.value.isPlaying) {
-                  pauseVideo();
-                } else {
-                  playVideo();
-                }
-              },
-              child: AspectRatio(
-                aspectRatio: aspectRatio,
-                child: Stack(
-                  children: [
-                    VideoPlayer(_videoController),
-                    if (!_videoController.value.isPlaying)
-                      Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: Icon(
-                            Icons.play_arrow,
-                            color: Colors.white,
-                            size: 64,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Interaction buttons - vertical column on right
-          Positioned(
-            right: 8,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Like button
-                    _buildActionButton(
-                      icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
-                      label: '$_localLikeCount',
-                      onTap: _handleLike,  // This is now separate from video play/pause
-                      color: _localIsLiked ? Colors.red : Colors.white,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Comments button
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('videos')
-                          .doc(widget.videoId)
-                          .collection('comments')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        final commentCount = snapshot.data?.docs.length ?? 0;
-                        return _buildActionButton(
-                          icon: Icons.comment,
-                          label: '$commentCount',
-                          onTap: () => _showComments(context),
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Bookmark button
-                    StreamBuilder<bool>(
-                      stream: Rx.combineLatest2(
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('bookmarks')
-                            .doc(widget.videoId)
-                            .snapshots(),
-                        FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.currentUserId)
-                            .collection('groups')
-                            .snapshots(),
-                        (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                          final isBookmarked = bookmarkDoc.exists;
-                          final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                            final groupData = groupDoc.data() as Map<String, dynamic>;
-                            final videos = groupData['videos'] as Map<String, dynamic>?;
-                            return videos?.containsKey(widget.videoId) ?? false;
-                          });
-                          return isBookmarked || isInGroup;
-                        },
-                      ).distinct(),
-                      builder: (context, snapshot) {
-                        final isSaved = snapshot.data ?? false;
-                        return _buildActionButton(
-                          icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          label: '',
-                          onTap: () => _toggleBookmark(context),
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Views count
-                    _buildActionButton(
-                      icon: Icons.remove_red_eye,
-                      label: '$_localViewCount',
-                      onTap: () {},
-                      color: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildActionButton({
+  Widget _buildActionButtonHorizontal({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
@@ -671,20 +620,20 @@ class VideoCardState extends State<VideoCard> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        customBorder: const CircleBorder(),
         child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color),
+              Icon(icon, color: color, size: 24),
               if (label.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(width: 4),
                 Text(
                   label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 12,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -734,6 +683,18 @@ class VideoCardState extends State<VideoCard> {
         ),
       ),
     );
+  }
+
+  void _toggleIngredients() {
+    setState(() {
+      _isIngredientsExpanded = !_isIngredientsExpanded;
+    });
+  }
+
+  void _toggleInstructions() {
+    setState(() {
+      _isInstructionsExpanded = !_isInstructionsExpanded;
+    });
   }
 }
 
