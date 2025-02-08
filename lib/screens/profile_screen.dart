@@ -45,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     super.initState();
     profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     _tabController = TabController(
-      length: isCurrentUserProfile ? 2 : 1,
+      length: isCurrentUserProfile ? 3 : 1,
       vsync: this,
       initialIndex: 0,
     );
@@ -963,32 +963,78 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildTabs() {
-    return DefaultTabController(
-      length: isCurrentUserProfile ? 2 : 1,
-      child: Column(
-        children: [
-          TabBar(
-            tabs: [
-              const Tab(icon: Icon(Icons.grid_on)),
-              if (isCurrentUserProfile)
-                const Tab(icon: Icon(Icons.bookmark_border)),
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: [
+            const Tab(icon: Icon(Icons.grid_on)),
+            if (isCurrentUserProfile) ...[
+              const Tab(icon: Icon(Icons.bookmark_border)),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid)
+                    .collection('tryLater')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.docs.length ?? 0;
+                  return Tab(
+                    child: Stack(
+                      children: [
+                        const Icon(Icons.watch_later_outlined),
+                        if (count > 0)
+                          Positioned(
+                            right: 0,
+                            top: -2,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 10,
+                                minHeight: 10,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  count.toString(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
-            indicatorColor: Colors.black,
-            unselectedLabelColor: Colors.grey,
-            labelColor: Colors.black,
-          ),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: TabBarView(
-              children: [
-                _buildVideoGrid(),
-                if (isCurrentUserProfile)
-                  _buildBookmarkedVideosGrid(),
+          ],
+          indicatorColor: Colors.black,
+          unselectedLabelColor: Colors.grey,
+          labelColor: Colors.black,
+        ),
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildVideoGrid(),
+              if (isCurrentUserProfile) ...[
+                _buildBookmarkedVideosGrid(),
+                _buildTryLaterGrid(),
               ],
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1025,127 +1071,99 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           );
         }
 
-        return CustomScrollView(
-          slivers: [
-            SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 1,
-                mainAxisSpacing: 1,
-                childAspectRatio: 0.8,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final videoData = videos[index].data() as Map<String, dynamic>?;
-                  if (videoData == null) return const SizedBox();
+        // Sort videos: pinned videos first, then by timestamp
+        final sortedVideos = videos.toList()
+          ..sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aIsPinned = aData['isPinned'] ?? false;
+            final bIsPinned = bData['isPinned'] ?? false;
+            
+            if (aIsPinned && !bIsPinned) return -1;
+            if (!aIsPinned && bIsPinned) return 1;
+            
+            final aTimestamp = aData['createdAt'] as Timestamp?;
+            final bTimestamp = bData['createdAt'] as Timestamp?;
+            if (aTimestamp == null || bTimestamp == null) return 0;
+            return bTimestamp.compareTo(aTimestamp); // Most recent first
+          });
 
-                  final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-                  final likes = videoData['likesCount'] as int? ?? 0;
-                  final comments = videoData['commentCount'] as int? ?? 0;
+        return GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 1,
+            mainAxisSpacing: 1,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: sortedVideos.length,
+          itemBuilder: (context, index) {
+            final videoData = sortedVideos[index].data() as Map<String, dynamic>?;
+            if (videoData == null) return const SizedBox();
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoPlayerScreen(
-                            videoData: videoData,
-                            videoId: videos[index].id,
-                          ),
-                        ),
-                      );
-                    },
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        thumbnailUrl != null
-                            ? CachedNetworkImage(
-                                imageUrl: thumbnailUrl,
-                                fit: BoxFit.cover,
-                                cacheManager: CustomCacheManager.instance,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[200],
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.error),
-                                ),
-                              )
-                            : Container(color: Colors.grey[200]),
-                        // Add overlay for likes and comments
-                        Positioned(
-                          left: 4,
-                          right: 4,
-                          bottom: 4,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.favorite,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _formatCount(likes),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.comment,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _formatCount(comments),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Add semi-transparent overlay for better text visibility
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: 32,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.6),
-                                  Colors.transparent,
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+            final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+            final isPinned = videoData['isPinned'] ?? false;
+
+            return GestureDetectorWithPosition(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoPlayerScreen(
+                      videoData: videoData,
+                      videoId: sortedVideos[index].id,
                     ),
-                  );
-                },
-                childCount: videos.length,
+                  ),
+                );
+              },
+              onLongPressWithPosition: isCurrentUserProfile 
+                ? (BuildContext context, Offset position) {
+                    _handleVideoLongPress(
+                      context,
+                      videoData,
+                      sortedVideos[index].id,
+                      position,
+                    );
+                  }
+                : null,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  thumbnailUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: thumbnailUrl,
+                          fit: BoxFit.cover,
+                          cacheManager: CustomCacheManager.instance,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey[200],
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.error),
+                          ),
+                        )
+                      : Container(color: Colors.grey[200]),
+                  if (isPinned)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(
+                          Icons.push_pin,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1206,59 +1224,147 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
             final videos = videoSnapshot.data ?? [];
 
-            return CustomScrollView(
-              slivers: [
-                SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 1,
-                    mainAxisSpacing: 1,
-                    childAspectRatio: 0.8,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final videoData = videos[index].data() as Map<String, dynamic>?;
-                      if (videoData == null) return const SizedBox();
+            return GridView.builder(
+              physics: const NeverScrollableScrollPhysics(), // Disable scrolling
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 1,
+                mainAxisSpacing: 1,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: videos.length,
+              itemBuilder: (context, index) {
+                final videoData = videos[index].data() as Map<String, dynamic>?;
+                if (videoData == null) return const SizedBox();
 
-                      final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
 
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VideoPlayerScreen(
-                                videoData: videoData,
-                                videoId: videos[index].id,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            thumbnailUrl != null
-                                ? CachedNetworkImage(
-                                    imageUrl: thumbnailUrl,
-                                    fit: BoxFit.cover,
-                                    cacheManager: CustomCacheManager.instance,
-                                    placeholder: (context, url) => Container(
-                                      color: Colors.grey[200],
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: Colors.grey[200],
-                                      child: const Icon(Icons.error),
-                                    ),
-                                  )
-                                : Container(color: Colors.grey[200]),
-                          ],
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VideoPlayerScreen(
+                          videoData: videoData,
+                          videoId: videos[index].id,
                         ),
-                      );
-                    },
-                    childCount: videos.length,
-                  ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTryLaterGrid() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('tryLater')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, tryLaterSnapshot) {
+        if (tryLaterSnapshot.hasError) {
+          return Center(child: Text('Error: ${tryLaterSnapshot.error}'));
+        }
+
+        if (tryLaterSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final tryLater = tryLaterSnapshot.data?.docs ?? [];
+
+        if (tryLater.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No dishes to try later',
+                  style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
+            ),
+          );
+        }
+
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: Future.wait(
+            tryLater.map((item) {
+              final itemData = item.data() as Map<String, dynamic>;
+              final videoId = itemData['videoId'] as String;
+              return FirebaseFirestore.instance
+                  .collection('videos')
+                  .doc(videoId)
+                  .get();
+            }),
+          ),
+          builder: (context, videoSnapshot) {
+            if (!videoSnapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final videos = videoSnapshot.data ?? [];
+
+            return GridView.builder(
+              physics: const NeverScrollableScrollPhysics(), // Disable scrolling
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 1,
+                mainAxisSpacing: 1,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: videos.length,
+              itemBuilder: (context, index) {
+                final videoData = videos[index].data() as Map<String, dynamic>?;
+                if (videoData == null) return const SizedBox();
+
+                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+                final likes = videoData['likesCount'] as int? ?? 0;
+                final comments = videoData['commentCount'] as int? ?? 0;
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VideoPlayerScreen(
+                          videoData: videoData,
+                          videoId: videos[index].id,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      thumbnailUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: thumbnailUrl,
+                              fit: BoxFit.cover,
+                              cacheManager: CustomCacheManager.instance,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[200],
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.error),
+                              ),
+                            )
+                          : Container(color: Colors.grey[200]),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );
@@ -1465,7 +1571,7 @@ class UserListItem extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => ProfileScreen(userId: userId),
-              ),
+                ),
             );
           },
         );
@@ -1571,13 +1677,13 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 // Add this helper widget at the bottom of the file
 class GestureDetectorWithPosition extends StatelessWidget {
   final Widget child;
-  final Function(BuildContext, Offset) onLongPressWithPosition;
+  final Function(BuildContext, Offset)? onLongPressWithPosition;
   final VoidCallback onTap;
 
   const GestureDetectorWithPosition({
     super.key,
     required this.child,
-    required this.onLongPressWithPosition,
+    this.onLongPressWithPosition,
     required this.onTap,
   });
 
@@ -1585,9 +1691,11 @@ class GestureDetectorWithPosition extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPressStart: (details) {
-        onLongPressWithPosition(context, details.globalPosition);
-      },
+      onLongPressStart: onLongPressWithPosition != null
+          ? (details) {
+              onLongPressWithPosition!(context, details.globalPosition);
+            }
+          : null,
       child: child,
     );
   }
