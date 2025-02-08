@@ -1040,6 +1040,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   if (videoData == null) return const SizedBox();
 
                   final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+                  final likes = videoData['likesCount'] as int? ?? 0;
+                  final comments = videoData['commentCount'] as int? ?? 0;
 
                   return GestureDetector(
                     onTap: () {
@@ -1070,6 +1072,72 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 ),
                               )
                             : Container(color: Colors.grey[200]),
+                        // Add overlay for likes and comments
+                        Positioned(
+                          left: 4,
+                          right: 4,
+                          bottom: 4,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.favorite,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _formatCount(likes),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.comment,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _formatCount(comments),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Add semi-transparent overlay for better text visibility
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 32,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.6),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -1109,10 +1177,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
+                Icon(Icons.favorite_border, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
-                  'No saved dishes yet',
+                  'No favorite dishes yet',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
