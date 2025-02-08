@@ -4,6 +4,7 @@ import 'package:recipetok/screens/home_screen.dart';
 import 'package:recipetok/screens/users_screen.dart';
 import 'package:recipetok/screens/trending_screen.dart';
 import 'package:recipetok/screens/video_upload_screen.dart';
+import 'package:recipetok/screens/meal_post_create_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -29,6 +30,86 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
+  void _showCreateOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.video_library,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+              title: const Text('Upload Video'),
+              subtitle: const Text('Share your cooking process'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VideoUploadScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.restaurant,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+              title: const Text('Create Meal Post'),
+              subtitle: const Text('Share photos of your meal'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MealPostCreateScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -37,14 +118,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         width: 48,
         height: 48,
         child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const VideoUploadScreen(),
-              ),
-            );
-          },
+          onPressed: _showCreateOptions,
           backgroundColor: Theme.of(context).primaryColor,
           elevation: 4,
           shape: RoundedRectangleBorder(
