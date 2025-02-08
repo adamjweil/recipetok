@@ -48,6 +48,7 @@ class VideoCardState extends State<VideoCard> {
   bool _isIngredientsExpanded = false;
   bool _isInstructionsExpanded = false;
 
+
   @override
   void initState() {
     super.initState();
@@ -534,6 +535,128 @@ class VideoCardState extends State<VideoCard> {
             ),
           );
         }).toList(),
+
+          // Video with tap gesture
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                // Toggle video play/pause
+                if (_videoController.value.isPlaying) {
+                  pauseVideo();
+                } else {
+                  playVideo();
+                }
+              },
+              child: AspectRatio(
+                aspectRatio: aspectRatio,
+                child: Stack(
+                  children: [
+                    VideoPlayer(_videoController),
+                    if (!_videoController.value.isPlaying)
+                      Container(
+                        color: Colors.black26,
+                        child: const Center(
+                          child: Icon(
+                            Icons.play_arrow,
+                            color: Colors.white,
+                            size: 64,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Interaction buttons - vertical column on right
+          Positioned(
+            right: 8,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Material(
+                color: Colors.transparent,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Like button
+                    _buildActionButton(
+                      icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
+                      label: '$_localLikeCount',
+                      onTap: _handleLike,  // This is now separate from video play/pause
+                      color: _localIsLiked ? Colors.red : Colors.white,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Comments button
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('videos')
+                          .doc(widget.videoId)
+                          .collection('comments')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final commentCount = snapshot.data?.docs.length ?? 0;
+                        return _buildActionButton(
+                          icon: Icons.comment,
+                          label: '$commentCount',
+                          onTap: () => _showComments(context),
+                          color: Colors.white,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Bookmark button
+                    StreamBuilder<bool>(
+                      stream: Rx.combineLatest2(
+                        FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(widget.currentUserId)
+                            .collection('bookmarks')
+                            .doc(widget.videoId)
+                            .snapshots(),
+                        FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(widget.currentUserId)
+                            .collection('groups')
+                            .snapshots(),
+                        (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
+                          final isBookmarked = bookmarkDoc.exists;
+                          final isInGroup = groupsSnapshot.docs.any((groupDoc) {
+                            final groupData = groupDoc.data() as Map<String, dynamic>;
+                            final videos = groupData['videos'] as Map<String, dynamic>?;
+                            return videos?.containsKey(widget.videoId) ?? false;
+                          });
+                          return isBookmarked || isInGroup;
+                        },
+                      ).distinct(),
+                      builder: (context, snapshot) {
+                        final isSaved = snapshot.data ?? false;
+                        return _buildActionButton(
+                          icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                          label: '',
+                          onTap: () => _toggleBookmark(context),
+                          color: Colors.white,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Views count
+                    _buildActionButton(
+                      icon: Icons.remove_red_eye,
+                      label: '$_localViewCount',
+                      onTap: () {},
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
