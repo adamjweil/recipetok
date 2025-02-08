@@ -396,13 +396,13 @@ class VideoCardState extends State<VideoCard> {
                                     .collection('groups')
                                     .snapshots(),
                                 (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                                  final isBookmarked = bookmarkDoc.exists;
+                                  final isFavorited = bookmarkDoc.exists;
                                   final isInGroup = groupsSnapshot.docs.any((groupDoc) {
                                     final groupData = groupDoc.data() as Map<String, dynamic>;
                                     final videos = groupData['videos'] as Map<String, dynamic>?;
                                     return videos?.containsKey(widget.videoId) ?? false;
                                   });
-                                  return isBookmarked || isInGroup;
+                                  return isFavorited || isInGroup;
                                 },
                               ).distinct(),
                               builder: (context, snapshot) {

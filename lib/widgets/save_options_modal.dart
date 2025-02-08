@@ -56,7 +56,7 @@ class SaveOptionsModal extends StatelessWidget {
       final bookmarkRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
-          .collection('bookmarks')
+          .collection('favorites')
           .doc(videoId);
 
       // Check if already bookmarked
@@ -67,7 +67,7 @@ class SaveOptionsModal extends StatelessWidget {
         await bookmarkRef.delete();
         if (context.mounted) {
           Navigator.pop(context);
-          _showTopSnackBar(context, 'Removed from bookmarks');
+          _showTopSnackBar(context, 'Removed from favorites');
         }
       } else {
         // Add bookmark
@@ -78,7 +78,7 @@ class SaveOptionsModal extends StatelessWidget {
 
         if (context.mounted) {
           Navigator.pop(context);
-          _showTopSnackBar(context, 'Saved to bookmarks');
+          _showTopSnackBar(context, 'Saved to favorites');
         }
       }
 
@@ -226,7 +226,7 @@ class SaveOptionsModal extends StatelessWidget {
             stream: FirebaseFirestore.instance
                 .collection('users')
                 .doc(userId)
-                .collection('bookmarks')
+                .collection('favorites')
                 .doc(videoId)
                 .snapshots(),
             builder: (context, snapshot) {
@@ -236,7 +236,7 @@ class SaveOptionsModal extends StatelessWidget {
                   backgroundColor: Colors.grey,
                   child: Icon(Icons.bookmark, color: Colors.white),
                 ),
-                title: const Text('Bookmarks'),
+                title: const Text('Favorites'),
                 trailing: Icon(
                   isBookmarked ? Icons.check_circle : Icons.add_circle_outline,
                   color: isBookmarked ? Colors.green : Colors.grey,
