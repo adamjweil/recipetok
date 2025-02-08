@@ -42,6 +42,12 @@ service firebase.storage {
       allow read: if true;
       allow write: if isOwner(userId);
     }
+
+    // Allow access to meal post photos
+    match /meal_posts/{userId}/{allPhotos=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
   }
 }
 

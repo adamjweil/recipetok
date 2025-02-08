@@ -21,6 +21,8 @@ import 'package:share_plus/share_plus.dart';
 import '../screens/messages_screen.dart';
 import '../services/message_service.dart';
 import '../screens/chat_screen.dart';
+import '../models/meal_post.dart';
+import '../widgets/meal_post_card.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -45,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     super.initState();
     profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     _tabController = TabController(
-      length: isCurrentUserProfile ? 3 : 1,
+      length: isCurrentUserProfile ? 4 : 2,
       vsync: this,
       initialIndex: 0,
     );
@@ -968,6 +970,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         TabBar(
           controller: _tabController,
           tabs: [
+            const Tab(icon: Icon(Icons.restaurant)),
             const Tab(icon: Icon(Icons.grid_on)),
             if (isCurrentUserProfile) ...[
               const Tab(icon: Icon(Icons.bookmark_border)),
@@ -1026,6 +1029,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           child: TabBarView(
             controller: _tabController,
             children: [
+              _buildMealPostsGrid(),
               _buildVideoGrid(),
               if (isCurrentUserProfile) ...[
                 _buildBookmarkedVideosGrid(),
@@ -1371,6 +1375,58 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
+
+  Widget _buildMealPostsGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('meal_posts')
+          .where('userId', isEqualTo: profileUserId)
+          .where('isPublic', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final posts = snapshot.data?.docs ?? [];
+
+        if (posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.restaurant_menu, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No meal posts yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = MealPost.fromFirestore(posts[index]);
+            return MealPostCard(
+              post: post,
+              onTap: () {
+                // TODO: Navigate to meal post detail screen
+              },
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 // Add this new widget at the bottom of the file
@@ -1500,6 +1556,8 @@ class UserListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCurrentUser = userId == FirebaseAuth.instance.currentUser?.uid;
+
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
@@ -1511,7 +1569,6 @@ class UserListItem extends StatelessWidget {
         final currentUserData = snapshot.data!.data() as Map<String, dynamic>;
         final following = List<String>.from(currentUserData['following'] ?? []);
         final isFollowing = following.contains(userId);
-        final isCurrentUser = userId == FirebaseAuth.instance.currentUser?.uid;
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -1553,9 +1610,6 @@ class UserListItem extends StatelessWidget {
                           ? Colors.red
                           : Theme.of(context).primaryColor,
                     ),
-                    backgroundColor: isFollowing
-                        ? Colors.red.withOpacity(0.1)
-                        : Colors.transparent,
                   ),
                   child: Text(
                     isFollowing ? 'Unfollow' : 'Follow',
@@ -1571,7 +1625,7 @@ class UserListItem extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (context) => ProfileScreen(userId: userId),
-                ),
+              ),
             );
           },
         );
@@ -1586,14 +1640,10 @@ class UserListItem extends StatelessWidget {
     final userRef = FirebaseFirestore.instance.collection('users').doc(currentUser.uid);
     final otherUserRef = FirebaseFirestore.instance.collection('users').doc(userId);
 
-    // Get current user's following list
     final userDoc = await userRef.get();
     final following = List<String>.from(userDoc.data()?['following'] ?? []);
     
-    final isFollowing = following.contains(userId);
-
-    if (isFollowing) {
-      // Unfollow
+    if (following.contains(userId)) {
       await userRef.update({
         'following': FieldValue.arrayRemove([userId]),
       });
@@ -1601,7 +1651,6 @@ class UserListItem extends StatelessWidget {
         'followers': FieldValue.arrayRemove([currentUser.uid]),
       });
     } else {
-      // Follow
       await userRef.update({
         'following': FieldValue.arrayUnion([userId]),
       });
