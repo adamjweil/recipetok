@@ -6,245 +6,623 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
+import '../widgets/comment_modal.dart';
 
-class MealPostCard extends StatelessWidget {
+class MealPostCard extends StatefulWidget {
   final MealPost post;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   const MealPostCard({
     super.key,
     required this.post,
-    this.onTap,
+    required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
-        elevation: 0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Post Date
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                DateFormat.yMMMd().format(post.createdAt),
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              ),
-            ),
+  State<MealPostCard> createState() => _MealPostCardState();
+}
 
-            // Photos
-            SizedBox(
-              height: 300,
-              child: PageView.builder(
-                itemCount: post.photoUrls.length,
-                itemBuilder: (context, index) {
-                  return CachedNetworkImage(
-                    imageUrl: post.photoUrls[index],
-                    fit: BoxFit.cover,
-                    cacheManager: CustomCacheManager.instance,
-                    placeholder: (context, url) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.error),
-                    ),
-                  );
-                },
-              ),
-            ),
+class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderStateMixin {
+  late AnimationController _likeController;
+  late Animation<double> _scaleAnimation;
 
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  _buildLikeButton(),
-                  const SizedBox(width: 16),
-                  IconButton(
-                    icon: const Icon(Icons.comment_outlined),
-                    onPressed: () {
-                      // TODO: Implement comments
-                    },
-                  ),
-                  Text(
-                    post.commentsCount.toString(),
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.share_outlined),
-                    onPressed: () {
-                      Share.share('Check out this meal post!'); // TODO: Add proper sharing URL
-                    },
-                  ),
-                ],
-              ),
-            ),
+  @override
+  void initState() {
+    super.initState();
+    _likeController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _likeController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
 
-            // Title and Description
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    post.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  if (post.description != null && post.description!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      post.description!,
-                      style: TextStyle(
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    post.mealType.toString().split('.').last.toUpperCase(),
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
+  @override
+  void dispose() {
+    _likeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLike() async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) return;
+
+    try {
+      final postRef = FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id);
+
+      // Start the animation
+      _likeController.forward().then((_) => _likeController.reverse());
+
+      if (widget.post.likedBy.contains(currentUserId)) {
+        // Unlike
+        await postRef.update({
+          'likedBy': FieldValue.arrayRemove([currentUserId]),
+          'likesCount': FieldValue.increment(-1),
+        });
+      } else {
+        // Like
+        await postRef.update({
+          'likedBy': FieldValue.arrayUnion([currentUserId]),
+          'likesCount': FieldValue.increment(1),
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating like: ${e.toString()}')),
+      );
+    }
+  }
+
+  void _showComments() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CommentsSection(
+            postId: widget.post.id,
+            scrollController: controller,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildLikeButton() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('meal_posts')
-          .doc(post.id)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-        final postData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-        final likedBy = List<String>.from(postData['likedBy'] ?? []);
-        final isLiked = currentUserId != null && likedBy.contains(currentUserId);
-
-        return Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                isLiked ? Icons.favorite : Icons.favorite_border,
-                color: isLiked ? Colors.red : null,
-              ),
-              onPressed: () => _toggleLike(context),
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // User Info Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // User Avatar
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: widget.post.userAvatarUrl != null 
+                      ? NetworkImage(widget.post.userAvatarUrl!) 
+                      : null,
+                  child: widget.post.userAvatarUrl == null
+                      ? const Icon(Icons.person, color: Colors.grey)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                
+                // Title and User Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.post.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'by ${widget.post.userName}',
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 3,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[400],
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            widget.post.mealType.icon,
+                            size: 16,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatDateTime(widget.post.createdAt),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Text(
-              likedBy.length.toString(),
-              style: TextStyle(
-                color: Colors.grey[600],
+          ),
+
+          // Description
+          if (widget.post.description != null && widget.post.description!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                widget.post.description!,
+                style: const TextStyle(fontSize: 15),
               ),
             ),
-          ],
-        );
-      },
-    );
-  }
 
-  Widget _buildMoreOptions(BuildContext context) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final isOwner = currentUserId == post.userId;
+          // Photo
+          if (widget.post.photoUrls.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: widget.post.photoUrls.first,
+              width: double.infinity,
+              height: 300,
+              fit: BoxFit.cover,
+            ),
 
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert),
-      onSelected: (value) async {
-        switch (value) {
-          case 'delete':
-            if (isOwner) {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Post'),
-                  content: const Text('Are you sure you want to delete this post?'),
-                  actions: [
-                    TextButton(
-                      child: const Text('Cancel'),
-                      onPressed: () => Navigator.pop(context, false),
+          // Metrics Section
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Stats Grid
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildMetric(
+                      'Cook Time',
+                      '${widget.post.cookTime}min',
+                      Icons.timer_outlined,
                     ),
-                    TextButton(
-                      child: const Text('Delete'),
-                      onPressed: () => Navigator.pop(context, true),
+                    _buildMetric(
+                      'Calories',
+                      '${widget.post.calories}',
+                      Icons.local_fire_department_outlined,
+                    ),
+                    _buildMetric(
+                      'Protein',
+                      '${widget.post.protein}g',
+                      Icons.fitness_center_outlined,
+                    ),
+                    if (widget.post.isVegetarian)
+                      _buildMetric(
+                        'CO₂ Saved',
+                        '${widget.post.carbonSaved}kg',
+                        Icons.eco_outlined,
+                      ),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Action Buttons
+                Row(
+                  children: [
+                    // Like Button with Animation
+                    ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: IconButton(
+                        icon: Icon(
+                          widget.post.likedBy.contains(
+                            FirebaseAuth.instance.currentUser?.uid
+                          ) 
+                              ? Icons.thumb_up
+                              : Icons.thumb_up_outlined,
+                          color: widget.post.likedBy.contains(
+                            FirebaseAuth.instance.currentUser?.uid
+                          )
+                              ? Theme.of(context).primaryColor
+                              : Colors.grey[600],
+                        ),
+                        onPressed: _handleLike,
+                      ),
+                    ),
+                    Text(
+                      widget.post.likesCount.toString(),
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(width: 16),
+                    
+                    // Comment Button
+                    IconButton(
+                      icon: Icon(Icons.chat_bubble_outline, color: Colors.grey[600]),
+                      onPressed: _showComments,
+                    ),
+                    Text(
+                      widget.post.commentsCount.toString(),
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
                   ],
                 ),
-              );
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              if (confirm == true) {
-                await FirebaseFirestore.instance
-                    .collection('meal_posts')
-                    .doc(post.id)
-                    .delete();
+  String _formatDateTime(DateTime dateTime) {
+    return 'Today at ${DateFormat('h:mm a').format(dateTime)}';
+  }
+
+  Widget _buildMetric(String label, String value, IconData icon) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, size: 24, color: Colors.grey[700]),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Add this new widget for comments
+class CommentsSection extends StatefulWidget {
+  final String postId;
+  final ScrollController scrollController;
+
+  const CommentsSection({
+    super.key,
+    required this.postId,
+    required this.scrollController,
+  });
+
+  @override
+  State<CommentsSection> createState() => _CommentsSectionState();
+}
+
+class _CommentsSectionState extends State<CommentsSection> {
+  final TextEditingController _commentController = TextEditingController();
+
+  // Add this list of quick comments
+  final List<String> _quickComments = [
+    "Looks delicious! 😋",
+    "Great recipe! 👨‍🍳",
+    "Need to try this! 🔥",
+    "Yummy! 😍",
+    "Well done! 👏",
+    "Making this ASAP! ⭐️",
+  ];
+
+  Future<void> _addComment() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || _commentController.text.trim().isEmpty) return;
+
+    try {
+      final commentRef = FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.postId)
+          .collection('comments')
+          .doc();
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      await commentRef.set({
+        'userId': currentUser.uid,
+        'userName': userDoc.data()?['displayName'] ?? 'Anonymous',
+        'userAvatar': userDoc.data()?['avatarUrl'],
+        'text': _commentController.text.trim(),
+        'timestamp': FieldValue.serverTimestamp(),
+        'likedBy': [],
+        'likesCount': 0,
+      });
+
+      // Update comment count
+      await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.postId)
+          .update({
+        'commentsCount': FieldValue.increment(1),
+      });
+
+      _commentController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error posting comment: ${e.toString()}')),
+      );
+    }
+  }
+
+  // Add this method to handle quick comment selection
+  void _addQuickComment(String comment) async {
+    _commentController.text = comment;
+    await _addComment();
+  }
+
+  String _getTimeAgo(Timestamp timestamp) {
+    final now = DateTime.now();
+    final date = timestamp.toDate();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 365) {
+      return '${(difference.inDays / 365).floor()}y';
+    } else if (difference.inDays > 30) {
+      return '${(difference.inDays / 30).floor()}mo';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays}d';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m';
+    } else {
+      return 'now';
+    }
+  }
+
+  Future<void> _handleCommentLike(String commentId, bool isLiked) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final commentRef = FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.postId)
+          .collection('comments')
+          .doc(commentId);
+
+      if (isLiked) {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayRemove([currentUser.uid]),
+          'likesCount': FieldValue.increment(-1),
+        });
+      } else {
+        await commentRef.update({
+          'likedBy': FieldValue.arrayUnion([currentUser.uid]),
+          'likesCount': FieldValue.increment(1),
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating like: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Comments Header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Text(
+                'Comments',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+
+        // Comments List
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('meal_posts')
+                .doc(widget.postId)
+                .collection('comments')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
               }
-            }
-            break;
-          case 'report':
-            // TODO: Implement report functionality
-            break;
-        }
-      },
-      itemBuilder: (context) => [
-        if (isOwner)
-          const PopupMenuItem(
-            value: 'delete',
-            child: Text('Delete'),
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final comments = snapshot.data?.docs ?? [];
+
+              return ListView.builder(
+                controller: widget.scrollController,
+                itemCount: comments.length,
+                itemBuilder: (context, index) {
+                  final comment = comments[index].data() as Map<String, dynamic>;
+                  final timestamp = comment['timestamp'];
+                  final commentId = comments[index].id;
+                  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                  final likedBy = List<String>.from(comment['likedBy'] ?? []);
+                  final isLiked = currentUserId != null && likedBy.contains(currentUserId);
+                  
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: comment['userAvatar'] != null
+                          ? NetworkImage(comment['userAvatar'])
+                          : null,
+                      child: comment['userAvatar'] == null
+                          ? const Icon(Icons.person)
+                          : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Text(comment['userName'] ?? 'Anonymous'),
+                        const SizedBox(width: 8),
+                        Text(
+                          timestamp != null 
+                              ? _getTimeAgo(timestamp as Timestamp)
+                              : 'now',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(comment['text'] ?? ''),
+                        if ((comment['likesCount'] ?? 0) > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${comment['likesCount']} ${(comment['likesCount'] ?? 0) == 1 ? 'like' : 'likes'}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(
+                        isLiked ? Icons.favorite : Icons.favorite_border,
+                        color: isLiked ? Colors.red : Colors.grey[600],
+                        size: 20,
+                      ),
+                      onPressed: () => _handleCommentLike(commentId, isLiked),
+                    ),
+                  );
+                },
+              );
+            },
           ),
-        if (!isOwner)
-          const PopupMenuItem(
-            value: 'report',
-            child: Text('Report'),
+        ),
+
+        // Add Quick Comments Section
+        Container(
+          height: 50,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _quickComments.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ElevatedButton(
+                  onPressed: () => _addQuickComment(_quickComments[index]),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[100],
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text(_quickComments[index]),
+                ),
+              );
+            },
           ),
+        ),
+
+        // Existing Comment Input
+        Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  decoration: const InputDecoration(
+                    hintText: 'Add a comment...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: _addComment,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Future<void> _toggleLike(BuildContext context) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) return;
-
-    final postRef = FirebaseFirestore.instance
-        .collection('meal_posts')
-        .doc(post.id);
-
-    final postDoc = await postRef.get();
-    final likedBy = List<String>.from(postDoc.data()?['likedBy'] ?? []);
-
-    if (likedBy.contains(currentUserId)) {
-      await postRef.update({
-        'likedBy': FieldValue.arrayRemove([currentUserId]),
-        'likesCount': FieldValue.increment(-1),
-      });
-    } else {
-      await postRef.update({
-        'likedBy': FieldValue.arrayUnion([currentUserId]),
-        'likesCount': FieldValue.increment(1),
-      });
-    }
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 } 

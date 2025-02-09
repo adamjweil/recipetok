@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:recipetok/screens/profile_screen.dart';
+import 'package:recipetok/screens/video_screen.dart';
 import 'package:recipetok/screens/home_screen.dart';
 import 'package:recipetok/screens/users_screen.dart';
-import 'package:recipetok/screens/trending_screen.dart';
 import 'package:recipetok/screens/video_upload_screen.dart';
 import 'package:recipetok/screens/meal_post_create_screen.dart';
 
@@ -19,8 +19,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   // Placeholder screens
   final List<Widget> _screens = [
     const HomeScreen(),
+    const VideoScreen(),
     const UsersScreen(),
-    const TrendingScreen(),
     const ProfileScreen(),
   ];
 
@@ -163,12 +163,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.people),
-              label: 'Users',
+              icon: Icon(Icons.play_circle_outline),
+              label: 'Videos',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.trending_up),
-              label: 'Trending',
+              icon: Icon(Icons.people),
+              label: 'Users',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person),

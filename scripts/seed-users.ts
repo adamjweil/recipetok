@@ -153,6 +153,78 @@ const sampleMessages = [
   "Can I substitute any ingredients?"
 ];
 
+// Add this after other sample data arrays
+const sampleMealPosts = [
+  {
+    title: 'Homemade Margherita Pizza',
+    description: 'Classic Italian pizza with fresh basil',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1574071318508-1cdbab80d002',
+      'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e',
+    ],
+    ingredients: 'Pizza dough, San Marzano tomatoes, Fresh mozzarella, Basil, Olive oil',
+    instructions: '1. Preheat oven to 500°F\n2. Roll out dough\n3. Add toppings\n4. Bake for 12-15 minutes',
+    mealType: 'dinner',
+    cookTime: 45,
+    calories: 850,
+    protein: 28,
+    isVegetarian: true,
+    carbonSaved: 1.2,
+  },
+  {
+    title: 'Avocado Toast',
+    description: 'Perfect breakfast or brunch',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1541519227354-08fa5d50c44d',
+      'https://images.unsplash.com/photo-1588137378633-dea1336ce1e2',
+    ],
+    ingredients: 'Sourdough bread, Ripe avocado, Cherry tomatoes, Red pepper flakes, Salt',
+    instructions: '1. Toast bread\n2. Mash avocado\n3. Add toppings\n4. Season to taste',
+    mealType: 'breakfast',
+    cookTime: 10,
+    calories: 320,
+    protein: 12,
+    isVegetarian: true,
+    carbonSaved: 0.8,
+  },
+  {
+    title: 'Grilled Salmon Bowl',
+    description: 'Healthy and delicious dinner option',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
+      'https://images.unsplash.com/photo-1580476262798-bddd9f4b7369',
+    ],
+    ingredients: 'Fresh salmon, Brown rice, Avocado, Cucumber, Soy sauce',
+    instructions: '1. Cook rice\n2. Grill salmon\n3. Prepare vegetables\n4. Assemble bowl',
+    mealType: 'dinner',
+    cookTime: 30,
+    calories: 620,
+    protein: 42,
+    isVegetarian: false,
+    carbonSaved: 0,
+  },
+  {
+    title: 'Protein Smoothie Bowl',
+    description: 'Post-workout nutrition',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1577805947697-89e18249d767',
+    ],
+    ingredients: 'Greek yogurt, Mixed berries, Banana, Protein powder, Granola',
+    instructions: '1. Blend ingredients\n2. Add toppings\n3. Serve immediately',
+    mealType: 'breakfast',
+  },
+  {
+    title: 'Chicken Stir Fry',
+    description: 'Quick and easy weeknight dinner',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1603133872878-684f208fb84b',
+    ],
+    ingredients: 'Chicken breast, Mixed vegetables, Soy sauce, Ginger, Garlic',
+    instructions: '1. Cut chicken\n2. Prepare sauce\n3. Stir fry\n4. Serve hot',
+    mealType: 'dinner',
+  },
+];
+
 async function createUser() {
   const firstName = faker.person.firstName();
   const lastName = faker.person.lastName();
@@ -369,6 +441,44 @@ async function createConversations(adamId: string, otherUserIds: string[]) {
   }
 }
 
+// Add this function to create meal posts
+async function createMealPost(userId: string, postData: any) {
+  try {
+    // First get the user's data
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.data() || {};
+
+    const mealPost = {
+      userId,
+      userName: userData.displayName || 'Anonymous',
+      userAvatarUrl: userData.avatarUrl,
+      title: postData.title,
+      description: postData.description,
+      photoUrls: postData.photoUrls,
+      ingredients: postData.ingredients,
+      instructions: postData.instructions,
+      mealType: postData.mealType,
+      cookTime: postData.cookTime || 0,
+      calories: postData.calories || 0,
+      protein: postData.protein || 0,
+      isVegetarian: postData.isVegetarian || false,
+      carbonSaved: postData.carbonSaved || 0.0,
+      isPublic: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      likesCount: 0,
+      commentsCount: 0,
+      likedBy: [],
+    };
+
+    const postDoc = await db.collection('meal_posts').add(mealPost);
+    console.log(`Created meal post: ${postDoc.id}`);
+    return postDoc.id;
+  } catch (error) {
+    console.error('Error creating meal post:', error);
+    throw error;
+  }
+}
+
 async function seedDatabase() {
   try {
     // First create your specific user
@@ -515,6 +625,12 @@ async function seedDatabase() {
 
       // Pass the created videos to createAdamCollections
       await createAdamCollections(adamUserRecord.uid, createdVideos);
+
+      // Add Adam's meal posts
+      for (const postData of sampleMealPosts) {
+        await createMealPost(adamUserRecord.uid, postData);
+        console.log(`Created meal post for Adam: ${postData.title}`);
+      }
     } catch (error) {
       console.error('Error creating Adam\'s account:', error);
       throw error; // Re-throw the error to stop the seeding process
@@ -531,6 +647,17 @@ async function seedDatabase() {
       for (let j = 0; j < numVideos; j++) {
         const videoId = await createVideo(userId);
         console.log(`Created video ${j + 1}/${numVideos} for user ${userId}: ${videoId}`);
+      }
+
+      // Create 3 random meal posts for each user
+      for (let j = 0; j < 3; j++) {
+        const randomPost = sampleMealPosts[Math.floor(Math.random() * sampleMealPosts.length)];
+        await createMealPost(userId, {
+          ...randomPost,
+          title: `${randomPost.title} ${j + 1}`,
+          description: `${faker.lorem.sentence()} ${randomPost.description}`,
+        });
+        console.log(`Created meal post ${j + 1}/3 for user ${userId}`);
       }
     }
 
