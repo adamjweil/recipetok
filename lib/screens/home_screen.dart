@@ -7,6 +7,9 @@ import '../utils/custom_cache_manager.dart';
 import '../widgets/video_card.dart';
 import './video_player_screen.dart';
 import 'dart:async' show unawaited;
+import '../widgets/meal_post_card.dart';
+import '../models/meal_post.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -156,90 +159,93 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _getVideosStream(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+      appBar: AppBar(
+        title: const Text('Activity Feed'),
+        automaticallyImplyLeading: false,
+      ),
+      body: StreamBuilder<List<String>>(
+        stream: _getFollowingUsers(),
+        builder: (context, followingSnapshot) {
+          if (followingSnapshot.hasError) {
+            return Center(child: Text('Error: ${followingSnapshot.error}'));
           }
 
-          if (snapshot.connectionState == ConnectionState.waiting && _cachedVideos == null) {
+          if (!followingSnapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final videos = snapshot.data?.docs ?? _cachedVideos ?? [];
-          
-          if (snapshot.hasData) {
-            _cachedVideos = snapshot.data?.docs;
-            // Add this to play initial video when data first loads
-            if (_currentlyPlayingVideo == null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _playInitialVideo();
-              });
-            }
-          }
+          final followingUsers = followingSnapshot.data!;
 
-          if (videos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No videos yet',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('meal_posts')
+                .where('userId', whereIn: followingUsers)
+                .where('isPublic', isEqualTo: true)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final posts = snapshot.data?.docs ?? [];
+
+              if (posts.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.restaurant_menu, 
+                        size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No meal posts yet',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Follow more users or create a post!',
+                        style: TextStyle(color: Colors.grey[500]),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          }
-
-          return PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: videos.length,
-            onPageChanged: (index) {
-              // Pause previous video
-              if (_currentlyPlayingVideo != null) {
-                _currentlyPlayingVideo!.pauseVideo();
+                );
               }
 
-              // Play new video
-              final videoKey = _videoKeys[videos[index].id];
-              if (videoKey?.currentState != null) {
-                videoKey!.currentState!.playVideo();
-                setState(() {
-                  _currentlyPlayingVideo = videoKey.currentState;
-                });
-              }
-            },
-            itemBuilder: (context, index) {
-              final videoData = videos[index].data() as Map<String, dynamic>;
-              final videoId = videos[index].id;
-              
-              // Create or get existing key
-              _videoKeys[videoId] ??= GlobalKey<VideoCardState>();
-              
-              return KeyedSubtree(
-                key: ValueKey(videoId),
-                child: VideoCard(
-                  key: _videoKeys[videoId],
-                  videoData: videoData,
-                  videoId: videoId,
-                  onUserTap: () {},
-                  onLike: () => _toggleVideoLike(videoId),
-                  onBookmark: () => _toggleBookmark(videoId, videoData),
-                  currentUserId: currentUserId,
-                  autoPlay: _currentlyPlayingVideo == null && index == 0,
-                ),
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  final post = MealPost.fromFirestore(posts[index]);
+                  return MealPostCard(
+                    post: post,
+                    onTap: () {
+                      // Navigate to meal post detail screen
+                    },
+                  );
+                },
               );
             },
           );
         },
       ),
     );
+  }
+
+  Stream<List<String>> _getFollowingUsers() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .snapshots()
+        .map((doc) {
+      final following = List<String>.from(doc.data()?['following'] ?? []);
+      following.add(currentUserId); // Include user's own posts
+      return following;
+    });
   }
 }
 

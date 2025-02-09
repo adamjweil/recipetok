@@ -1047,6 +1047,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       stream: FirebaseFirestore.instance
           .collection('videos')
           .where('userId', isEqualTo: profileUserId)
+          .orderBy('isPinned', descending: true)
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1075,34 +1077,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           );
         }
 
-        // Sort videos: pinned videos first, then by timestamp
-        final sortedVideos = videos.toList()
-          ..sort((a, b) {
-            final aData = a.data() as Map<String, dynamic>;
-            final bData = b.data() as Map<String, dynamic>;
-            final aIsPinned = aData['isPinned'] ?? false;
-            final bIsPinned = bData['isPinned'] ?? false;
-            
-            if (aIsPinned && !bIsPinned) return -1;
-            if (!aIsPinned && bIsPinned) return 1;
-            
-            final aTimestamp = aData['createdAt'] as Timestamp?;
-            final bTimestamp = bData['createdAt'] as Timestamp?;
-            if (aTimestamp == null || bTimestamp == null) return 0;
-            return bTimestamp.compareTo(aTimestamp); // Most recent first
-          });
-
         return GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 1,
             mainAxisSpacing: 1,
-            childAspectRatio: 0.8,
           ),
-          itemCount: sortedVideos.length,
+          itemCount: videos.length,
           itemBuilder: (context, index) {
-            final videoData = sortedVideos[index].data() as Map<String, dynamic>?;
+            final videoData = videos[index].data() as Map<String, dynamic>?;
             if (videoData == null) return const SizedBox();
 
             final thumbnailUrl = videoData['thumbnailUrl'] as String?;
@@ -1115,7 +1098,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   MaterialPageRoute(
                     builder: (context) => VideoPlayerScreen(
                       videoData: videoData,
-                      videoId: sortedVideos[index].id,
+                      videoId: videos[index].id,
                     ),
                   ),
                 );
@@ -1125,7 +1108,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     _handleVideoLongPress(
                       context,
                       videoData,
-                      sortedVideos[index].id,
+                      videos[index].id,
                       position,
                     );
                   }

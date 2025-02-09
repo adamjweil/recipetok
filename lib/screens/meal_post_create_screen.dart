@@ -94,15 +94,21 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not logged in');
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw Exception('User not logged in');
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final userData = userDoc.data() ?? {};
 
       // Upload photos
       final List<String> photoUrls = [];
       for (var photo in _selectedPhotos) {
         final ref = FirebaseStorage.instance
             .ref()
-            .child('meal_posts/${user.uid}')
+            .child('meal_posts/${currentUser.uid}')
             .child('${DateTime.now().millisecondsSinceEpoch}_${photoUrls.length}.jpg');
         
         await ref.putFile(photo);
@@ -112,16 +118,27 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
       // Create meal post
       final mealPost = MealPost(
-        id: '', // Will be set by Firestore
-        userId: user.uid,
+        id: '', // This will be set by Firestore
+        userId: currentUser.uid,
+        userName: userData['displayName'] ?? 'Anonymous',
         title: _titleController.text,
-        description: _descriptionController.text,
         photoUrls: photoUrls,
-        ingredients: _ingredientsController.text,
-        instructions: _instructionsController.text,
         mealType: _selectedMealType,
+        cookTime: 0, // Assuming cookTime is not provided in the original code
+        calories: 0, // Assuming calories is not provided in the original code
+        protein: 0, // Assuming protein is not provided in the original code
+        isVegetarian: false, // Assuming isVegetarian is not provided in the original code
+        carbonSaved: 0.0, // Assuming carbonSaved is not provided in the original code
+        likes: 0,
+        comments: 0,
+        isLiked: false,
         isPublic: _isPublic,
         createdAt: DateTime.now(),
+        userAvatarUrl: userData['avatarUrl'],
+        caption: '', // Assuming caption is not provided in the original code
+        description: _descriptionController.text,
+        ingredients: _ingredientsController.text,
+        instructions: _instructionsController.text,
       );
 
       await FirebaseFirestore.instance
