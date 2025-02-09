@@ -17,10 +17,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
-  // Initialize cache before running app
-  final cacheDir = await getTemporaryDirectory();
-  await CustomCacheManager.init(cacheDir);
+  await CustomCacheManager.initialize();
   
   print('Firebase initialized successfully');
   runApp(const MyApp());

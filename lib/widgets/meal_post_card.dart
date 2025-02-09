@@ -105,10 +105,10 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: Colors.grey.shade200),
       ),
       child: Column(
@@ -116,21 +116,21 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
         children: [
           // User Info Header
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 // User Avatar
                 CircleAvatar(
-                  radius: 24,
+                  radius: 18,
                   backgroundColor: Colors.grey[200],
                   backgroundImage: widget.post.userAvatarUrl != null 
                       ? NetworkImage(widget.post.userAvatarUrl!) 
                       : null,
                   child: widget.post.userAvatarUrl == null
-                      ? const Icon(Icons.person, color: Colors.grey)
+                      ? const Icon(Icons.person, size: 18)
                       : null,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 
                 // Title and User Info
                 Expanded(
@@ -141,7 +141,7 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
                         widget.post.title,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 14,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -206,7 +206,7 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
             CachedNetworkImage(
               imageUrl: widget.post.photoUrls.first,
               width: double.infinity,
-              height: 300,
+              height: 225,
               fit: BoxFit.cover,
             ),
 
@@ -264,8 +264,10 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
                           )
                               ? Theme.of(context).primaryColor
                               : Colors.grey[600],
+                          size: 20,
                         ),
                         onPressed: _handleLike,
+                        padding: const EdgeInsets.all(8),
                       ),
                     ),
                     Text(
@@ -301,20 +303,20 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
     return Expanded(
       child: Column(
         children: [
-          Icon(icon, size: 24, color: Colors.grey[700]),
-          const SizedBox(height: 8),
+          Icon(icon, size: 18),
+          const SizedBox(height: 3),
           Text(
             value,
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 18,
+              fontSize: 14,
             ),
           ),
           Text(
             label,
             style: TextStyle(
               color: Colors.grey[600],
-              fontSize: 12,
+              fontSize: 10,
             ),
           ),
         ],

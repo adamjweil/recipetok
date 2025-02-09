@@ -43,20 +43,23 @@ class VideoGroupsSection extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        return SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: groups.length + (showAddButton ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == groups.length && showAddButton) {
-                return _buildCreateGroupButton(context);
-              }
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            height: 80,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: groups.length + (showAddButton ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == groups.length && showAddButton) {
+                  return _buildCreateGroupButton(context);
+                }
 
-              final group = groups[index].data() as Map<String, dynamic>;
-              return _buildGroupItem(context, group, groups[index].id);
-            },
+                final group = groups[index].data() as Map<String, dynamic>;
+                return _buildGroupItem(context, group, groups[index].id);
+              },
+            ),
           ),
         );
       },
@@ -67,13 +70,14 @@ class VideoGroupsSection extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showGroupModal(context, group, groupId),
       child: Container(
-        width: 80,
-        margin: const EdgeInsets.only(right: 12),
+        width: 64,
+        margin: const EdgeInsets.only(right: 8),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 70,
-              height: 70,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.grey[300]!),
@@ -95,10 +99,10 @@ class VideoGroupsSection extends StatelessWidget {
                       ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               group['name'] ?? '',
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 11),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -110,30 +114,29 @@ class VideoGroupsSection extends StatelessWidget {
   }
 
   Widget _buildCreateGroupButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _showCreateGroupModal(context),
-      child: Container(
-        width: 80,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          children: [
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: const Icon(Icons.add, size: 30, color: Colors.grey),
+    return Container(
+      width: 64,
+      margin: const EdgeInsets.only(right: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey[100],
+              border: Border.all(color: Colors.grey[300]!),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'New',
-              style: TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+            child: Icon(Icons.add, color: Colors.grey[600], size: 24),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'New',
+            style: TextStyle(fontSize: 11),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
