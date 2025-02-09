@@ -21,10 +21,14 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   final _descriptionController = TextEditingController();
   final _ingredientsController = TextEditingController();
   final _instructionsController = TextEditingController();
+  final _cookTimeController = TextEditingController();
+  final _caloriesController = TextEditingController();
+  final _proteinController = TextEditingController();
   
   List<File> _selectedPhotos = [];
   MealType _selectedMealType = MealType.snack;
   bool _isPublic = true;
+  bool _isVegetarian = false;
   bool _isLoading = false;
 
   @override
@@ -33,6 +37,9 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     _descriptionController.dispose();
     _ingredientsController.dispose();
     _instructionsController.dispose();
+    _cookTimeController.dispose();
+    _caloriesController.dispose();
+    _proteinController.dispose();
     super.dispose();
   }
 
@@ -116,6 +123,9 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         photoUrls.add(url);
       }
 
+      // Calculate carbon saved (example calculation)
+      final carbonSaved = _isVegetarian ? 1.2 : 0.0;
+
       // Create meal post
       final mealPost = MealPost(
         id: '', // This will be set by Firestore
@@ -124,14 +134,11 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         title: _titleController.text,
         photoUrls: photoUrls,
         mealType: _selectedMealType,
-        cookTime: 0, // Assuming cookTime is not provided in the original code
-        calories: 0, // Assuming calories is not provided in the original code
-        protein: 0, // Assuming protein is not provided in the original code
-        isVegetarian: false, // Assuming isVegetarian is not provided in the original code
-        carbonSaved: 0.0, // Assuming carbonSaved is not provided in the original code
-        likes: 0,
-        comments: 0,
-        isLiked: false,
+        cookTime: int.parse(_cookTimeController.text),
+        calories: int.parse(_caloriesController.text),
+        protein: int.parse(_proteinController.text),
+        isVegetarian: _isVegetarian,
+        carbonSaved: carbonSaved,
         isPublic: _isPublic,
         createdAt: DateTime.now(),
         userAvatarUrl: userData['avatarUrl'],
@@ -139,6 +146,12 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         description: _descriptionController.text,
         ingredients: _ingredientsController.text,
         instructions: _instructionsController.text,
+        likes: 0,
+        comments: 0,
+        isLiked: false,
+        likesCount: 0,
+        commentsCount: 0,
+        likedBy: [],
       );
 
       await FirebaseFirestore.instance
@@ -146,13 +159,10 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           .add(mealPost.toFirestore());
 
       if (mounted) {
-        // Replace current screen with profile screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const ProfileScreen(),
-          ),
-        );
+        // Pop back to previous screen
+        Navigator.pop(context);
+        
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Meal post created successfully!')),
         );
@@ -170,186 +180,380 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     }
   }
 
+  Widget _buildPhotoSection() {
+    return Container(
+      height: 120,
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Row(
+        children: [
+          // Add Photo Button
+          InkWell(
+            onTap: _pickImage,
+            child: Container(
+              width: 100,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_photo_alternate, size: 32, color: Colors.grey[600]),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add Photo',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Selected Photos
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedPhotos.length,
+              itemBuilder: (context, index) {
+                return Container(
+                  width: 100,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          _selectedPhotos[index],
+                          width: 100,
+                          height: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: IconButton(
+                          icon: const Icon(Icons.remove_circle),
+                          color: Colors.red,
+                          onPressed: () {
+                            setState(() {
+                              _selectedPhotos.removeAt(index);
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    String? suffix,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(icon),
+          suffixText: suffix,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          filled: true,
+          fillColor: Colors.grey[50],
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter $label';
+          }
+          if (int.tryParse(value) == null) {
+            return 'Please enter a valid number';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Meal Post'),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _createPost,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Post'),
-          ),
-        ],
+        title: const Text('Create Recipe'),
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Photo Selection
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    // Add Photo Button
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        width: 120,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildPhotoSection(),
+
+                  // Title Field
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    child: TextFormField(
+                      controller: _titleController,
+                      decoration: InputDecoration(
+                        labelText: 'Recipe Title',
+                        hintText: 'Give your recipe a name',
+                        prefixIcon: const Icon(Icons.restaurant_menu),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.add_photo_alternate, size: 40),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                      ),
+                      validator: (value) => value?.isEmpty ?? true ? 'Please enter a title' : null,
+                    ),
+                  ),
+
+                  // Meal Type Selector
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<MealType>(
+                        value: _selectedMealType,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down),
+                        items: MealType.values.map((MealType type) {
+                          return DropdownMenuItem<MealType>(
+                            value: type,
+                            child: Row(
+                              children: [
+                                Icon(type.icon, size: 20),
+                                const SizedBox(width: 8),
+                                Text(type.toString().split('.').last.toUpperCase()),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (MealType? newValue) {
+                          if (newValue != null) {
+                            setState(() => _selectedMealType = newValue);
+                          }
+                        },
                       ),
                     ),
-                    // Selected Photos
-                    ..._selectedPhotos.map((photo) => Stack(
-                      children: [
-                        Container(
-                          width: 120,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            image: DecorationImage(
-                              image: FileImage(photo),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 12,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedPhotos.remove(photo);
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                  ),
+
+                  // Metrics Section
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
                       ],
-                    )).toList(),
-                  ],
-                ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Recipe Metrics',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildMetricField(
+                          controller: _cookTimeController,
+                          label: 'Cook Time',
+                          hint: 'How long to prepare?',
+                          icon: Icons.timer,
+                          suffix: 'min',
+                        ),
+                        _buildMetricField(
+                          controller: _caloriesController,
+                          label: 'Calories',
+                          hint: 'Calories per serving',
+                          icon: Icons.local_fire_department,
+                          suffix: 'kcal',
+                        ),
+                        _buildMetricField(
+                          controller: _proteinController,
+                          label: 'Protein',
+                          hint: 'Protein content',
+                          icon: Icons.fitness_center,
+                          suffix: 'g',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Recipe Details Section
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Recipe Details',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _descriptionController,
+                          decoration: InputDecoration(
+                            labelText: 'Description',
+                            hintText: 'Brief description of your recipe',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                          maxLines: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _ingredientsController,
+                          decoration: InputDecoration(
+                            labelText: 'Ingredients',
+                            hintText: '- 2 cups flour\n- 1 cup sugar\n- 3 eggs',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                          maxLines: 5,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _instructionsController,
+                          decoration: InputDecoration(
+                            labelText: 'Instructions',
+                            hintText: '1. Preheat oven\n2. Mix ingredients\n3. Bake for 30 minutes',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                          ),
+                          maxLines: 5,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Options Section
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          title: const Text('Vegetarian'),
+                          subtitle: const Text('Is this a vegetarian recipe?'),
+                          value: _isVegetarian,
+                          onChanged: (bool value) {
+                            setState(() => _isVegetarian = value);
+                          },
+                        ),
+                        const Divider(),
+                        SwitchListTile(
+                          title: const Text('Public Recipe'),
+                          subtitle: const Text('Make this recipe visible to everyone'),
+                          value: _isPublic,
+                          onChanged: (bool value) {
+                            setState(() => _isPublic = value);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Submit Button
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _createPost,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Share Recipe',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 16),
-
-              // Title
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title *',
-                  hintText: 'Give your meal a name',
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter a title';
-                  }
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // Meal Type
-              DropdownButtonFormField<MealType>(
-                value: _selectedMealType,
-                decoration: const InputDecoration(
-                  labelText: 'Meal Type',
-                ),
-                items: MealType.values.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Text(type.toString().split('.').last.toUpperCase()),
-                  );
-                }).toList(),
-                onChanged: (MealType? value) {
-                  if (value != null) {
-                    setState(() {
-                      _selectedMealType = value;
-                    });
-                  }
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              // Description
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  hintText: 'Tell us about your meal',
-                ),
-                maxLines: 3,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Ingredients
-              TextFormField(
-                controller: _ingredientsController,
-                decoration: const InputDecoration(
-                  labelText: 'Ingredients',
-                  hintText: 'Example:\n- 2 cups flour\n- 1 cup sugar\n- 3 eggs',
-                ),
-                maxLines: 5,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Instructions
-              TextFormField(
-                controller: _instructionsController,
-                decoration: const InputDecoration(
-                  labelText: 'Instructions',
-                  hintText: 'Example:\n1. Preheat oven to 350°F\n2. Mix dry ingredients\n3. Add wet ingredients',
-                ),
-                maxLines: 5,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Privacy Toggle
-              SwitchListTile(
-                title: const Text('Public Post'),
-                subtitle: const Text('Anyone can see this post'),
-                value: _isPublic,
-                onChanged: (bool value) {
-                  setState(() {
-                    _isPublic = value;
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 } 

@@ -397,7 +397,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               leading: isCurrentUserProfile
                   ? IconButton(
                       icon: const Icon(Icons.menu, color: Colors.black),
-                      onPressed: () => _showLogoutDialog(context),
+                      onPressed: () => _showLogoutDialog(context, userData),
                     )
                   : IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.black),
@@ -527,24 +527,46 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Future<void> _showLogoutDialog(BuildContext context) async {
+  Future<void> _showLogoutDialog(BuildContext context, Map<String, dynamic> userData) async {
     return showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: const Text('Logout'),
+        return SimpleDialog(
+          title: const Text('Menu'),
+          children: <Widget>[
+            SimpleDialogOption(
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.pop(context); // Close the dialog
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(
+                      userData: userData,
+                    ),
+                  ),
+                );
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.edit),
+                  SizedBox(width: 12),
+                  Text('Edit Profile'),
+                ],
+              ),
+            ),
+            const Divider(),
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
                 _signOut(context);
               },
+              child: Row(
+                children: [
+                  const Icon(Icons.logout, color: Colors.red),
+                  const SizedBox(width: 12),
+                  Text('Logout', style: TextStyle(color: Colors.red[700])),
+                ],
+              ),
             ),
           ],
         );
@@ -619,7 +641,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     child: GestureDetector(
                       onTap: _addStory,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
                           color: Theme.of(context).primaryColor,
                           shape: BoxShape.circle,
@@ -630,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                         ),
                         child: const Icon(
                           Icons.add,
-                          size: 20,
+                          size: 14,
                           color: Colors.white,
                         ),
                       ),
@@ -807,78 +829,77 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildProfileActions(Map<String, dynamic> userData) {
-    if (isCurrentUserProfile) {
-      return _buildEditProfileButton(userData);
-    } else {
+    if (!isCurrentUserProfile) {  // Only show actions for other users' profiles
       final List followers = userData['followers'] ?? [];
       final bool isFollowing = followers.contains(FirebaseAuth.instance.currentUser?.uid);
 
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (!isCurrentUserProfile) ...[
-            // Follow/Unfollow Button
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ElevatedButton(
-                  onPressed: () {
-                    _toggleFollow(userData['uid']);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
-                    foregroundColor: isFollowing ? Colors.black : Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: isFollowing 
-                          ? BorderSide(color: Colors.grey[300]!)
-                          : BorderSide.none,
-                    ),
-                    minimumSize: const Size(0, 36),
+          // Follow/Unfollow Button
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ElevatedButton(
+                onPressed: () {
+                  _toggleFollow(userData['uid']);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
+                  foregroundColor: isFollowing ? Colors.black : Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: isFollowing 
+                        ? BorderSide(color: Colors.grey[300]!)
+                        : BorderSide.none,
                   ),
-                  child: Text(
-                    isFollowing ? 'Following' : 'Follow',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  minimumSize: const Size(0, 36),
+                ),
+                child: Text(
+                  isFollowing ? 'Following' : 'Follow',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
-            // Message Button
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ElevatedButton(
-                  onPressed: () => _openChat(userData),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[100],
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    minimumSize: const Size(0, 36),
+          ),
+          // Message Button
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ElevatedButton(
+                onPressed: () => _openChat(userData),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[100],
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(color: Colors.grey[300]!),
                   ),
-                  child: const Text(
-                    'Message',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  minimumSize: const Size(0, 36),
+                ),
+                child: const Text(
+                  'Message',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ],
       );
     }
+    
+    // Return empty container for current user's profile
+    return const SizedBox.shrink();
   }
 
   Future<void> _toggleFollow(String targetUserId) async {

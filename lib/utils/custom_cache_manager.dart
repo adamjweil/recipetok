@@ -26,9 +26,14 @@ class CustomCacheManager {
     await _instance?.emptyCache();
   }
 
-  static Future<void> init(Directory cacheDir) async {
+  // Rename init to initialize to match the call in main.dart
+  static Future<void> initialize() async {
     try {
-      await cacheDir.create(recursive: true);
+      final cacheDir = await getTemporaryDirectory();
+      final cachePath = p.join(cacheDir.path, key);
+      await Directory(cachePath).create(recursive: true);
+      
+      // Initialize the cache manager instance
       _instance = CacheManager(
         Config(
           key,
@@ -40,7 +45,8 @@ class CustomCacheManager {
         ),
       );
     } catch (e) {
-      print('Error initializing cache: $e');
+      // Handle or log initialization error
+      print('Cache initialization error: $e');
     }
   }
 
