@@ -21,6 +21,12 @@ enum MealType {
   }
 }
 
+extension MealTypeExtension on MealType {
+  String toUpperCase() {
+    return toString().split('.').last.toUpperCase();
+  }
+}
+
 class MealPost {
   final String id;
   final String userId;

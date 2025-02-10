@@ -586,7 +586,7 @@ class _CommentItemState extends State<_CommentItem> {
       child: SlideTransition(
         position: _slideAnimation,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -606,21 +606,21 @@ class _CommentItemState extends State<_CommentItem> {
                         Navigator.pushNamed(context, '/profile/${widget.userId}');
                       },
                       child: CircleAvatar(
-                        radius: 14,
+                        radius: 12,
                         backgroundImage: userData?['avatarUrl'] != null
                             ? CachedNetworkImageProvider(userData!['avatarUrl'])
                             : null,
                         child: userData?['avatarUrl'] == null
-                            ? const Icon(Icons.person, size: 14)
+                            ? const Icon(Icons.person, size: 12)
                             : null,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     
                     // Comment Content
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
@@ -642,14 +642,14 @@ class _CommentItemState extends State<_CommentItem> {
                                   userData?['username'] ?? 'Unknown User',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 13,
+                                    fontSize: 12,
                                   ),
                                 ),
                                 if (widget.isPinned) ...[
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Icon(
                                     Icons.push_pin,
-                                    size: 14,
+                                    size: 12,
                                     color: Theme.of(context).primaryColor,
                                   ),
                                 ],
@@ -713,17 +713,15 @@ class _CommentItemState extends State<_CommentItem> {
                             ),
                             
                             // Comment Text
-                            if (widget.text.isNotEmpty) ...[
-                              const SizedBox(height: 4),
+                            if (widget.text.isNotEmpty)
                               Text(
                                 widget.text,
-                                style: const TextStyle(fontSize: 13),
+                                style: const TextStyle(fontSize: 12),
                               ),
-                            ],
                             
                             // Comment Image
                             if (widget.imageUrl != null) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: CachedNetworkImage(
@@ -743,11 +741,11 @@ class _CommentItemState extends State<_CommentItem> {
                             ],
                             
                             // Timestamp
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               getTimeAgo(widget.timestamp),
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 color: Colors.grey[600],
                               ),
                             ),

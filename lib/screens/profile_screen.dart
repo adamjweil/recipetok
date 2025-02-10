@@ -596,14 +596,25 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       );
                     }
 
-                    return ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(12),
-                      itemCount: posts.length,
-                      itemBuilder: (context, index) {
-                        final post = MealPost.fromFirestore(posts[index]);
-                        return MealPostWrapper(post: post);
-                      },
+                    return CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.only(bottom: 80),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final post = MealPost.fromFirestore(posts[index]);
+                                return ExpandableMealPost(
+                                  post: post,
+                                  isExpanded: false,
+                                  onToggle: () {},
+                                );
+                              },
+                              childCount: posts.length,
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
