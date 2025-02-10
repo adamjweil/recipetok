@@ -10,6 +10,7 @@ import 'dart:async' show unawaited;
 import '../widgets/meal_post_card.dart';
 import '../models/meal_post.dart';
 import 'package:intl/intl.dart';
+import '../widgets/meal_post/meal_post_wrapper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -221,11 +222,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: posts.length,
                 itemBuilder: (context, index) {
                   final post = MealPost.fromFirestore(posts[index]);
-                  return MealPostCard(
+                  return MealPostWrapper(
                     post: post,
-                    onTap: () {
-                      // Navigate to meal post detail screen
-                    },
+                    showUserInfo: true,
                   );
                 },
               );
