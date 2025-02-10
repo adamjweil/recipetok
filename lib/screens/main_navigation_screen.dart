@@ -16,18 +16,23 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  // Placeholder screens
+  // Placeholder screens - adjust order to match navigation items
   final List<Widget> _screens = [
-    const HomeScreen(),
-    const VideoScreen(),
-    const UsersScreen(),
-    const ProfileScreen(),
+    const HomeScreen(),      // index 0
+    const VideoScreen(),     // index 1
+    Container(),            // index 2 (placeholder for center button)
+    const UsersScreen(),     // index 3
+    const ProfileScreen(),   // index 4
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    if (index == 2) {
+      _showCreateOptions();
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   void _showCreateOptions() {
@@ -114,63 +119,63 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
-      floatingActionButton: SizedBox(
-        width: 48,
-        height: 48,
-        child: FloatingActionButton(
-          onPressed: _showCreateOptions,
-          backgroundColor: Theme.of(context).primaryColor,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Theme.of(context).primaryColor,
-                  Theme.of(context).primaryColor.withOpacity(0.8),
-                ],
-              ),
-            ),
-            child: const Icon(
-              Icons.add,
-              size: 24,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: const Offset(0, -3),
-            ),
-          ],
-        ),
+      bottomNavigationBar: SizedBox(
+        height: 120,
         child: BottomNavigationBar(
-          items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
+          items: <BottomNavigationBarItem>[
+            const BottomNavigationBarItem(
               icon: Icon(Icons.home),
               label: 'Home',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.play_circle_outline),
               label: 'Videos',
             ),
             BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).primaryColor,
+                      Theme.of(context).primaryColor.withOpacity(0.8),
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).primaryColor.withOpacity(0.3),
+                      spreadRadius: 2,
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                    BoxShadow(
+                      color: Theme.of(context).primaryColor.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              label: '',
+            ),
+            const BottomNavigationBarItem(
               icon: Icon(Icons.people),
               label: 'Users',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.person),
               label: 'Profile',
             ),
@@ -179,7 +184,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey,
           type: BottomNavigationBarType.fixed,
-          onTap: _onItemTapped,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          iconSize: 24,
+          selectedIconTheme: const IconThemeData(size: 24),
+          unselectedIconTheme: const IconThemeData(size: 24),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          landscapeLayout: BottomNavigationBarLandscapeLayout.centered,
+          onTap: (index) {
+            if (index == 2) {
+              _showCreateOptions();
+            } else {
+              _onItemTapped(index);
+            }
+          },
         ),
       ),
     );

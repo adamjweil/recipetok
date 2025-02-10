@@ -45,9 +45,9 @@ class VideoCardState extends State<VideoCard> {
   // Add stream subscription
   StreamSubscription<DocumentSnapshot>? _likeSubscription;
 
-  bool _isIngredientsExpanded = false;
-  bool _isInstructionsExpanded = false;
-
+  // Change these to true to make them expanded by default
+  bool _isIngredientsExpanded = true;
+  bool _isInstructionsExpanded = true;
 
   @override
   void initState() {
@@ -204,18 +204,18 @@ class VideoCardState extends State<VideoCard> {
       color: Colors.grey[600],
       child: Stack(
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Add black space above video
-              Container(
-                height: 64,
-                color: Colors.black,
-              ),
+          SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Add black space above video
+                Container(
+                  height: 64,
+                  color: Colors.black,
+                ),
 
-              // Video Container with interaction buttons
-              Flexible(
-                child: Column(
+                // Video Container with interaction buttons
+                Column(
                   children: [
                     // Video player
                     AspectRatio(
@@ -435,12 +435,14 @@ class VideoCardState extends State<VideoCard> {
                       color: Colors.grey[600],
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Ingredients Button
                           _buildIngredientsButton(),
                           // Ingredients List (when expanded)
                           if (_isIngredientsExpanded)
                             Container(
+                              width: double.infinity,
                               constraints: BoxConstraints(
                                 maxHeight: MediaQuery.of(context).size.height * 0.4,
                               ),
@@ -453,6 +455,7 @@ class VideoCardState extends State<VideoCard> {
                           // Instructions List (when expanded)
                           if (_isInstructionsExpanded)
                             Container(
+                              width: double.infinity,
                               constraints: BoxConstraints(
                                 maxHeight: MediaQuery.of(context).size.height * 0.4,
                               ),
@@ -465,8 +468,8 @@ class VideoCardState extends State<VideoCard> {
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

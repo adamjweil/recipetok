@@ -40,7 +40,16 @@ async function clearAllCollections() {
       clearCollection('users'),
       clearCollection('videos'),
       clearCollection('stories'),
+      clearCollection('meal_posts'),
     ]);
+
+    // Double check users collection is cleared
+    const usersSnapshot = await db.collection('users').get();
+    if (!usersSnapshot.empty) {
+      console.log('Performing secondary users cleanup...');
+      const userDeletions = usersSnapshot.docs.map(doc => doc.ref.delete());
+      await Promise.all(userDeletions);
+    }
 
     // Clear Firebase Authentication users
     console.log('Clearing Firebase Authentication users...');
@@ -70,6 +79,17 @@ async function clearAllCollections() {
       }
     } catch (error: any) {
       console.warn('Storage cleanup failed (this is OK if Storage is not initialized):', error.message);
+    }
+
+    // Verify collections are empty
+    const collections = ['users', 'meal_posts', 'videos', 'conversations', 'stories'];
+    for (const collectionName of collections) {
+      const snapshot = await db.collection(collectionName).get();
+      if (!snapshot.empty) {
+        console.warn(`Warning: ${collectionName} collection still has ${snapshot.size} documents`);
+      } else {
+        console.log(`Verified ${collectionName} collection is empty`);
+      }
     }
 
     console.log('Database cleanup completed successfully');

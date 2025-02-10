@@ -21,23 +21,43 @@ class GroupDetailsModal extends StatelessWidget {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
+      // Get the current group data
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .doc(groupId)
+          .get();
+
+      final groupData = groupDoc.data() ?? {};
+      final videos = Map<String, dynamic>.from(groupData['videos'] ?? {});
+      
+      // Remove the video
+      videos.remove(videoId);
+
+      // Update the document with the new videos map
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('groups')
           .doc(groupId)
           .update({
-        'videos.$videoId': FieldValue.delete(),
+        'videos': videos,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video removed from collection')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Video removed from collection')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error removing video: ${e.toString()}')),
-      );
+      print('Error removing video: $e'); // Debug log
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error removing video: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -160,7 +180,9 @@ class GroupDetailsModal extends StatelessWidget {
                 }
 
                 final groupData = snapshot.data?.data() as Map<String, dynamic>?;
-                final videos = groupData?['videos'] as Map<String, dynamic>? ?? {};
+                final videos = (groupData?['videos'] is Map) 
+                    ? (groupData?['videos'] as Map<String, dynamic>?) ?? {}
+                    : <String, dynamic>{};  // Convert List to empty Map if needed
 
                 if (videos.isEmpty) {
                   return Center(
