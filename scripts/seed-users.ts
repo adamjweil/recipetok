@@ -2,14 +2,15 @@ import * as admin from 'firebase-admin';
 import * as serviceAccount from './serviceAccountKey.json';
 import { faker } from '@faker-js/faker';
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin with the correct bucket name
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-  storageBucket: "recipetok-acc07.appspot.com"
+  storageBucket: "recipetok-acc07.firebasestorage.app"  // Updated bucket name
 });
 
 const db = admin.firestore();
 const auth = admin.auth();
+const storage = admin.storage();
 
 const sampleVideos = [
   {
@@ -74,16 +75,16 @@ const recipeTitles = [
 ];
 
 const recipeDescriptions = [
-  'Quick and easy recipe perfect for weeknight dinners',
-  'A family favorite that never disappoints',
-  'Restaurant-quality dish you can make at home',
-  'Healthy and delicious meal prep option',
-  'Traditional recipe with a modern twist',
-  'Perfect comfort food for any occasion',
-  'Budget-friendly meal the whole family will love',
-  'Impressive dish that\'s surprisingly simple to make',
-  'Classic recipe passed down through generations',
-  'Ready in under 30 minutes!'
+  'Made this delicious dish for dinner tonight! The flavors turned out amazing 😋',
+  'Finally perfected my grandmother\'s recipe after months of practice 👩‍🍳',
+  'Quick and healthy meal prep for the week ahead! #MealPrep',
+  'Sunday cooking session - meal prepped for the entire week! 🥘',
+  'My take on a classic recipe with a modern twist 🌟',
+  'Tried this recipe from @ChefJohn and it turned out perfect! Thanks for the inspiration',
+  'Experimenting with new flavors today - absolutely love how it turned out! 🔥',
+  'Simple ingredients, maximum flavor. Sometimes less is more! 👨‍🍳',
+  'Meal prepping doesn\'t have to be boring - look at these colors! 🌈',
+  'Late night cooking session - worth every minute of prep time 🌙'
 ];
 
 const commonIngredients = [
@@ -137,6 +138,18 @@ const adamCollections = [
     imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT9za753NZ8JZfpdMxdGvYIMyFYsQJ6FgexIpuhhZx7fE7mQ8zNxLZogwUehpjdULMX85M&usqp=CAU',
     videos: {},
   },
+  {
+    name: 'Sushi',
+    description: 'Roll with it! 🍱',
+    imageUrl: 'https://int.japanesetaste.com/cdn/shop/articles/how-to-make-makizushi-sushi-rolls-japanese-taste.jpg?v=1707914944&width=1280',
+    videos: {},
+  },
+  {
+    name: 'Steaks',
+    description: 'Rare finds, well done! 🥩',
+    imageUrl: 'https://www.howtocook.recipes/wp-content/uploads/2022/11/rare-steak-recipejpg.jpg',
+    videos: {},
+  },
 ];
 
 // Add this after other sample data arrays
@@ -157,7 +170,7 @@ const sampleMessages = [
 const sampleMealPosts = [
   {
     title: 'Homemade Margherita Pizza',
-    description: 'Classic Italian pizza with fresh basil',
+    description: 'First time making pizza from scratch! The fresh basil and buffalo mozzarella make all the difference 🍕 #HomemadePizza #ItalianCooking',
     photoUrls: [
       'https://images.unsplash.com/photo-1574071318508-1cdbab80d002',
       'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e',
@@ -172,8 +185,8 @@ const sampleMealPosts = [
     carbonSaved: 1.2,
   },
   {
-    title: 'Avocado Toast',
-    description: 'Perfect breakfast or brunch',
+    title: 'Avocado Toast Brunch',
+    description: 'Starting my day right with this protein-packed avocado toast! Added a poached egg and everything bagel seasoning 🥑 #HealthyBreakfast #BrunchGoals',
     photoUrls: [
       'https://images.unsplash.com/photo-1541519227354-08fa5d50c44d',
       'https://images.unsplash.com/photo-1588137378633-dea1336ce1e2',
@@ -189,7 +202,7 @@ const sampleMealPosts = [
   },
   {
     title: 'Grilled Salmon Bowl',
-    description: 'Healthy and delicious dinner option',
+    description: 'Meal prep done right! This omega-3 rich bowl keeps me energized all day. The secret is in the marinade 🐟 #CleanEating #HealthyMealPrep',
     photoUrls: [
       'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
       'https://images.unsplash.com/photo-1580476262798-bddd9f4b7369',
@@ -204,8 +217,8 @@ const sampleMealPosts = [
     carbonSaved: 0,
   },
   {
-    title: 'Protein Smoothie Bowl',
-    description: 'Post-workout nutrition',
+    title: 'Post-Workout Protein Bowl',
+    description: 'My go-to post-gym fuel! Packed with 30g of protein and tons of antioxidants from fresh berries 💪 #PostWorkout #HealthyEating',
     photoUrls: [
       'https://images.unsplash.com/photo-1577805947697-89e18249d767',
     ],
@@ -214,8 +227,8 @@ const sampleMealPosts = [
     mealType: 'breakfast',
   },
   {
-    title: 'Chicken Stir Fry',
-    description: 'Quick and easy weeknight dinner',
+    title: 'Quick Chicken Stir Fry',
+    description: 'When you need dinner in 20 minutes! Used fresh veggies from the farmers market and my homemade stir fry sauce 🥢 #QuickMeals #StirFry',
     photoUrls: [
       'https://images.unsplash.com/photo-1603133872878-684f208fb84b',
     ],
@@ -224,6 +237,45 @@ const sampleMealPosts = [
     mealType: 'dinner',
   },
 ];
+
+// Add function to upload video and get URL
+async function uploadVideoAndGetUrl(filename: string): Promise<{videoUrl: string, thumbnailUrl: string}> {
+  try {
+    // Upload video file
+    const videoBuffer = require('fs').readFileSync(`assets/videos/${filename}`);
+    const videoFile = storage.bucket().file(`sample_videos/${filename}`);
+    await videoFile.save(videoBuffer);
+    await videoFile.makePublic();
+    const videoUrl = videoFile.publicUrl();
+
+    // For thumbnail, we'll use a default image for now
+    // You can replace this with actual video thumbnails if you have them
+    const thumbnailUrl = 'https://picsum.photos/seed/burger/300/300';
+
+    console.log(`Uploaded video: ${filename}`);
+    return { videoUrl, thumbnailUrl };
+  } catch (error) {
+    console.error(`Error uploading video ${filename}:`, error);
+    throw error;
+  }
+}
+
+// Add your custom videos to the array
+async function initializeSampleVideos() {
+  const burger1 = await uploadVideoAndGetUrl('Burger_1.mp4');
+  const burger2 = await uploadVideoAndGetUrl('Burger_2.mp4');
+  
+  sampleVideos.push(
+    {
+      videoUrl: burger1.videoUrl,
+      thumbnailUrl: burger1.thumbnailUrl,
+    },
+    {
+      videoUrl: burger2.videoUrl,
+      thumbnailUrl: burger2.thumbnailUrl,
+    }
+  );
+}
 
 async function createUser() {
   const firstName = faker.person.firstName();
@@ -314,30 +366,59 @@ async function createVideo(userId: string) {
   }
 }
 
-async function createRandomConnections(userIds: string[]) {
-  console.log('Creating random follow connections between users...');
-  
-  for (const userId of userIds) {
-    // Randomly follow 1-3 other users
-    const numToFollow = Math.floor(Math.random() * 3) + 1;
-    const otherUsers = userIds.filter(id => id !== userId);
-    
-    // Shuffle and take first n users
-    const usersToFollow = otherUsers
-      .sort(() => Math.random() - 0.5)
-      .slice(0, numToFollow);
-    
-    for (const targetId of usersToFollow) {
-      await db.collection('users').doc(userId).update({
-        following: admin.firestore.FieldValue.arrayUnion(targetId)
+// Add this function after the other helper functions
+async function createRandomConnections(userIds: string[], adamId: string) {
+  try {
+    // Make 5-7 random users follow Adam
+    const numberOfFollowers = Math.floor(Math.random() * 3) + 5; // Random number between 5-7
+    const randomFollowers = [...userIds]
+      .filter(id => id !== adamId)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, numberOfFollowers);
+
+    const batch = admin.firestore().batch();
+
+    // Add followers to Adam's followers array
+    batch.update(admin.firestore().collection('users').doc(adamId), {
+      followers: admin.firestore.FieldValue.arrayUnion(...randomFollowers),
+    });
+
+    // Add Adam to each follower's following array
+    for (const followerId of randomFollowers) {
+      batch.update(admin.firestore().collection('users').doc(followerId), {
+        following: admin.firestore.FieldValue.arrayUnion(adamId),
       });
-      
-      await db.collection('users').doc(targetId).update({
-        followers: admin.firestore.FieldValue.arrayUnion(userId)
-      });
-      
-      console.log(`User ${userId} is now following ${targetId}`);
     }
+
+    // Create some random connections between other users
+    for (const userId of userIds) {
+      if (userId === adamId) continue;
+      
+      // Each user follows 2-4 random other users
+      const numberOfFollowing = Math.floor(Math.random() * 3) + 2;
+      const potentialFollowees = userIds.filter(id => id !== userId && id !== adamId);
+      const randomFollowees = potentialFollowees
+        .sort(() => 0.5 - Math.random())
+        .slice(0, numberOfFollowing);
+
+      // Update following array for current user
+      batch.update(admin.firestore().collection('users').doc(userId), {
+        following: admin.firestore.FieldValue.arrayUnion(...randomFollowees),
+      });
+
+      // Update followers array for each followed user
+      for (const followeeId of randomFollowees) {
+        batch.update(admin.firestore().collection('users').doc(followeeId), {
+          followers: admin.firestore.FieldValue.arrayUnion(userId),
+        });
+      }
+    }
+
+    await batch.commit();
+    console.log('Created random follow connections');
+  } catch (error) {
+    console.error('Error creating random connections:', error);
+    throw error;
   }
 }
 
@@ -481,6 +562,9 @@ async function createMealPost(userId: string, postData: any) {
 
 async function seedDatabase() {
   try {
+    // Initialize videos first
+    await initializeSampleVideos();
+    
     // First create your specific user
     const adamUser = {
       email: 'adamjweil@gmail.com',
@@ -661,8 +745,8 @@ async function seedDatabase() {
       }
     }
 
-    // Create random follow connections between users
-    await createRandomConnections(createdUserIds);
+    // Create follow connections
+    await createRandomConnections(createdUserIds, adamId);
 
     // Create conversations using adamId instead of adamUserRecord
     const otherUserIds = createdUserIds.filter(id => id !== adamId);

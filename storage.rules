@@ -25,10 +25,11 @@ service firebase.storage {
       allow write: if isOwner(userId);
     }
 
-    // Allow access to user avatars
-    match /user_avatars/{userId}/{allImages=**} {
+    // Allow access to user avatars - Updated to match code path
+    match /user_avatars/{filename} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isSignedIn() 
+        && filename.matches(request.auth.uid + '.jpg');
     }
 
     // Allow access to video uploads
@@ -47,6 +48,12 @@ service firebase.storage {
     match /meal_posts/{userId}/{allPhotos=**} {
       allow read: if true;
       allow write: if isOwner(userId);
+    }
+
+    // Allow access to group images - Simplified path
+    match /group_images/{filename} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }

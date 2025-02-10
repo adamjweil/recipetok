@@ -46,7 +46,9 @@ class _CreateGroupModalState extends State<CreateGroupModal> {
 
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
 
       String? imageUrl;
       if (_selectedImage != null) {
@@ -55,33 +57,72 @@ class _CreateGroupModalState extends State<CreateGroupModal> {
             .child('group_images')
             .child('$userId-${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-        await storageRef.putFile(_selectedImage!);
-        imageUrl = await storageRef.getDownloadURL();
+        try {
+          // Upload the image file
+          final uploadTask = await storageRef.putFile(_selectedImage!);
+          if (uploadTask.state == TaskState.success) {
+            imageUrl = await storageRef.getDownloadURL();
+            print('Image uploaded successfully: $imageUrl'); // Debug log
+          } else {
+            print('Image upload failed: ${uploadTask.state}');
+          }
+        } catch (e) {
+          print('Error uploading image: $e');
+          // Continue without image if upload fails
+        }
       }
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('groups')
-          .add({
+      // Create the group document
+      final groupData = {
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'imageUrl': imageUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'videos': {},
-      });
+        'videos': {}, // Changed from [] to {} to match group_details_modal.dart
+        'userId': userId,
+      };
+
+      print('Creating group with data: $groupData'); // Debug log
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('groups')
+          .add(groupData);
+
+      print('Group created with ID: ${docRef.id}'); // Debug log
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group created successfully')),
+          const SnackBar(
+            content: Text('Collection created successfully'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating group: ${e.toString()}')),
-      );
+      print('Error creating group: $e'); // Debug log
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating collection: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(
+              bottom: 20,
+              right: 20,
+              left: 20,
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
