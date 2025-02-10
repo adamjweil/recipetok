@@ -8,16 +8,18 @@ class CustomCacheManager {
   static CacheManager? _instance;
 
   static CacheManager get instance {
-    _instance ??= CacheManager(
-      Config(
-        key,
-        stalePeriod: const Duration(days: 7),
-        maxNrOfCacheObjects: 100,
-        repo: JsonCacheInfoRepository(databaseName: key),
-        fileSystem: IOFileSystem(key),
-        fileService: HttpFileService(),
-      ),
-    );
+    if (_instance == null) {
+      _instance = CacheManager(
+        Config(
+          key,
+          stalePeriod: const Duration(days: 7),
+          maxNrOfCacheObjects: 100,
+          repo: JsonCacheInfoRepository(databaseName: key),
+          fileSystem: IOFileSystem(key),
+          fileService: HttpFileService(),
+        ),
+      );
+    }
     return _instance!;
   }
 
@@ -68,6 +70,35 @@ class CustomCacheManager {
         // For other errors, just log them
         print('Cache operation failed: $e');
       }
+    }
+  }
+
+  // Add a separate method for URL validation
+  static bool isValidImageUrl(String? url) {
+    if (url == null || url.isEmpty) {
+      return false;
+    }
+    try {
+      final uri = Uri.parse(url);
+      return uri.hasScheme;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Update getFileFromCache to use the validation method
+  static Future<File?> getFileFromCache(String? url) async {
+    if (!isValidImageUrl(url)) {
+      print('Warning: Invalid or empty image URL');
+      return null;
+    }
+
+    try {
+      final fileInfo = await instance.getFileFromCache(url!);
+      return fileInfo?.file;
+    } catch (e) {
+      print('Error retrieving cached file: $e');
+      return null;
     }
   }
 } 
