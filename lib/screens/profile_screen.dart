@@ -23,6 +23,13 @@ import '../services/message_service.dart';
 import '../screens/chat_screen.dart';
 import '../models/meal_post.dart';
 import '../widgets/meal_post_card.dart';
+import '../widgets/profile/user_list_modal.dart';
+import '../widgets/meal_post/expandable_meal_post.dart';
+import '../widgets/meal_post/meal_post_wrapper.dart';
+import '../widgets/profile_tabs/videos_grid.dart';
+import '../widgets/profile_tabs/bookmarked_videos_grid.dart';
+import '../widgets/profile_tabs/try_later_grid.dart';
+import '../utils/time_formatter.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -538,6 +545,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       ),
                       TabBar(
                         controller: _tabController,
+                        indicatorColor: Colors.black,
+                        unselectedLabelColor: Colors.grey,
+                        labelColor: Colors.black,
                         tabs: [
                           const Tab(icon: Icon(Icons.restaurant)),
                           const Tab(icon: Icon(Icons.grid_on)),
@@ -546,9 +556,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                             const Tab(icon: Icon(Icons.watch_later_outlined)),
                           ],
                         ],
-                        indicatorColor: Colors.black,
-                        unselectedLabelColor: Colors.grey,
-                        labelColor: Colors.black,
                       ),
                     ],
                   ),
@@ -590,6 +597,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     }
 
                     return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(12),
                       itemCount: posts.length,
                       itemBuilder: (context, index) {
@@ -634,33 +642,181 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       );
                     }
 
-                    return GridView.builder(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 1,
-                        mainAxisSpacing: 1,
+                    // First sort the videos to show pinned ones first
+                    final sortedVideos = [...videos];
+                    sortedVideos.sort((a, b) {
+                      final isPinnedA = (a.data() as Map<String, dynamic>)['isPinned'] ?? false;
+                      final isPinnedB = (b.data() as Map<String, dynamic>)['isPinned'] ?? false;
+                      if (isPinnedA && !isPinnedB) return -1;
+                      if (!isPinnedA && isPinnedB) return 1;
+                      return 0;
+                    });
+
+                    return SizedBox.expand(
+                      child: GridView.builder(
+                        physics: const ClampingScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 1,
+                          mainAxisSpacing: 1,
+                          childAspectRatio: 0.8,
+                        ),
+                        itemCount: sortedVideos.length,
+                        itemBuilder: (context, index) {
+                          final videoData = sortedVideos[index].data() as Map<String, dynamic>;
+                          final videoId = sortedVideos[index].id;
+                          final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+                          final isPinned = videoData['isPinned'] ?? false;
+
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => VideoPlayerScreen(
+                                    videoData: videoData,
+                                    videoId: videoId,
+                                  ),
+                                ),
+                              );
+                            },
+                            onLongPress: isCurrentUserProfile ? () {
+                              showModalBottomSheet(
+                                context: context,
+                                builder: (context) => Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(
+                                        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                                        color: isPinned ? Theme.of(context).primaryColor : null,
+                                      ),
+                                      title: Text(isPinned ? 'Unpin from Profile' : 'Pin to Profile'),
+                                      onTap: () async {
+                                        Navigator.pop(context);
+                                        try {
+                                          await FirebaseFirestore.instance
+                                              .collection('videos')
+                                              .doc(videoId)
+                                              .update({
+                                            'isPinned': !isPinned,
+                                          });
+                                          
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                isPinned ? 'Video unpinned from profile' : 'Video pinned to profile'
+                                              ),
+                                              duration: const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        } catch (e) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Error: $e')),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Icon(Icons.share),
+                                      title: const Text('Share Video'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Share.share(
+                                          'Check out this recipe video: ${videoData['videoUrl']}',
+                                          subject: videoData['title'],
+                                        );
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Icon(Icons.delete_outline, color: Colors.red),
+                                      title: const Text('Delete Video', style: TextStyle(color: Colors.red)),
+                                      onTap: () async {
+                                        Navigator.pop(context);
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Delete Video'),
+                                            content: const Text('Are you sure you want to delete this video? This action cannot be undone.'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, true),
+                                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirm == true && context.mounted) {
+                                          try {
+                                            await FirebaseFirestore.instance
+                                                .collection('videos')
+                                                .doc(videoId)
+                                                .delete();
+                                            
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Video deleted successfully')),
+                                            );
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Error deleting video: $e')),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                ),
+                              );
+                            } : null,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                CustomCacheManager.isValidImageUrl(thumbnailUrl)
+                                    ? CachedNetworkImage(
+                                        imageUrl: thumbnailUrl!,
+                                        fit: BoxFit.cover,
+                                        cacheManager: CustomCacheManager.instance,
+                                        placeholder: (context, url) => Container(
+                                          color: Colors.grey[200],
+                                        ),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: Colors.grey[200],
+                                          child: const Icon(Icons.error),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: Colors.grey[200],
+                                        child: const Icon(Icons.video_library),
+                                      ),
+                                if (isPinned)
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Icon(
+                                        Icons.push_pin,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      itemCount: videos.length,
-                      itemBuilder: (context, index) {
-                        final video = videos[index].data() as Map<String, dynamic>;
-                        return GestureDetector(
-                          onTap: () {
-                            // Handle video tap
-                          },
-                          child: CachedNetworkImage(
-                            imageUrl: video['thumbnailUrl'] ?? '',
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[200],
-                              child: const Center(child: CircularProgressIndicator()),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.error),
-                            ),
-                          ),
-                        );
-                      },
                     );
                   },
                 ),
@@ -1365,836 +1521,5 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     } else {
       return '${(difference.inDays / 365).floor()}y ago';
     }
-  }
-}
-
-// Add this new widget at the bottom of the file
-class UserListModal extends StatelessWidget {
-  final String title;
-  final List<String> userIds;
-  final bool isFollowers;
-
-  const UserListModal({
-    super.key,
-    required this.title,
-    required this.userIds,
-    required this.isFollowers,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Stack(
-              children: [
-                Center(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 8,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // User List
-          Expanded(
-            child: userIds.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          isFollowers ? Icons.people_outline : Icons.person_outline,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          isFollowers ? 'No followers yet' : 'Not following anyone',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: userIds.length,
-                    itemBuilder: (context, index) {
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(userIds[index])
-                            .get(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const UserListItemSkeleton();
-                          }
-
-                          final userData = snapshot.data!.data() as Map<String, dynamic>;
-                          return UserListItem(
-                            userData: userData,
-                            userId: userIds[index],
-                            isFollowers: isFollowers,
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Add these supporting widgets
-class UserListItem extends StatelessWidget {
-  final Map<String, dynamic> userData;
-  final String userId;
-  final bool isFollowers;
-
-  const UserListItem({
-    super.key,
-    required this.userData,
-    required this.userId,
-    required this.isFollowers,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final isCurrentUser = currentUserId == userId;
-
-    return ListTile(
-      onTap: () {
-        // Close the modal first
-        Navigator.pop(context);
-        // Then navigate to the profile
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProfileScreen(userId: userId),
-          ),
-        );
-      },
-      leading: CircleAvatar(
-        backgroundImage: userData['avatarUrl'] != null
-            ? CachedNetworkImageProvider(userData['avatarUrl'])
-            : null,
-        child: userData['avatarUrl'] == null ? const Icon(Icons.person) : null,
-      ),
-      title: Text(
-        userData['displayName'] ?? 'Unknown User',
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-      subtitle: Text('@${userData['username'] ?? ''}'),
-      trailing: !isCurrentUser ? StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUserId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const SizedBox();
-
-          final following = (snapshot.data?.get('following') as List<dynamic>?) ?? [];
-          final isFollowing = following.contains(userId);
-
-          return TextButton(
-            onPressed: () => _toggleFollow(context),
-            style: TextButton.styleFrom(
-              backgroundColor: isFollowing ? Colors.grey[200] : Theme.of(context).primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              isFollowing ? 'Unfollow' : 'Follow',
-              style: TextStyle(
-                color: isFollowing ? Colors.black87 : Colors.white,
-                fontSize: 13,
-              ),
-            ),
-          );
-        },
-      ) : null,
-    );
-  }
-
-  Future<void> _toggleFollow(BuildContext context) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      final batch = FirebaseFirestore.instance.batch();
-      final currentUserRef = FirebaseFirestore.instance.collection('users').doc(currentUser.uid);
-      final otherUserRef = FirebaseFirestore.instance.collection('users').doc(userId);
-
-      // Get current user data to check if already following
-      final currentUserDoc = await currentUserRef.get();
-      final following = (currentUserDoc.data()?['following'] as List<dynamic>?) ?? [];
-      final isFollowing = following.contains(userId);
-
-      if (isFollowing) {
-        // Unfollow
-        batch.update(currentUserRef, {
-          'following': FieldValue.arrayRemove([userId])
-        });
-        batch.update(otherUserRef, {
-          'followers': FieldValue.arrayRemove([currentUser.uid])
-        });
-      } else {
-        // Follow
-        batch.update(currentUserRef, {
-          'following': FieldValue.arrayUnion([userId])
-        });
-        batch.update(otherUserRef, {
-          'followers': FieldValue.arrayUnion([currentUser.uid])
-        });
-      }
-
-      await batch.commit();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-}
-
-class UserListItemSkeleton extends StatelessWidget {
-  const UserListItemSkeleton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const ListTile(
-      contentPadding: EdgeInsets.symmetric(vertical: 8),
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: Colors.black12,
-      ),
-      title: LinearProgressIndicator(),
-      subtitle: LinearProgressIndicator(),
-    );
-  }
-}
-
-String _formatViewCount(int viewCount) {
-  if (viewCount >= 1000000) {
-    return '${(viewCount / 1000000).toStringAsFixed(1)}M';
-  } else if (viewCount >= 1000) {
-    return '${(viewCount / 1000).toStringAsFixed(1)}K';
-  } else {
-    return viewCount.toString();
-  }
-}
-
-String _formatCount(int count) {
-  if (count >= 1000000) {
-    return '${(count / 1000000).toStringAsFixed(1)}M';
-  } else if (count >= 1000) {
-    return '${(count / 1000).toStringAsFixed(1)}K';
-  } else {
-    return count.toString();
-  }
-}
-
-// Add this class at the bottom of the file
-class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
-  _SliverAppBarDelegate(this._tabBar);
-
-  final TabBar _tabBar;
-
-  @override
-  double get minExtent => _tabBar.preferredSize.height;
-  @override
-  double get maxExtent => _tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white,
-      child: _tabBar,
-    );
-  }
-
-  @override
-  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
-    return false;
-  }
-}
-
-// Add this helper widget at the bottom of the file
-class GestureDetectorWithPosition extends StatelessWidget {
-  final Widget child;
-  final Function(BuildContext, Offset)? onLongPressWithPosition;
-  final VoidCallback onTap;
-
-  const GestureDetectorWithPosition({
-    super.key,
-    required this.child,
-    this.onLongPressWithPosition,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPressStart: onLongPressWithPosition != null
-          ? (details) {
-              onLongPressWithPosition!(context, details.globalPosition);
-            }
-          : null,
-      child: child,
-    );
-  }
-}
-
-// First, create a new StatefulWidget for the like button
-class LikeButton extends StatefulWidget {
-  final String postId;
-  final String userId;
-
-  const LikeButton({
-    super.key,
-    required this.postId,
-    required this.userId,
-  });
-
-  @override
-  State<LikeButton> createState() => _LikeButtonState();
-}
-
-class _LikeButtonState extends State<LikeButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  bool _isLikeAnimating = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _toggleLike() async {
-    try {
-      final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(widget.postId);
-      final userLikeRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('mealPostLikes')
-          .doc(widget.postId);
-
-      final likeDoc = await userLikeRef.get();
-      final isLiked = likeDoc.exists;
-
-      final batch = FirebaseFirestore.instance.batch();
-
-      if (isLiked) {
-        batch.update(postRef, {
-          'likes': FieldValue.increment(-1),
-          'likedBy': FieldValue.arrayRemove([widget.userId])
-        });
-        batch.delete(userLikeRef);
-      } else {
-        setState(() => _isLikeAnimating = true);
-        _controller.forward(from: 0).then((_) {
-          setState(() => _isLikeAnimating = false);
-        });
-        
-        batch.update(postRef, {
-          'likes': FieldValue.increment(1),
-          'likedBy': FieldValue.arrayUnion([widget.userId])
-        });
-        batch.set(userLikeRef, {
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-      }
-
-      await batch.commit();
-    } catch (e) {
-      debugPrint('Error toggling like: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('mealPostLikes')
-          .doc(widget.postId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final isLiked = snapshot.data?.exists ?? false;
-        
-        return Row(
-          children: [
-            GestureDetector(
-              onTap: _toggleLike,
-              child: Row(
-                children: [
-                  AnimatedCrossFade(
-                    firstChild: Icon(
-                      Icons.thumb_up,
-                      color: Theme.of(context).primaryColor,
-                      size: 22,
-                    ),
-                    secondChild: Icon(
-                      Icons.thumb_up_outlined,
-                      color: Colors.grey[600],
-                      size: 22,
-                    ),
-                    crossFadeState: isLiked
-                        ? CrossFadeState.showFirst
-                        : CrossFadeState.showSecond,
-                    duration: const Duration(milliseconds: 200),
-                  ),
-                  const SizedBox(width: 4),
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('meal_posts')
-                        .doc(widget.postId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final likes = (snapshot.data?.data() 
-                        as Map<String, dynamic>?)?['likes'] ?? 0;
-                      return Text(
-                        '$likes',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            if (_isLikeAnimating)
-              ScaleTransition(
-                scale: Tween<double>(begin: 0, end: 1).animate(
-                  CurvedAnimation(
-                    parent: _controller,
-                    curve: Curves.elasticOut,
-                  ),
-                ),
-                child: Icon(
-                  Icons.thumb_up,
-                  color: Theme.of(context).primaryColor,
-                  size: 30,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-// First, create a new StatefulWidget for the expandable meal post
-class ExpandableMealPost extends StatefulWidget {
-  final MealPost post;
-  final bool isExpanded;
-  final VoidCallback onToggle;
-  final bool showUserInfo;
-
-  const ExpandableMealPost({
-    super.key,
-    required this.post,
-    required this.isExpanded,
-    required this.onToggle,
-    this.showUserInfo = true,
-  });
-
-  @override
-  State<ExpandableMealPost> createState() => _ExpandableMealPostState();
-}
-
-class _ExpandableMealPostState extends State<ExpandableMealPost> {
-  final TextEditingController _commentController = TextEditingController();
-  bool _isPostingComment = false;
-
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _postComment() async {
-    if (_commentController.text.trim().isEmpty) return;
-    setState(() => _isPostingComment = true);
-    try {
-      final commentRef = FirebaseFirestore.instance
-          .collection('meal_posts')
-          .doc(widget.post.id)
-          .collection('comments')
-          .doc();
-
-      await commentRef.set({
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-        'text': _commentController.text.trim(),
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-
-      await FirebaseFirestore.instance
-          .collection('meal_posts')
-          .doc(widget.post.id)
-          .update({
-        'comments': FieldValue.increment(1),
-      });
-
-      if (mounted) {
-        _commentController.clear();
-        FocusScope.of(context).unfocus();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error posting comment: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPostingComment = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timestamp
-          Padding(
-            padding: const EdgeInsets.only(top: 8, right: 12, left: 12),
-            child: Text(
-              _getTimeAgo(widget.post.createdAt),
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-
-          // Image and Description Row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Image
-                if (widget.post.photoUrls.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      width: 120,  // Fixed width for image
-                      height: 120,  // Square aspect ratio
-                      child: CachedNetworkImage(
-                        imageUrl: widget.post.photoUrls.first,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.error, size: 20),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                const SizedBox(width: 12),  // Spacing between image and description
-
-                // Description
-                if (widget.post.description != null)
-                  Expanded(
-                    child: Text(
-                      widget.post.description!,
-                      style: const TextStyle(fontSize: 12),
-                      maxLines: 6,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Interaction buttons
-          Padding(
-            padding: const EdgeInsets.all(6.0),
-            child: Row(
-              children: [
-                LikeButton(
-                  postId: widget.post.id,
-                  userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: widget.onToggle,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.chat_bubble_outline,
-                        color: Colors.grey[600],
-                        size: 18,
-                      ),
-                      const SizedBox(width: 4),
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('meal_posts')
-                            .doc(widget.post.id)
-                            .collection('comments')
-                            .snapshots(),
-                        builder: (context, snapshot) {
-                          final commentCount = snapshot.data?.docs.length ?? 0;
-                          return Text(
-                            '$commentCount',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(
-                    Icons.share_outlined,
-                    color: Colors.grey[600],
-                    size: 18,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onPressed: () {
-                    // Implement share functionality
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Comments section
-          if (widget.isExpanded) ...[
-            const Divider(),
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('meal_posts')
-                  .doc(widget.post.id)
-                  .collection('comments')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final comments = snapshot.data?.docs ?? [];
-
-                return Column(
-                  children: [
-                    // Comment input
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _commentController,
-                              decoration: InputDecoration(
-                                hintText: 'Add a comment...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey[100],
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                              ),
-                              maxLines: null,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: _isPostingComment
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.send_rounded),
-                            onPressed: _isPostingComment ? null : _postComment,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Comments list
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: comments.length,
-                      itemBuilder: (context, index) {
-                        final comment = comments[index].data() as Map<String, dynamic>;
-                        final userId = comment['userId'] as String?;
-                        final timestamp = (comment['timestamp'] as Timestamp?)?.toDate();
-
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(userId)
-                              .get(),
-                          builder: (context, userSnapshot) {
-                            final userData = userSnapshot.data?.data() 
-                                as Map<String, dynamic>? ?? {};
-
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage: userData['avatarUrl'] != null
-                                    ? CachedNetworkImageProvider(userData['avatarUrl'])
-                                    : null,
-                                child: userData['avatarUrl'] == null
-                                    ? const Icon(Icons.person)
-                                    : null,
-                              ),
-                              title: Row(
-                                children: [
-                                  Text(
-                                    userData['displayName'] ?? 'Unknown User',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  if (timestamp != null)
-                                    Text(
-                                      _getTimeAgo(timestamp),
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(comment['text'] ?? ''),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-    
-    if (difference.inMinutes < 1) {
-      return 'just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inDays < 30) {
-      return '${(difference.inDays / 7).floor()}w ago';
-    } else if (difference.inDays < 365) {
-      return '${(difference.inDays / 30).floor()}mo ago';
-    } else {
-      return '${(difference.inDays / 365).floor()}y ago';
-    }
-  }
-}
-
-// Add this new widget
-class MealPostWrapper extends StatefulWidget {
-  final MealPost post;
-
-  const MealPostWrapper({
-    super.key,
-    required this.post,
-  });
-
-  @override
-  State<MealPostWrapper> createState() => _MealPostWrapperState();
-}
-
-class _MealPostWrapperState extends State<MealPostWrapper> {
-  bool _isExpanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return ExpandableMealPost(
-      post: widget.post,
-      isExpanded: _isExpanded,
-      showUserInfo: false,
-      onToggle: () {
-        setState(() {
-          _isExpanded = !_isExpanded;
-        });
-      },
-    );
   }
 } 
