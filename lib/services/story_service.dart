@@ -168,21 +168,17 @@ class StoryService {
 
   Stream<List<Story>> getUserActiveStories(String userId) {
     final now = DateTime.now();
-    print('Querying stories for user: $userId at time: $now'); // Debug log
+    print('Querying stories for user: $userId at time: $now');  // Debug print
     
-    return _firestore
+    return FirebaseFirestore.instance
         .collection('stories')
         .where('userId', isEqualTo: userId)
-        .where('isActive', isEqualTo: true)
+        .where('isActive', isEqualTo: true)  // Add this condition back
         .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
         .orderBy('expiresAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          print('Found ${snapshot.docs.length} active stories'); // Debug log
-          snapshot.docs.forEach((doc) {
-            final data = doc.data();
-            print('Story ${doc.id}: expiresAt=${(data['expiresAt'] as Timestamp).toDate()}, isActive=${data['isActive']}');
-          });
+          print('Found ${snapshot.docs.length} active stories');  // Debug print
           return snapshot.docs.map((doc) => Story.fromFirestore(doc)).toList();
         });
   }
