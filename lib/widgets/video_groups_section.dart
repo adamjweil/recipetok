@@ -114,29 +114,32 @@ class VideoGroupsSection extends StatelessWidget {
   }
 
   Widget _buildCreateGroupButton(BuildContext context) {
-    return Container(
-      width: 64,
-      margin: const EdgeInsets.only(right: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.grey[100],
-              border: Border.all(color: Colors.grey[300]!),
+    return GestureDetector(
+      onTap: () => _showCreateGroupModal(context),
+      child: Container(
+        width: 64,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey[100],
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Icon(Icons.add, color: Colors.grey[600], size: 24),
             ),
-            child: Icon(Icons.add, color: Colors.grey[600], size: 24),
-          ),
-          const SizedBox(height: 2),
-          const Text(
-            'New',
-            style: TextStyle(fontSize: 11),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 2),
+            const Text(
+              'New',
+              style: TextStyle(fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

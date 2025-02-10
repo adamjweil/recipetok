@@ -622,13 +622,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     child: CircleAvatar(
                       radius: 40,
                       backgroundColor: Colors.grey[200],
-                      backgroundImage: userData['avatarUrl'] != null
+                      backgroundImage: CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
                           ? CachedNetworkImageProvider(
                               userData['avatarUrl'],
                               cacheManager: CustomCacheManager.instance,
                             )
                           : null,
-                      child: userData['avatarUrl'] == null
+                      child: !CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
                           ? const Icon(Icons.person, size: 40)
                           : null,
                     ),
@@ -1045,19 +1045,45 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           unselectedLabelColor: Colors.grey,
           labelColor: Colors.black,
         ),
-        SizedBox(
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildMealPostsGrid(),
-              _buildVideoGrid(),
-              if (isCurrentUserProfile) ...[
-                _buildBookmarkedVideosGrid(),
-                _buildTryLaterGrid(),
-              ],
-            ],
-          ),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('videos')
+              .where('userId', isEqualTo: profileUserId)
+              .snapshots(),
+          builder: (context, videoSnapshot) {
+            final hasVideos = (videoSnapshot.data?.docs.length ?? 0) > 0;
+            
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('meal_posts')
+                  .where('userId', isEqualTo: profileUserId)
+                  .snapshots(),
+              builder: (context, mealSnapshot) {
+                final hasMealPosts = (mealSnapshot.data?.docs.length ?? 0) > 0;
+                
+                // If there's no content, use a smaller height
+                final containerHeight = (hasVideos || hasMealPosts) 
+                    ? MediaQuery.of(context).size.height * 0.6 
+                    : MediaQuery.of(context).size.height * 0.3;
+
+                return SizedBox(
+                  height: containerHeight,
+                  child: TabBarView(
+                    controller: _tabController,
+                    physics: const NeverScrollableScrollPhysics(), // Prevent scrolling
+                    children: [
+                      _buildMealPostsGrid(),
+                      _buildVideoGrid(),
+                      if (isCurrentUserProfile) ...[
+                        _buildBookmarkedVideosGrid(),
+                        _buildTryLaterGrid(),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
         ),
       ],
     );
@@ -1083,17 +1109,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         final videos = snapshot.data?.docs ?? [];
 
         if (videos.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No videos yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.3,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No videos yet',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1110,7 +1139,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             if (videoData == null) return const SizedBox();
 
             final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-            final isPinned = videoData['isPinned'] ?? false;
 
             return GestureDetectorWithPosition(
               onTap: () {
@@ -1137,9 +1165,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  thumbnailUrl != null
+                  CustomCacheManager.isValidImageUrl(thumbnailUrl)
                       ? CachedNetworkImage(
-                          imageUrl: thumbnailUrl,
+                          imageUrl: thumbnailUrl!,
                           fit: BoxFit.cover,
                           cacheManager: CustomCacheManager.instance,
                           placeholder: (context, url) => Container(
@@ -1150,8 +1178,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             child: const Icon(Icons.error),
                           ),
                         )
-                      : Container(color: Colors.grey[200]),
-                  if (isPinned)
+                      : Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.image_not_supported),
+                        ),
+                  if (videoData['isPinned'] ?? false)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -1199,17 +1230,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         final bookmarks = bookmarkSnapshot.data?.docs ?? [];
 
         if (bookmarks.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.favorite_border, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No favorite dishes yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.3,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_border, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No favorite dishes yet',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1290,17 +1324,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         final tryLater = tryLaterSnapshot.data?.docs ?? [];
 
         if (tryLater.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No dishes to try later',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.3,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No dishes to try later',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1355,9 +1392,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      thumbnailUrl != null
+                      CustomCacheManager.isValidImageUrl(thumbnailUrl)
                           ? CachedNetworkImage(
-                              imageUrl: thumbnailUrl,
+                              imageUrl: thumbnailUrl!,
                               fit: BoxFit.cover,
                               cacheManager: CustomCacheManager.instance,
                               placeholder: (context, url) => Container(
@@ -1368,7 +1405,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 child: const Icon(Icons.error),
                               ),
                             )
-                          : Container(color: Colors.grey[200]),
+                          : Container(
+                              color: Colors.grey[200],
+                              child: const Icon(Icons.image_not_supported),
+                            ),
                     ],
                   ),
                 );
@@ -1400,17 +1440,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         final posts = snapshot.data?.docs ?? [];
 
         if (posts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.restaurant_menu, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No meal posts yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.3,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.restaurant_menu, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No meal posts yet',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1579,13 +1622,13 @@ class UserListItem extends StatelessWidget {
           leading: CircleAvatar(
             radius: 24,
             backgroundColor: Colors.grey[200],
-            backgroundImage: userData['avatarUrl'] != null
+            backgroundImage: CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
                 ? CachedNetworkImageProvider(
                     userData['avatarUrl'],
                     cacheManager: CustomCacheManager.instance,
                   )
                 : null,
-            child: userData['avatarUrl'] == null
+            child: !CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
                 ? const Icon(Icons.person, color: Colors.grey)
                 : null,
           ),
