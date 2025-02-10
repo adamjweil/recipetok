@@ -113,10 +113,104 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
           itemCount: users.length,
           itemBuilder: (context, index) {
             final userData = users[index].data() as Map<String, dynamic>;
-            return _UserListTile(
-              userData: userData,
-              currentUserId: currentUserId,
-              onFollow: () => _toggleFollow(users[index].id),
+            final userId = users[index].id;
+
+            return StreamBuilder<List<Story>>(
+              stream: StoryService().getUserActiveStories(userId),
+              builder: (context, storySnapshot) {
+                final hasActiveStory = storySnapshot.hasData && storySnapshot.data!.isNotEmpty;
+
+                return ListTile(
+                  leading: GestureDetector(
+                    onTap: () {
+                      if (hasActiveStory) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => StoryViewer(
+                              story: storySnapshot.data!.first,
+                            ),
+                          ),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProfileScreen(userId: userId),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: hasActiveStory ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [
+                            Colors.purple,
+                            Colors.pink,
+                            Colors.orange,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ) : null,
+                      child: CircleAvatar(
+                        radius: hasActiveStory ? 24 : 26,
+                        backgroundColor: Colors.white,
+                        child: CircleAvatar(
+                          radius: hasActiveStory ? 22 : 26,
+                          backgroundImage: userData['avatarUrl'] != null
+                              ? CachedNetworkImageProvider(userData['avatarUrl'])
+                              : null,
+                          child: userData['avatarUrl'] == null
+                              ? const Icon(Icons.person)
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: Text(userData['username'] ?? 'Unknown User'),
+                  subtitle: Text(userData['displayName'] ?? ''),
+                  trailing: userId != currentUserId ? StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(userId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox();
+                      
+                      final userDoc = snapshot.data!.data() as Map<String, dynamic>;
+                      final List followers = userDoc['followers'] ?? [];
+                      final bool isFollowing = followers.contains(currentUserId);
+
+                      return TextButton(
+                        onPressed: () => _toggleFollow(userId),
+                        style: TextButton.styleFrom(
+                          backgroundColor: isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
+                          foregroundColor: isFollowing ? Colors.black : Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        child: Text(
+                          isFollowing ? 'Following' : 'Follow',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      );
+                    },
+                  ) : null,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProfileScreen(userId: userId),
+                      ),
+                    );
+                  },
+                );
+              },
             );
           },
         );
@@ -125,8 +219,8 @@ class _UsersScreenState extends State<UsersScreen> with SingleTickerProviderStat
   }
 
   Future<void> _toggleFollow(String targetUserId) async {
-    final userRef = _firestore.collection('users').doc(currentUserId);
-    final targetUserRef = _firestore.collection('users').doc(targetUserId);
+    final userRef = FirebaseFirestore.instance.collection('users').doc(currentUserId);
+    final targetUserRef = FirebaseFirestore.instance.collection('users').doc(targetUserId);
 
     final userDoc = await userRef.get();
     final List following = userDoc.data()?['following'] ?? [];

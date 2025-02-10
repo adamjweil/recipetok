@@ -9,6 +9,10 @@ import '../../screens/comment_screen.dart';
 import 'like_button.dart';
 import '../../widgets/profile/user_list_item_skeleton.dart';
 import '../../utils/time_formatter.dart';
+import '../../models/story.dart';
+import '../../services/story_service.dart';
+import '../../widgets/story_viewer.dart';
+import '../../screens/profile_screen.dart';
 
 class MealPostWrapper extends StatelessWidget {
   final MealPost post;
@@ -42,61 +46,87 @@ class MealPostWrapper extends StatelessWidget {
                   }
 
                   final userData = snapshot.data!.data() as Map<String, dynamic>;
+                  
                   return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          '/profile/${post.userId}',
-                        ),
-                        child: CircleAvatar(
-                          radius: 16,
-                          backgroundImage: userData['avatarUrl'] != null
-                              ? CachedNetworkImageProvider(userData['avatarUrl'])
-                              : null,
-                          child: userData['avatarUrl'] == null
-                              ? const Icon(Icons.person)
-                              : null,
-                        ),
+                      // Avatar with story indicator
+                      StreamBuilder<List<Story>>(
+                        stream: StoryService().getUserActiveStories(post.userId),
+                        builder: (context, storySnapshot) {
+                          final hasActiveStory = storySnapshot.hasData && storySnapshot.data!.isNotEmpty;
+                          final timeRemaining = hasActiveStory 
+                              ? getTimeAgo(storySnapshot.data!.first.expiresAt)
+                              : '';
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              if (hasActiveStory) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => StoryViewer(
+                                      story: storySnapshot.data!.first,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ProfileScreen(userId: post.userId),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: hasActiveStory ? BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Colors.purple,
+                                    Colors.pink,
+                                    Colors.orange,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ) : null,
+                              child: CircleAvatar(
+                                radius: hasActiveStory ? 14 : 16,
+                                backgroundColor: Colors.white,
+                                child: CircleAvatar(
+                                  radius: hasActiveStory ? 13 : 16,
+                                  backgroundImage: userData['avatarUrl'] != null
+                                      ? CachedNetworkImageProvider(userData['avatarUrl'])
+                                      : null,
+                                  child: userData['avatarUrl'] == null
+                                      ? const Icon(Icons.person)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(width: 12),
+                      // Username and timestamp
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              post.title,
+                              userData['username'] ?? 'Unknown User',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                Text(
-                                  userData['username'] ?? 'Unknown User',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                Text(
-                                  ' • ',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                Text(
-                                  getTimeAgo(post.createdAt),
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              getTimeAgo(post.createdAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
                             ),
                           ],
                         ),
@@ -161,6 +191,14 @@ class MealPostWrapper extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        post.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
                       if (post.description != null)
                         Text(
                           post.description!,

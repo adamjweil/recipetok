@@ -50,6 +50,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   bool get isCurrentUserProfile => profileUserId == FirebaseAuth.instance.currentUser?.uid;
   bool _isLikeAnimating = false;
   AnimationController? _likeAnimationController;
+  final _tabKey = PageStorageKey('profile_tab');
+  late Stream<List<Story>> _storiesStream;
 
   void _initializeAnimationController() {
     _likeAnimationController?.dispose();
@@ -69,6 +71,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       initialIndex: 0,
     );
     _initializeAnimationController();
+    _storiesStream = StoryService().getUserActiveStories(profileUserId);
   }
 
   @override
@@ -567,6 +570,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               children: [
                 // Meal Posts Tab
                 StreamBuilder<QuerySnapshot>(
+                  key: _tabKey,
                   stream: FirebaseFirestore.instance
                       .collection('meal_posts')
                       .where('userId', isEqualTo: profileUserId)
@@ -597,14 +601,17 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     }
 
                     return CustomScrollView(
+                      key: const PageStorageKey('meal_posts'),
+                      physics: const AlwaysScrollableScrollPhysics(),
                       slivers: [
                         SliverPadding(
-                          padding: const EdgeInsets.only(bottom: 80),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
                                 final post = MealPost.fromFirestore(posts[index]);
                                 return ExpandableMealPost(
+                                  key: ValueKey(post.id),
                                   post: post,
                                   isExpanded: false,
                                   onToggle: () {},
@@ -893,90 +900,80 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   Widget _buildAvatarWithStory(Map<String, dynamic> userData) {
     return StreamBuilder<List<Story>>(
-      stream: StoryService().getUserActiveStories(profileUserId),
+      stream: _storiesStream,
       builder: (context, snapshot) {
-        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
-        final timeRemaining = hasActiveStory 
-            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
-            : '';
+        print('Story snapshot: ${snapshot.data?.length} stories, hasData: ${snapshot.hasData}');
         
-        return Column(
+        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
+        
+        return Stack(
           children: [
-            if (hasActiveStory)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  timeRemaining,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.normal,
+            GestureDetector(
+              onTap: () {
+                if (hasActiveStory) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StoryViewer(
+                        story: snapshot.data!.first,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: hasActiveStory ? BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [
+                      Colors.purple,
+                      Colors.pink,
+                      Colors.orange,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ) : null,
+                child: CircleAvatar(
+                  radius: hasActiveStory ? 38 : 40,
+                  backgroundColor: Colors.white,
+                  child: CircleAvatar(
+                    radius: hasActiveStory ? 36 : 40,
+                    backgroundImage: userData['avatarUrl'] != null
+                        ? CachedNetworkImageProvider(userData['avatarUrl'])
+                        : null,
+                    child: userData['avatarUrl'] == null
+                        ? const Icon(Icons.person)
+                        : null,
                   ),
                 ),
               ),
-            Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: hasActiveStory ? BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: const [
-                        Colors.purple,
-                        Colors.pink,
-                        Colors.orange,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+            ),
+            if (!hasActiveStory && isCurrentUserProfile)
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: _addStory,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
                     ),
-                  ) : null,
-                  child: GestureDetector(
-                    onTap: () {
-                      if (hasActiveStory) {
-                        _showStoryModal(context, snapshot.data!.first);
-                      }
-                    },
-                    child: CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
-                          ? CachedNetworkImageProvider(
-                              userData['avatarUrl'],
-                              cacheManager: CustomCacheManager.instance,
-                            )
-                          : null,
-                      child: !CustomCacheManager.isValidImageUrl(userData['avatarUrl'])
-                          ? const Icon(Icons.person, size: 40)
-                          : null,
+                    child: const Icon(
+                      Icons.add,
+                      size: 14,
+                      color: Colors.white,
                     ),
                   ),
                 ),
-                if (!hasActiveStory && isCurrentUserProfile)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _addStory,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              ),
           ],
         );
       },
@@ -1104,7 +1101,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   // Update the profile section where the name is displayed
   Widget _buildProfileInfo(Map<String, dynamic> userData) {
     return StreamBuilder<List<Story>>(
-      stream: StoryService().getUserActiveStories(FirebaseAuth.instance.currentUser!.uid),
+      stream: _storiesStream,
       builder: (context, snapshot) {
         final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
         final timeRemaining = hasActiveStory 

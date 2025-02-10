@@ -80,9 +80,9 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image and Description Row with Interaction Buttons
+          // Image and Description Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),  // Removed bottom padding
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -141,151 +141,156 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
                           maxLines: 6,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      const SizedBox(height: 0),
-                      // First row: Interaction buttons
-                      Row(
-                        children: [
-                          // Like and Comment buttons on the left
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              LikeButton(
-                                postId: widget.post.id,
-                                userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                              ),
-                              const SizedBox(width: 12),
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => CommentScreen(post: widget.post),
-                                    ),
-                                  );
-                                },
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.chat_bubble_outline,
-                                      color: Colors.grey[600],
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    StreamBuilder<QuerySnapshot>(
-                                      stream: FirebaseFirestore.instance
-                                          .collection('meal_posts')
-                                          .doc(widget.post.id)
-                                          .collection('comments')
-                                          .snapshots(),
-                                      builder: (context, snapshot) {
-                                        final commentCount = snapshot.data?.docs.length ?? 0;
-                                        return Text(
-                                          '$commentCount',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Interaction buttons row (full width)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Like and Comment buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LikeButton(
+                      postId: widget.post.id,
+                      userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CommentScreen(post: widget.post),
                           ),
-                          const SizedBox(width: 12),
-                          // Likes avatars and count
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            color: Colors.grey[600],
+                            size: 16,
+                          ),
+                          const SizedBox(width: 2),
                           StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection('meal_posts')
                                 .doc(widget.post.id)
-                                .collection('likes')
-                                .limit(3)
+                                .collection('comments')
                                 .snapshots(),
                             builder: (context, snapshot) {
-                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                return const SizedBox(width: 0);
-                              }
-                              
-                              final likes = snapshot.data!.docs;
-                              final likeCount = likes.length;
-
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: likes.length * 20.0 - (likes.length - 1) * 12.0,
-                                    height: 24,
-                                    child: Stack(
-                                      children: likes.asMap().entries.map((entry) {
-                                        final index = entry.key;
-                                        final like = entry.value;
-                                        return Positioned(
-                                          left: index * 12.0,
-                                          child: StreamBuilder<DocumentSnapshot>(
-                                            stream: FirebaseFirestore.instance
-                                                .collection('users')
-                                                .doc(like.id)
-                                                .snapshots(),
-                                            builder: (context, userSnapshot) {
-                                              final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                                              return Container(
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: Colors.white,
-                                                    width: 1.5,
-                                                  ),
-                                                ),
-                                                child: CircleAvatar(
-                                                  radius: 10,
-                                                  backgroundImage: userData?['avatarUrl'] != null
-                                                      ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                                      : null,
-                                                  child: userData?['avatarUrl'] == null
-                                                      ? const Icon(Icons.person, size: 12)
-                                                      : null,
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '$likeCount gave props',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                          const Spacer(),
-                          // Share button on the right
-                          IconButton(
-                            icon: Icon(
-                              Icons.share_outlined,
-                              color: Colors.grey[600],
-                              size: 18,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              Share.share(
-                                'Check out this meal post: ${widget.post.description}',
-                                subject: 'Check out this meal post!',
+                              final commentCount = snapshot.data?.docs.length ?? 0;
+                              return Text(
+                                '$commentCount',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 11,
+                                ),
                               );
                             },
                           ),
                         ],
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                // Likes avatars and count
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('meal_posts')
+                        .doc(widget.post.id)
+                        .collection('likes')
+                        .limit(3)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const SizedBox(width: 0);
+                      }
+                      
+                      final likes = snapshot.data!.docs;
+                      final likeCount = likes.length;
+
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: likes.length * 16.0 - (likes.length - 1) * 10.0,
+                            height: 20,
+                            child: Stack(
+                              children: likes.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final like = entry.value;
+                                return Positioned(
+                                  left: index * 10.0,
+                                  child: StreamBuilder<DocumentSnapshot>(
+                                    stream: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(like.id)
+                                        .snapshots(),
+                                    builder: (context, userSnapshot) {
+                                      final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 8,
+                                          backgroundImage: userData?['avatarUrl'] != null
+                                              ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                              : null,
+                                          child: userData?['avatarUrl'] == null
+                                              ? const Icon(Icons.person, size: 10)
+                                              : null,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$likeCount gave props',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
+                ),
+                // Share button
+                IconButton(
+                  icon: Icon(
+                    Icons.share_outlined,
+                    color: Colors.grey[600],
+                    size: 16,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    Share.share(
+                      'Check out this meal post: ${widget.post.description}',
+                      subject: 'Check out this meal post!',
+                    );
+                  },
                 ),
               ],
             ),
