@@ -362,6 +362,10 @@ async function createUser() {
 async function createVideo(userId: string) {
   const randomVideo = sampleVideos[Math.floor(Math.random() * sampleVideos.length)];
   
+  // Get user data first
+  const userDoc = await db.collection('users').doc(userId).get();
+  const userData = userDoc.data();
+  
   // Get 3-5 random ingredients
   const numIngredients = Math.floor(Math.random() * 3) + 3;
   const ingredients = Array.from({ length: numIngredients }, () => {
@@ -390,6 +394,9 @@ async function createVideo(userId: string) {
 
     const videoDoc = await db.collection('videos').add({
       userId,
+      username: userData?.displayName || 'Anonymous',
+      userHandle: userData?.username || 'user',
+      userImage: userData?.avatarUrl,
       videoUrl: randomVideo.videoUrl,
       thumbnailUrl: randomVideo.thumbnailUrl,
       title: recipeTitles[Math.floor(Math.random() * recipeTitles.length)],
@@ -802,6 +809,9 @@ async function seedDatabase() {
       for (const videoData of adamVideos) {
         const videoDoc = await db.collection('videos').add({
           userId: adamUserRecord.uid,
+          username: adamUser.displayName,
+          userHandle: adamUser.username,
+          userImage: adamUser.avatarUrl,
           ...videoData,
           likes: 0,
           views: 0,

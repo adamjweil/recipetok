@@ -675,7 +675,48 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                         const Tab(icon: Icon(Icons.grid_on)),
                         if (isCurrentUserProfile) ...[
                           const Tab(icon: Icon(Icons.collections_bookmark)),
-                          const Tab(icon: Icon(Icons.watch_later_outlined)),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('videos')
+                                .where('tryLaterBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              final count = snapshot.data?.docs.length ?? 0;
+                              return Tab(
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(Icons.watch_later_outlined),
+                                    if (count > 0)
+                                      Positioned(
+                                        right: -4,
+                                        top: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 14,
+                                            minHeight: 14,
+                                          ),
+                                          child: Text(
+                                            count.toString(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ],
                     ),
@@ -942,7 +983,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           ),
         );
       }
-    } finally {
       if (mounted) {
         setState(() => _isUploading = false);
       }

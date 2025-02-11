@@ -46,6 +46,17 @@ service cloud.firestore {
         allow write: if isSignedIn() && request.auth.uid == userId;
       }
 
+      // Explicitly allow following and followers subcollections
+      match /following/{followedUserId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+      
+      match /followers/{followerUserId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();  // Allow any signed-in user to follow
+      }
+
       // Explicitly allow videoLikes and bookmarks subcollections
       match /videoLikes/{videoId} {
         allow read: if isSignedIn();
