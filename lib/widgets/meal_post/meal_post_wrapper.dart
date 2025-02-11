@@ -101,16 +101,21 @@ class MealPostWrapper extends StatelessWidget {
                                 radius: hasActiveStory ? 13 : 16,
                                 backgroundColor: Colors.grey[200],
                                 child: ClipOval(
-                                  child: avatarUrl != null
+                                  child: avatarUrl != null && avatarUrl.isNotEmpty
                                       ? CustomCacheManager.buildCachedImage(
                                           url: avatarUrl,
                                           width: (hasActiveStory ? 26 : 32),
                                           height: (hasActiveStory ? 26 : 32),
                                         )
-                                      : Icon(
-                                          Icons.person,
-                                          size: hasActiveStory ? 13 : 16,
-                                          color: Colors.grey[400],
+                                      : Container(
+                                          width: (hasActiveStory ? 26 : 32),
+                                          height: (hasActiveStory ? 26 : 32),
+                                          color: Colors.grey[200],
+                                          child: Icon(
+                                            Icons.person,
+                                            size: hasActiveStory ? 13 : 16,
+                                            color: Colors.grey[400],
+                                          ),
                                         ),
                                 ),
                               ),
