@@ -519,49 +519,46 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                _buildAvatarWithStory(userData),
-                                const SizedBox(width: 24),
-                                Expanded(
-                                  child: _buildProfileStats(userData),
-                                ),
-                              ],
+                            _buildAvatarWithStory(userData),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: _buildProfileStats(userData),
                             ),
-                            const SizedBox(height: 12),
-                            _buildProfileInfo(userData),
-                            const SizedBox(height: 12),
-                            _buildProfileActions(userData),
                           ],
                         ),
-                      ),
-                      VideoGroupsSection(
-                        showAddButton: isCurrentUserProfile,
-                        userId: profileUserId,
-                      ),
-                      TabBar(
-                        controller: _tabController,
-                        indicatorColor: Colors.black,
-                        unselectedLabelColor: Colors.grey,
-                        labelColor: Colors.black,
-                        tabs: [
-                          const Tab(icon: Icon(Icons.restaurant)),
-                          const Tab(icon: Icon(Icons.grid_on)),
-                          if (isCurrentUserProfile) ...[
-                            const Tab(icon: Icon(Icons.bookmark_border)),
-                            const Tab(icon: Icon(Icons.watch_later_outlined)),
-                          ],
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        _buildProfileInfo(userData),
+                        const SizedBox(height: 12),
+                        _buildProfileActions(userData),
+                      ],
+                    ),
                   ),
+                ),
+                SliverPersistentHeader(
+                  delegate: _StickyTabBarDelegate(
+                    tabBar: TabBar(
+                      controller: _tabController,
+                      indicatorColor: Colors.black,
+                      unselectedLabelColor: Colors.grey,
+                      labelColor: Colors.black,
+                      tabs: [
+                        const Tab(icon: Icon(Icons.restaurant)),
+                        const Tab(icon: Icon(Icons.grid_on)),
+                        if (isCurrentUserProfile) ...[
+                          const Tab(icon: Icon(Icons.collections_bookmark)),
+                          const Tab(icon: Icon(Icons.watch_later_outlined)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  pinned: true,
                 ),
               ];
             },
@@ -604,6 +601,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       key: const PageStorageKey('meal_posts'),
                       physics: const AlwaysScrollableScrollPhysics(),
                       slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            child: Text(
+                              isCurrentUserProfile ? 'My Posts' : 'Posts',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           sliver: SliverList(
@@ -905,75 +916,93 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         print('Story snapshot: ${snapshot.data?.length} stories, hasData: ${snapshot.hasData}');
         
         final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
+        final timeRemaining = hasActiveStory 
+            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
+            : '';
         
-        return Stack(
+        return Column(
           children: [
-            GestureDetector(
-              onTap: () {
-                if (hasActiveStory) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => StoryViewer(
-                        story: snapshot.data!.first,
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: hasActiveStory ? BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [
-                      Colors.purple,
-                      Colors.pink,
-                      Colors.orange,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ) : null,
-                child: CircleAvatar(
-                  radius: hasActiveStory ? 38 : 40,
-                  backgroundColor: Colors.white,
-                  child: CircleAvatar(
-                    radius: hasActiveStory ? 36 : 40,
-                    backgroundImage: userData['avatarUrl'] != null
-                        ? CachedNetworkImageProvider(userData['avatarUrl'])
-                        : null,
-                    child: userData['avatarUrl'] == null
-                        ? const Icon(Icons.person)
-                        : null,
+            if (hasActiveStory)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  timeRemaining,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
                   ),
                 ),
               ),
-            ),
-            if (!hasActiveStory && isCurrentUserProfile)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: _addStory,
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (hasActiveStory) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StoryViewer(
+                            story: snapshot.data!.first,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                   child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor,
+                    padding: const EdgeInsets.all(2),
+                    decoration: hasActiveStory ? BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 2,
+                      gradient: const LinearGradient(
+                        colors: [
+                          Colors.purple,
+                          Colors.pink,
+                          Colors.orange,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      size: 14,
-                      color: Colors.white,
+                    ) : null,
+                    child: CircleAvatar(
+                      radius: hasActiveStory ? 38 : 40,
+                      backgroundColor: Colors.white,
+                      child: CircleAvatar(
+                        radius: hasActiveStory ? 36 : 40,
+                        backgroundImage: userData['avatarUrl'] != null
+                            ? CachedNetworkImageProvider(userData['avatarUrl'])
+                            : null,
+                        child: userData['avatarUrl'] == null
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
                     ),
                   ),
                 ),
-              ),
+                if (!hasActiveStory && isCurrentUserProfile)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _addStory,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         );
       },
@@ -1100,45 +1129,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   // Update the profile section where the name is displayed
   Widget _buildProfileInfo(Map<String, dynamic> userData) {
-    return StreamBuilder<List<Story>>(
-      stream: _storiesStream,
-      builder: (context, snapshot) {
-        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
-        final timeRemaining = hasActiveStory 
-            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
-            : '';
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  userData['displayName'] ?? 'User',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                if (hasActiveStory) 
-                  Text(
-                    ' $timeRemaining',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                      fontWeight: FontWeight.normal,
-                    ),
-                  ),
-              ],
-            ),
-            if (userData['bio'] != null && userData['bio'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(userData['bio']),
-              ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (userData['bio'] != null && userData['bio'].toString().isNotEmpty)
+          Text(
+            userData['bio'],
+            style: const TextStyle(fontSize: 14),
+          ),
+      ],
     );
   }
 
@@ -1300,96 +1299,22 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildBookmarkedVideosGrid() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('bookmarks')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, bookmarkSnapshot) {
-        if (bookmarkSnapshot.hasError) {
-          return Center(child: Text('Error: ${bookmarkSnapshot.error}'));
-        }
-
-        if (bookmarkSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final bookmarks = bookmarkSnapshot.data?.docs ?? [];
-
-        if (bookmarks.isEmpty) {
-          return SizedBox(
-            height: MediaQuery.of(context).size.height * 0.3,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.favorite_border, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No favorite dishes yet',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return StreamBuilder<List<DocumentSnapshot>>(
-          stream: Stream.fromFuture(
-            Future.wait(
-              bookmarks.map((bookmark) {
-                final bookmarkData = bookmark.data() as Map<String, dynamic>;
-                final videoId = bookmarkData['videoId'] as String;
-                return FirebaseFirestore.instance
-                    .collection('videos')
-                    .doc(videoId)
-                    .get();
-              }),
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Only show VideoGroupsSection
+                VideoGroupsSection(
+                  showAddButton: isCurrentUserProfile,
+                  userId: profileUserId,
+                ),
+              ],
             ),
           ),
-          builder: (context, videoSnapshot) {
-            if (!videoSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final videos = videoSnapshot.data ?? [];
-
-            return GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 1,
-                mainAxisSpacing: 1,
-              ),
-              itemCount: videos.length,
-              itemBuilder: (context, index) {
-                final videoData = videos[index].data() as Map<String, dynamic>?;
-                if (videoData == null) return const SizedBox();
-
-                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(
-                          videoData: videoData,
-                          videoId: videos[index].id,
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -1529,5 +1454,31 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     } else {
       return '${(difference.inDays / 365).floor()}y ago';
     }
+  }
+}
+
+// First, create a delegate class for the persistent header
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _StickyTabBarDelegate({required this.tabBar});
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+  
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor, // Match background color
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
+    return false;
   }
 } 
