@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/custom_cache_manager.dart';
 
 enum MealType {
   breakfast,
@@ -80,10 +81,21 @@ class MealPost {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.likedBy = const [],
-  });
+  }) {
+    photoUrls.removeWhere((url) => !CustomCacheManager.isValidImageUrl(url));
+  }
 
   factory MealPost.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    
+    List<String> photoUrls = [];
+    if (data['photoUrls'] != null) {
+      photoUrls = (data['photoUrls'] as List)
+          .map((url) => url.toString())
+          .where((url) => CustomCacheManager.isValidImageUrl(url))
+          .toList();
+    }
+
     return MealPost(
       id: doc.id,
       userId: data['userId'] ?? '',
@@ -93,7 +105,7 @@ class MealPost {
       caption: data['caption'],
       title: data['title'] ?? '',
       description: data['description'],
-      photoUrls: List<String>.from(data['photoUrls'] ?? []),
+      photoUrls: photoUrls,
       ingredients: data['ingredients'],
       instructions: data['instructions'],
       mealType: MealType.values.firstWhere(

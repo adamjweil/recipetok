@@ -3,6 +3,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CustomCacheManager {
   static const key = 'customCache';
@@ -77,22 +79,31 @@ class CustomCacheManager {
   // Add a separate method for URL validation
   static bool isValidImageUrl(String? url) {
     if (url == null || url.isEmpty) {
-      debugPrint('Debug: URL is null or empty');
+      debugPrint('❌ CustomCacheManager: Empty URL detected');
+      debugPrint('Call stack:');
+      debugPrint(StackTrace.current.toString());
       return false;
     }
-    
+
     try {
-      final uri = Uri.parse(url);
+      final uri = Uri.parse(url.trim());
       final isValid = uri.hasScheme && 
                      (uri.scheme == 'http' || uri.scheme == 'https') &&
                      uri.host.isNotEmpty;
       
-      debugPrint('Debug: URL validation for $url: $isValid');
-      debugPrint('Debug: Scheme: ${uri.scheme}, Host: ${uri.host}');
+      if (!isValid) {
+        debugPrint('❌ CustomCacheManager: Invalid URL format: "$url"');
+        debugPrint('Scheme: ${uri.scheme}, Host: ${uri.host}');
+        debugPrint('Call stack:');
+        debugPrint(StackTrace.current.toString());
+      }
       
       return isValid;
     } catch (e) {
-      debugPrint('Debug: URL parsing error: $e');
+      debugPrint('❌ CustomCacheManager: URL parsing error: "$url"');
+      debugPrint('Error: $e');
+      debugPrint('Call stack:');
+      debugPrint(StackTrace.current.toString());
       return false;
     }
   }
@@ -111,5 +122,58 @@ class CustomCacheManager {
       print('Error retrieving cached file: $e');
       return null;
     }
+  }
+
+  // Add a helper method for CachedNetworkImage
+  static Widget buildCachedImage({
+    required String? url,
+    required double width,
+    required double height,
+    BoxFit fit = BoxFit.cover,
+  }) {
+    debugPrint('🔍 Attempting to build cached image with URL: "$url"');
+    
+    if (!isValidImageUrl(url)) {
+      debugPrint('⚠️ Falling back to placeholder due to invalid URL');
+      return Container(
+        width: width,
+        height: height,
+        color: Colors.grey[200],
+        child: const Center(
+          child: Icon(Icons.image_not_supported, color: Colors.grey),
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: url!,
+      cacheManager: instance,
+      width: width,
+      height: height,
+      fit: fit,
+      placeholder: (context, url) {
+        debugPrint('⌛ Loading placeholder for: $url');
+        return Container(
+          width: width,
+          height: height,
+          color: Colors.grey[200],
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      },
+      errorWidget: (context, url, error) {
+        debugPrint('❌ Error loading image from: $url');
+        debugPrint('Error details: $error');
+        return Container(
+          width: width,
+          height: height,
+          color: Colors.grey[200],
+          child: const Center(
+            child: Icon(Icons.error_outline, color: Colors.grey),
+          ),
+        );
+      },
+    );
   }
 } 

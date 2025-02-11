@@ -13,6 +13,7 @@ import '../../models/story.dart';
 import '../../services/story_service.dart';
 import '../../widgets/story_viewer.dart';
 import '../../screens/profile_screen.dart';
+import '../../utils/custom_cache_manager.dart';
 
 class MealPostWrapper extends StatelessWidget {
   final MealPost post;
@@ -41,11 +42,14 @@ class MealPostWrapper extends StatelessWidget {
                     .doc(post.userId)
                     .snapshots(),
                 builder: (context, snapshot) {
+                  debugPrint('👤 User data snapshot for ${post.userId}: ${snapshot.hasData}');
                   if (!snapshot.hasData) {
                     return const UserListItemSkeleton();
                   }
 
                   final userData = snapshot.data!.data() as Map<String, dynamic>;
+                  final avatarUrl = userData['avatarUrl'] as String?;
+                  debugPrint('👤 User avatar URL: $avatarUrl');
                   
                   return Row(
                     children: [
@@ -53,6 +57,7 @@ class MealPostWrapper extends StatelessWidget {
                       StreamBuilder<List<Story>>(
                         stream: StoryService().getUserActiveStories(post.userId),
                         builder: (context, storySnapshot) {
+                          debugPrint('📖 Story snapshot for ${post.userId}: ${storySnapshot.hasData}');
                           final hasActiveStory = storySnapshot.hasData && storySnapshot.data!.isNotEmpty;
                           final timeRemaining = hasActiveStory 
                               ? getTimeAgo(storySnapshot.data!.first.expiresAt)
@@ -93,16 +98,20 @@ class MealPostWrapper extends StatelessWidget {
                                 ),
                               ) : null,
                               child: CircleAvatar(
-                                radius: hasActiveStory ? 14 : 16,
-                                backgroundColor: Colors.white,
-                                child: CircleAvatar(
-                                  radius: hasActiveStory ? 13 : 16,
-                                  backgroundImage: userData['avatarUrl'] != null
-                                      ? CachedNetworkImageProvider(userData['avatarUrl'])
-                                      : null,
-                                  child: userData['avatarUrl'] == null
-                                      ? const Icon(Icons.person)
-                                      : null,
+                                radius: hasActiveStory ? 13 : 16,
+                                backgroundColor: Colors.grey[200],
+                                child: ClipOval(
+                                  child: avatarUrl != null
+                                      ? CustomCacheManager.buildCachedImage(
+                                          url: avatarUrl,
+                                          width: (hasActiveStory ? 26 : 32),
+                                          height: (hasActiveStory ? 26 : 32),
+                                        )
+                                      : Icon(
+                                          Icons.person,
+                                          size: hasActiveStory ? 13 : 16,
+                                          color: Colors.grey[400],
+                                        ),
                                 ),
                               ),
                             ),
@@ -151,9 +160,8 @@ class MealPostWrapper extends StatelessWidget {
                       height: 120,
                       child: Stack(
                         children: [
-                          CachedNetworkImage(
-                            imageUrl: post.photoUrls.first,
-                            fit: BoxFit.cover,
+                          CustomCacheManager.buildCachedImage(
+                            url: post.photoUrls.firstOrNull,
                             width: 120,
                             height: 120,
                           ),
@@ -277,11 +285,13 @@ class MealPostWrapper extends StatelessWidget {
                       .limit(3)
                       .snapshots(),
                   builder: (context, snapshot) {
+                    debugPrint('❤️ Likes snapshot for post ${post.id}: ${snapshot.hasData}');
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return const SizedBox(width: 0);
                     }
                     
                     final likes = snapshot.data!.docs;
+                    debugPrint('❤️ Number of likes: ${likes.length}');
                     final likeCount = likes.length;
 
                     return Row(
@@ -302,7 +312,21 @@ class MealPostWrapper extends StatelessWidget {
                                       .doc(like.id)
                                       .snapshots(),
                                   builder: (context, userSnapshot) {
+                                    if (!userSnapshot.hasData) {
+                                      return Container(
+                                        width: 20,
+                                        height: 20,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.grey[200],
+                                        ),
+                                      );
+                                    }
+
                                     final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                                    final avatarUrl = userData?['avatarUrl'] as String?;
+                                    debugPrint('🔍 Like avatar URL for user ${like.id}: $avatarUrl');
+
                                     return Container(
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
@@ -311,14 +335,17 @@ class MealPostWrapper extends StatelessWidget {
                                           width: 1.5,
                                         ),
                                       ),
-                                      child: CircleAvatar(
-                                        radius: 10,
-                                        backgroundImage: userData?['avatarUrl'] != null
-                                            ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                            : null,
-                                        child: userData?['avatarUrl'] == null
-                                            ? const Icon(Icons.person, size: 12)
-                                            : null,
+                                      child: ClipOval(
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CustomCacheManager.buildCachedImage(
+                                            url: avatarUrl,
+                                            width: 20,
+                                            height: 20,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
                                       ),
                                     );
                                   },
@@ -360,6 +387,28 @@ class MealPostWrapper extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildImage(String? imageUrl) {
+    if (!CustomCacheManager.isValidImageUrl(imageUrl)) {
+      return Container(
+        color: Colors.grey[200],
+        child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
+      cacheManager: CustomCacheManager.instance,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => Container(
+        color: Colors.grey[200],
+      ),
+      errorWidget: (context, url, error) => Container(
+        color: Colors.grey[200],
+        child: Icon(Icons.error_outline, color: Colors.grey[400]),
       ),
     );
   }

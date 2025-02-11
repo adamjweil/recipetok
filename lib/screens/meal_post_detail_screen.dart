@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
 
 class MealPostDetailScreen extends StatefulWidget {
   final MealPost post;
@@ -288,15 +289,23 @@ class _MealPostDetailScreenState extends State<MealPostDetailScreen> {
                   .get(),
               builder: (context, userSnapshot) {
                 final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
+                
+                // Add debug logging
+                final avatarUrl = userData['avatarUrl']?.toString() ?? '';
+                if (avatarUrl.isEmpty) {
+                  debugPrint('⚠️ Empty avatar URL found for user: ${userData['displayName'] ?? 'Unknown'}');
+                  debugPrint('User data: $userData');
+                }
+                
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: userData['avatarUrl'] != null
+                    backgroundImage: (userData['avatarUrl'] != null && userData['avatarUrl'].toString().isNotEmpty)
                         ? CachedNetworkImageProvider(
                             userData['avatarUrl'],
                             cacheManager: CustomCacheManager.instance,
                           )
                         : null,
-                    child: userData['avatarUrl'] == null
+                    child: (userData['avatarUrl'] == null || userData['avatarUrl'].toString().isEmpty)
                         ? const Icon(Icons.person)
                         : null,
                   ),
