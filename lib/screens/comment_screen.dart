@@ -29,6 +29,20 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   late AnimationController _animationController;
   bool _isPostingComment = false;
 
+  // Add this list at the top of the class
+  final List<String> _quickComments = [
+    "Damn bro, nice meal! 🔥",
+    "Those gains incoming 💪",
+    "Meal prep on point! 👊",
+    "Macros looking clean bro",
+    "This is the whey 🏋️‍♂️",
+    "Absolute unit of a meal 😤",
+    "Chef mode activated 👨‍🍳",
+    "Protein game strong 💯",
+    "Eating like a champion 🏆",
+    "Beast mode fuel right there",
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +50,10 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    // Add listener to text controller
+    _commentController.addListener(() {
+      setState(() {}); // Trigger rebuild when text changes
+    });
     // Auto-focus and show keyboard
     Future.delayed(const Duration(milliseconds: 300), () {
       _focusNode.requestFocus();
@@ -44,6 +62,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    _commentController.removeListener(() { setState(() {}); }); // Clean up listener
     _commentController.dispose();
     _focusNode.dispose();
     _animationController.dispose();
@@ -104,17 +123,20 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: Column(
+      body: Stack(
         children: [
-          // Top pinned post section
-          _buildPinnedPost(),
-          
-          // Comments section
-          Expanded(
-            child: _buildCommentsList(),
+          Column(
+            children: [
+              // Top pinned post section
+              _buildPinnedPost(),
+              
+              // Comments section
+              Expanded(
+                child: _buildCommentsList(),
+              ),
+            ],
           ),
-          
-          // Comment input section
+          // Comment input section at bottom
           _buildCommentInput(),
         ],
       ),
@@ -169,32 +191,6 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left column: User Avatar
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.post.userId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final userData = snapshot.data?.data() as Map<String, dynamic>?;
-              return GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(context, '/profile/${widget.post.userId}');
-                },
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundImage: userData?['avatarUrl'] != null
-                      ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                      : null,
-                  child: userData?['avatarUrl'] == null
-                      ? const Icon(Icons.person, size: 16)
-                      : null,
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 12),
-          
           // Middle column: Image
           if (widget.post.photoUrls.isNotEmpty)
             ClipRRect(
@@ -227,7 +223,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                   Text(
                     widget.post.description!,
                     style: const TextStyle(fontSize: 13),
-                    maxLines: 2,  // Reduced max lines
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 const SizedBox(height: 4),
@@ -372,7 +368,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 80), // Space for input field
+          padding: const EdgeInsets.only(bottom: 16),
           itemCount: comments.length,
           itemBuilder: (context, index) {
             final comment = comments[index].data() as Map<String, dynamic>;
@@ -440,86 +436,121 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   }
 
   Widget _buildCommentInput() {
-    return Container(
-      padding: MediaQuery.of(context).viewInsets.bottom > 0
-          ? EdgeInsets.zero
-          : const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_selectedImage != null)
+        bottom: false,
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Quick comments
               Container(
-                height: 80,
-                padding: const EdgeInsets.all(8),
-                child: Stack(
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Colors.grey[300]!),
+                  ),
+                ),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: _quickComments.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: TextButton(
+                        onPressed: () {
+                          _commentController.text = _quickComments[index];
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.grey[100],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          _quickComments[index],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Input field
+              Container(
+                color: Colors.white,
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(_selectedImage!.path),
-                        height: 64,
-                        width: 64,
-                        fit: BoxFit.cover,
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(Icons.image_outlined, color: Colors.grey[600]),
+                      onPressed: () {
+                        // Handle image picking
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                        ),
                       ),
                     ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        onPressed: () => setState(() => _selectedImage = null),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _commentController.text.trim().isEmpty ? null : _postComment,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        minimumSize: const Size(0, 32),
+                      ),
+                      child: Text(
+                        'Post',
+                        style: TextStyle(
+                          color: _commentController.text.trim().isEmpty 
+                              ? Colors.grey[400] 
+                              : Theme.of(context).primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.photo_library_outlined),
-                    onPressed: _pickImage,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _commentController,
-                      focusNode: _focusNode,
-                      decoration: const InputDecoration(
-                        hintText: 'Add a comment...',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      maxLines: null,
-                    ),
-                  ),
-                  IconButton(
-                    icon: _isPostingComment
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    onPressed: _isPostingComment ? null : _postComment,
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -596,165 +627,127 @@ class _CommentItemState extends State<_CommentItem> {
               final userData = snapshot.data?.data() as Map<String, dynamic>?;
               final isCurrentUser = widget.userId == FirebaseAuth.instance.currentUser?.uid;
 
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // User Avatar
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/profile/${widget.userId}');
-                      },
-                      child: CircleAvatar(
-                        radius: 12,
-                        backgroundImage: userData?['avatarUrl'] != null
-                            ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                            : null,
-                        child: userData?['avatarUrl'] == null
-                            ? const Icon(Icons.person, size: 12)
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    
-                    // Comment Content
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar and Username Column
+                  Column(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/profile/${widget.userId}');
+                        },
+                        child: CircleAvatar(
+                          radius: 12,
+                          backgroundImage: userData?['avatarUrl'] != null
+                              ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                              : null,
+                          child: userData?['avatarUrl'] == null
+                              ? const Icon(Icons.person, size: 12)
+                              : null,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Username and Pin/Delete Options
-                            Row(
-                              children: [
-                                Text(
-                                  userData?['username'] ?? 'Unknown User',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        userData?['username'] ?? 'Unknown',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  
+                  // Comment Bubble
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Top row with comment and more options
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.text,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
                                     fontSize: 12,
+                                    color: Colors.black,
                                   ),
                                 ),
-                                if (widget.isPinned) ...[
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.push_pin,
-                                    size: 12,
-                                    color: Theme.of(context).primaryColor,
+                              ),
+                              if (isCurrentUser || widget.isPostOwner)
+                                PopupMenuButton<String>(
+                                  padding: EdgeInsets.zero,
+                                  iconSize: 16,
+                                  icon: Icon(
+                                    Icons.more_vert,
+                                    color: Colors.grey[600],
                                   ),
-                                ],
-                                const Spacer(),
-                                if (isCurrentUser || widget.isPostOwner)
-                                  PopupMenuButton<String>(
-                                    padding: EdgeInsets.zero,
-                                    icon: Icon(
-                                      Icons.more_vert,
-                                      size: 16,
-                                      color: Colors.grey[600],
-                                    ),
-                                    itemBuilder: (context) => [
-                                      if (widget.isPostOwner)
-                                        PopupMenuItem(
-                                          value: 'pin',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                widget.isPinned
-                                                    ? Icons.push_pin_outlined
-                                                    : Icons.push_pin,
-                                                size: 16,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                widget.isPinned
-                                                    ? 'Unpin'
-                                                    : 'Pin',
-                                              ),
-                                            ],
-                                          ),
-                                        ),
+                                  itemBuilder: (context) => [
+                                    if (widget.isPostOwner)
                                       PopupMenuItem(
-                                        value: 'delete',
+                                        value: 'pin',
                                         child: Row(
                                           children: [
-                                            const Icon(
-                                              Icons.delete_outline,
+                                            Icon(
+                                              widget.isPinned
+                                                  ? Icons.push_pin_outlined
+                                                  : Icons.push_pin,
                                               size: 16,
-                                              color: Colors.red,
                                             ),
                                             const SizedBox(width: 8),
-                                            const Text(
-                                              'Delete',
-                                              style: TextStyle(color: Colors.red),
-                                            ),
+                                            Text(widget.isPinned ? 'Unpin' : 'Pin'),
                                           ],
                                         ),
                                       ),
-                                    ],
-                                    onSelected: (value) {
-                                      if (value == 'pin') {
-                                        widget.onPin();
-                                      } else if (value == 'delete') {
-                                        widget.onDelete();
-                                      }
-                                    },
-                                  ),
-                              ],
-                            ),
-                            
-                            // Comment Text
-                            if (widget.text.isNotEmpty)
-                              Text(
-                                widget.text,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            
-                            // Comment Image
-                            if (widget.imageUrl != null) ...[
-                              const SizedBox(height: 6),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: CachedNetworkImage(
-                                  imageUrl: widget.imageUrl!,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: Colors.grey[200],
-                                    height: 150,
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    color: Colors.grey[200],
-                                    height: 150,
-                                    child: const Icon(Icons.error),
-                                  ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: const [
+                                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                          SizedBox(width: 8),
+                                          Text('Delete', style: TextStyle(color: Colors.red)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  onSelected: (value) {
+                                    if (value == 'pin') widget.onPin();
+                                    if (value == 'delete') widget.onDelete();
+                                  },
                                 ),
-                              ),
                             ],
-                            
-                            // Timestamp
-                            const SizedBox(height: 2),
-                            Text(
-                              getTimeAgo(widget.timestamp),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[600],
-                              ),
+                          ),
+                          // Timestamp below with reduced spacing
+                          const SizedBox(height: 2),  // Reduced from 4 to 2
+                          Text(
+                            getTimeAgo(widget.timestamp),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[600],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),
