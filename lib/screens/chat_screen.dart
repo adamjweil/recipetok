@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/message_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
+import '../models/chat_message.dart';
+import '../widgets/chat/post_like_message.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -134,14 +136,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final message = messages[index].data() as Map<String, dynamic>;
-                    final isMe = message['senderId'] == FirebaseAuth.instance.currentUser?.uid;
-
-                    return _MessageBubble(
-                      message: message['text'] ?? '',
-                      isMe: isMe,
-                      timestamp: (message['timestamp'] as Timestamp?)?.toDate(),
-                    );
+                    final messageData = messages[index].data() as Map<String, dynamic>;
+                    final message = ChatMessage.fromMap(messageData, messages[index].id);
+                    return _buildMessage(message);
                   },
                 );
               },
@@ -297,5 +294,26 @@ class _MessageBubble extends StatelessWidget {
 
   String _formatTimestamp(DateTime timestamp) {
     return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+Widget _buildMessage(ChatMessage message) {
+  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  
+  switch (message.type) {
+    case MessageType.text:
+      return _MessageBubble(
+        message: message.text ?? '',
+        isMe: message.senderId == currentUserId,
+        timestamp: message.timestamp,
+      );
+    case MessageType.image:
+      // Handle image messages
+      return Container(); // TODO: Implement image message UI
+    case MessageType.postLike:
+      return PostLikeMessage(
+        message: message,
+        isCurrentUser: message.senderId == currentUserId,
+      );
   }
 } 

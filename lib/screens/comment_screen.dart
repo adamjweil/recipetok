@@ -123,22 +123,21 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              // Top pinned post section
-              _buildPinnedPost(),
-              
-              // Comments section
-              Expanded(
-                child: _buildCommentsList(),
-              ),
-            ],
-          ),
-          // Comment input section at bottom
-          _buildCommentInput(),
-        ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top pinned post section
+            _buildPinnedPost(),
+            
+            // Comments section
+            Expanded(
+              child: _buildCommentsList(),
+            ),
+            
+            // Comment input section at bottom
+            _buildCommentInput(),
+          ],
+        ),
       ),
     );
   }
@@ -436,122 +435,114 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   }
 
   Widget _buildCommentInput() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          color: Colors.white,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Quick comments
-              Container(
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: _quickComments.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      child: TextButton(
-                        onPressed: () {
-                          _commentController.text = _quickComments[index];
-                        },
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.grey[100],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          _quickComments[index],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[800],
-                          ),
-                        ),
+    return Container(
+      color: Colors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Quick comments
+          Container(
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              itemCount: _quickComments.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: TextButton(
+                    onPressed: () {
+                      _commentController.text = _quickComments[index];
+                    },
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    );
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      _quickComments[index],
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Input field
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(
+              left: 8,
+              right: 8,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(Icons.image_outlined, color: Colors.grey[600]),
+                  onPressed: () {
+                    // Handle image picking
                   },
                 ),
-              ),
-              // Input field
-              Container(
-                color: Colors.white,
-                padding: EdgeInsets.only(
-                  left: 8,
-                  right: 8,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    maxLines: 1,
+                    decoration: InputDecoration(
+                      hintText: 'Add a comment...',
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                    ),
+                  ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: Icon(Icons.image_outlined, color: Colors.grey[600]),
-                      onPressed: () {
-                        // Handle image picking
-                      },
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _commentController.text.trim().isEmpty ? null : _postComment,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 32),
+                  ),
+                  child: Text(
+                    'Post',
+                    style: TextStyle(
+                      color: _commentController.text.trim().isEmpty 
+                          ? Colors.grey[400] 
+                          : Theme.of(context).primaryColor,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _commentController,
-                        maxLines: 1,
-                        decoration: InputDecoration(
-                          hintText: 'Add a comment...',
-                          hintStyle: TextStyle(color: Colors.grey[600]),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _commentController.text.trim().isEmpty ? null : _postComment,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        minimumSize: const Size(0, 32),
-                      ),
-                      child: Text(
-                        'Post',
-                        style: TextStyle(
-                          color: _commentController.text.trim().isEmpty 
-                              ? Colors.grey[400] 
-                              : Theme.of(context).primaryColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

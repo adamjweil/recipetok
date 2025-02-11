@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/chat_message.dart';
+import '../../utils/custom_cache_manager.dart';
 
 class LikeButton extends StatelessWidget {
   final String postId;
@@ -12,32 +14,113 @@ class LikeButton extends StatelessWidget {
   });
 
   Future<void> _toggleLike() async {
-    try {
-      final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(postId);
-      final likeRef = postRef.collection('likes').doc(userId);
+    try {  // Add try-catch for better error handling
+      final likesRef = FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(postId)
+          .collection('likes');
 
-      final likeDoc = await likeRef.get();
-      final batch = FirebaseFirestore.instance.batch();
+      final existingLike = await likesRef.doc(userId).get();
 
-      if (likeDoc.exists) {
-        // Unlike
-        batch.delete(likeRef);
-        batch.update(postRef, {
-          'likes': FieldValue.increment(-1),
-        });
+      if (existingLike.exists) {
+        // Unlike - just remove the like
+        await likesRef.doc(userId).delete();
       } else {
-        // Like
-        batch.set(likeRef, {
+        // Like - add like and send notification
+        await likesRef.doc(userId).set({
           'timestamp': FieldValue.serverTimestamp(),
         });
-        batch.update(postRef, {
-          'likes': FieldValue.increment(1),
-        });
+
+        // Get post details
+        final postDoc = await FirebaseFirestore.instance
+            .collection('meal_posts')
+            .doc(postId)
+            .get();
+        
+        if (!postDoc.exists) {
+          debugPrint('Post not found');
+          return;
+        }
+
+        final postData = postDoc.data()!;
+        final postOwnerId = postData['userId'] as String;
+
+        // Don't send notification if liking your own post
+        if (postOwnerId == userId) {
+          return;
+        }
+        
+        // Check if chat exists or create new one
+        final chatId = await _getOrCreateChat(userId, postOwnerId);
+        
+        final photoUrl = postData['photoUrls']?[0];
+        debugPrint('Debug: Photo URL from post: $photoUrl');
+
+        if (!CustomCacheManager.isValidImageUrl(photoUrl)) {
+          debugPrint('Debug: Invalid photo URL detected, skipping image');
+        }
+        
+        // Send like notification message
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .add({
+              'senderId': userId,
+              'receiverId': postOwnerId,
+              'type': 'MessageType.postLike',
+              'postId': postId,
+              'postThumbnailUrl': CustomCacheManager.isValidImageUrl(photoUrl) ? photoUrl : null,
+              'postTitle': 'Meal Post',
+              'postDescription': postData['description'] ?? '',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+
+        // Update last message in chat
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .update({
+              'lastMessage': 'Liked your post',
+              'lastMessageTimestamp': FieldValue.serverTimestamp(),
+            });
+
+        debugPrint('Like notification sent successfully');
+      }
+    } catch (e) {
+      debugPrint('Error in _toggleLike: $e');
+    }
+  }
+
+  Future<String> _getOrCreateChat(String user1Id, String user2Id) async {
+    try {
+      // Sort IDs to ensure consistent chat ID
+      final sortedIds = [user1Id, user2Id]..sort();
+      final chatId = sortedIds.join('_');
+
+      final chatDoc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .get();
+
+      if (!chatDoc.exists) {
+        // Create new chat
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .set({
+              'participants': sortedIds,
+              'lastMessage': null,
+              'lastMessageTimestamp': FieldValue.serverTimestamp(),
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+        debugPrint('Created new chat: $chatId');
       }
 
-      await batch.commit();
+      return chatId;
     } catch (e) {
-      debugPrint('Error toggling like: $e');
+      debugPrint('Error in _getOrCreateChat: $e');
+      rethrow;
     }
   }
 
