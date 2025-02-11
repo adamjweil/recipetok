@@ -70,9 +70,6 @@ class LikeButton extends StatelessWidget {
               'receiverId': postOwnerId,
               'type': 'MessageType.postLike',
               'postId': postId,
-              'postThumbnailUrl': CustomCacheManager.isValidImageUrl(photoUrl) ? photoUrl : null,
-              'postTitle': 'Meal Post',
-              'postDescription': postData['description'] ?? '',
               'timestamp': FieldValue.serverTimestamp(),
             });
 

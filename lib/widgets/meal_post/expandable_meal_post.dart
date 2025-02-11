@@ -7,6 +7,7 @@ import '../../utils/time_formatter.dart';
 import 'like_button.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../screens/comment_screen.dart';
+import '../../utils/custom_cache_manager.dart';
 
 class ExpandableMealPost extends StatefulWidget {
   final MealPost post;
@@ -92,17 +93,7 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
                     child: SizedBox(
                       width: 120,
                       height: 120,
-                      child: CachedNetworkImage(
-                        imageUrl: widget.post.photoUrls.first,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.error),
-                        ),
-                      ),
+                      child: _buildPostImage(widget.post.photoUrls.first),
                     ),
                   ),
 
@@ -303,6 +294,34 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
             // Add your existing comments section code here
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPostImage(String? imageUrl) {
+    if (!CustomCacheManager.isValidImageUrl(imageUrl)) {
+      return AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+        ),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl!,
+        cacheManager: CustomCacheManager.instance,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          color: Colors.grey[200],
+        ),
+        errorWidget: (context, url, error) => Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.error_outline, color: Colors.grey[400]),
+        ),
       ),
     );
   }

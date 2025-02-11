@@ -64,7 +64,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
+    
+    // Initialize profileUserId
     profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    
+    if (profileUserId.isEmpty) {
+      debugPrint('❌ No valid user ID found for profile');
+      return;
+    }
+
     _tabController = TabController(
       length: isCurrentUserProfile ? 4 : 2,
       vsync: this,
@@ -81,12 +89,22 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     super.dispose();
   }
 
-  // Add stream for user data
   Stream<DocumentSnapshot> _getUserData() {
+    if (profileUserId.isEmpty) {
+      debugPrint('❌ Attempted to get user data with empty ID');
+      return Stream.empty();
+    }
+
     return FirebaseFirestore.instance
         .collection('users')
         .doc(profileUserId)
-        .snapshots();
+        .snapshots()
+        .where((snapshot) => snapshot.exists && snapshot.data() != null)
+        .map((snapshot) {
+          final data = snapshot.data() as Map<String, dynamic>? ?? {};
+          debugPrint('👤 User data loaded for $profileUserId: ${data.isNotEmpty}');
+          return snapshot;
+        });
   }
 
   Widget _buildProfileStats(Map<String, dynamic> userData) {
@@ -418,13 +436,27 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    if (profileUserId.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text('Invalid user profile')),
+      );
+    }
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: StreamBuilder<DocumentSnapshot>(
           stream: _getUserData(),
           builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+              );
+            }
+
             final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+            
             return AppBar(
               leading: isCurrentUserProfile
                   ? IconButton(
@@ -442,61 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               backgroundColor: Colors.transparent,
               elevation: 0,
               actions: [
-                if (isCurrentUserProfile)
-                  Stack(
-                    children: [
-                      Transform.rotate(
-                        angle: -35 * (3.14159 / 180),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.send_outlined,
-                            color: Colors.black,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MessagesScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      StreamBuilder<int>(
-                        stream: MessageService().getTotalUnreadCount(),
-                        builder: (context, snapshot) {
-                          final unreadCount = snapshot.data ?? 0;
-                          if (unreadCount == 0) {
-                            return const SizedBox.shrink();
-                          }
-                          
-                          return Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor,
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 14,
-                                minHeight: 14,
-                              ),
-                              child: Text(
-                                unreadCount > 99 ? '99+' : unreadCount.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                if (isCurrentUserProfile) _buildMessagesButton(),
               ],
             );
           },
@@ -505,15 +483,14 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       body: StreamBuilder<DocumentSnapshot>(
         stream: _getUserData(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+          if (userData.isEmpty) {
+            return const Center(child: Text('User data not found'));
+          }
 
           return NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -565,291 +542,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             body: TabBarView(
               controller: _tabController,
               children: [
-                // Meal Posts Tab
-                StreamBuilder<QuerySnapshot>(
-                  key: _tabKey,
-                  stream: FirebaseFirestore.instance
-                      .collection('meal_posts')
-                      .where('userId', isEqualTo: profileUserId)
-                      .where('isPublic', isEqualTo: true)
-                      .orderBy('createdAt', descending: true)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final posts = snapshot.data!.docs;
-                    
-                    if (posts.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.restaurant_menu, size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No meal posts yet',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return CustomScrollView(
-                      key: const PageStorageKey('meal_posts'),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                            child: Text(
-                              isCurrentUserProfile ? 'My Posts' : 'Posts',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey[800],
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final post = MealPost.fromFirestore(posts[index]);
-                                return ExpandableMealPost(
-                                  key: ValueKey(post.id),
-                                  post: post,
-                                  isExpanded: false,
-                                  onToggle: () {},
-                                );
-                              },
-                              childCount: posts.length,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-
-                // Videos Tab
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('videos')
-                      .where('userId', isEqualTo: profileUserId)
-                      .orderBy('createdAt', descending: true)
-                      .snapshots(),
-                  builder: (context, videoSnapshot) {
-                    if (videoSnapshot.hasError) {
-                      return Center(child: Text('Error: ${videoSnapshot.error}'));
-                    }
-
-                    if (videoSnapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final videos = videoSnapshot.data?.docs ?? [];
-
-                    if (videos.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No videos yet',
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    // First sort the videos to show pinned ones first
-                    final sortedVideos = [...videos];
-                    sortedVideos.sort((a, b) {
-                      final isPinnedA = (a.data() as Map<String, dynamic>)['isPinned'] ?? false;
-                      final isPinnedB = (b.data() as Map<String, dynamic>)['isPinned'] ?? false;
-                      if (isPinnedA && !isPinnedB) return -1;
-                      if (!isPinnedA && isPinnedB) return 1;
-                      return 0;
-                    });
-
-                    return SizedBox.expand(
-                      child: GridView.builder(
-                        physics: const ClampingScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 1,
-                          mainAxisSpacing: 1,
-                          childAspectRatio: 0.8,
-                        ),
-                        itemCount: sortedVideos.length,
-                        itemBuilder: (context, index) {
-                          final videoData = sortedVideos[index].data() as Map<String, dynamic>;
-                          final videoId = sortedVideos[index].id;
-                          final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-                          final isPinned = videoData['isPinned'] ?? false;
-
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => VideoPlayerScreen(
-                                    videoData: videoData,
-                                    videoId: videoId,
-                                  ),
-                                ),
-                              );
-                            },
-                            onLongPress: isCurrentUserProfile ? () {
-                              showModalBottomSheet(
-                                context: context,
-                                builder: (context) => Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ListTile(
-                                      leading: Icon(
-                                        isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                                        color: isPinned ? Theme.of(context).primaryColor : null,
-                                      ),
-                                      title: Text(isPinned ? 'Unpin from Profile' : 'Pin to Profile'),
-                                      onTap: () async {
-                                        Navigator.pop(context);
-                                        try {
-                                          await FirebaseFirestore.instance
-                                              .collection('videos')
-                                              .doc(videoId)
-                                              .update({
-                                            'isPinned': !isPinned,
-                                          });
-                                          
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                isPinned ? 'Video unpinned from profile' : 'Video pinned to profile'
-                                              ),
-                                              duration: const Duration(seconds: 2),
-                                            ),
-                                          );
-                                        } catch (e) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('Error: $e')),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: const Icon(Icons.share),
-                                      title: const Text('Share Video'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        Share.share(
-                                          'Check out this recipe video: ${videoData['videoUrl']}',
-                                          subject: videoData['title'],
-                                        );
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: const Icon(Icons.delete_outline, color: Colors.red),
-                                      title: const Text('Delete Video', style: TextStyle(color: Colors.red)),
-                                      onTap: () async {
-                                        Navigator.pop(context);
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text('Delete Video'),
-                                            content: const Text('Are you sure you want to delete this video? This action cannot be undone.'),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context, false),
-                                                child: const Text('Cancel'),
-                                              ),
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context, true),
-                                                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                                child: const Text('Delete'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-
-                                        if (confirm == true && context.mounted) {
-                                          try {
-                                            await FirebaseFirestore.instance
-                                                .collection('videos')
-                                                .doc(videoId)
-                                                .delete();
-                                            
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('Video deleted successfully')),
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Error deleting video: $e')),
-                                            );
-                                          }
-                                        }
-                                      },
-                                    ),
-                                    const SizedBox(height: 8),
-                                  ],
-                                ),
-                              );
-                            } : null,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                CustomCacheManager.isValidImageUrl(thumbnailUrl)
-                                    ? CachedNetworkImage(
-                                        imageUrl: thumbnailUrl!,
-                                        fit: BoxFit.cover,
-                                        cacheManager: CustomCacheManager.instance,
-                                        placeholder: (context, url) => Container(
-                                          color: Colors.grey[200],
-                                        ),
-                                        errorWidget: (context, url, error) => Container(
-                                          color: Colors.grey[200],
-                                          child: const Icon(Icons.error),
-                                        ),
-                                      )
-                                    : Container(
-                                        color: Colors.grey[200],
-                                        child: const Icon(Icons.video_library),
-                                      ),
-                                if (isPinned)
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.7),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Icon(
-                                        Icons.push_pin,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-
+                _buildMealPostsTab(),
+                _buildVideosGrid(),
                 if (isCurrentUserProfile) ...[
                   _buildBookmarkedVideosGrid(),
                   _buildTryLaterGrid(),
@@ -862,59 +556,71 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Future<void> _showLogoutDialog(BuildContext context, Map<String, dynamic> userData) async {
-    return showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return SimpleDialog(
-          title: const Text('Menu'),
-          children: <Widget>[
-            SimpleDialogOption(
-              onPressed: () {
-                Navigator.pop(context); // Close the dialog
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfileScreen(
-                      userData: userData,
-                    ),
+  Widget _buildMessagesButton() {
+    return Stack(
+      children: [
+        Transform.rotate(
+          angle: -35 * (3.14159 / 180),
+          child: IconButton(
+            icon: const Icon(Icons.send_outlined, color: Colors.black),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MessagesScreen()),
+              );
+            },
+          ),
+        ),
+        StreamBuilder<int>(
+          stream: MessageService().getTotalUnreadCount(),
+          builder: (context, snapshot) {
+            final unreadCount = snapshot.data ?? 0;
+            if (unreadCount == 0) return const SizedBox.shrink();
+            
+            return Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 14,
+                  minHeight: 14,
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
                   ),
-                );
-              },
-              child: const Row(
-                children: [
-                  Icon(Icons.edit),
-                  SizedBox(width: 12),
-                  Text('Edit Profile'),
-                ],
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
-            const Divider(),
-            SimpleDialogOption(
-              onPressed: () {
-                Navigator.pop(context);
-                _signOut(context);
-              },
-              child: Row(
-                children: [
-                  const Icon(Icons.logout, color: Colors.red),
-                  const SizedBox(width: 12),
-                  Text('Logout', style: TextStyle(color: Colors.red[700])),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+            );
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildAvatarWithStory(Map<String, dynamic> userData) {
+    final avatarUrl = userData['avatarUrl'] as String?;
+    debugPrint('👤 Building avatar with URL: "$avatarUrl"');
+    
+    if (!_isValidUrl(avatarUrl, debugContext: 'Profile Avatar')) {
+      return CircleAvatar(
+        radius: 40,
+        backgroundColor: Colors.grey[200],
+        child: const Icon(Icons.person),
+      );
+    }
+
     return StreamBuilder<List<Story>>(
       stream: _storiesStream,
       builder: (context, snapshot) {
-        print('Story snapshot: ${snapshot.data?.length} stories, hasData: ${snapshot.hasData}');
-        
         final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
         final timeRemaining = hasActiveStory 
             ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
@@ -953,11 +659,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     decoration: hasActiveStory ? BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const LinearGradient(
-                        colors: [
-                          Colors.purple,
-                          Colors.pink,
-                          Colors.orange,
-                        ],
+                        colors: [Colors.purple, Colors.pink, Colors.orange],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -965,14 +667,29 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     child: CircleAvatar(
                       radius: hasActiveStory ? 38 : 40,
                       backgroundColor: Colors.white,
-                      child: CircleAvatar(
-                        radius: hasActiveStory ? 36 : 40,
-                        backgroundImage: userData['avatarUrl'] != null
-                            ? CachedNetworkImageProvider(userData['avatarUrl'])
-                            : null,
-                        child: userData['avatarUrl'] == null
-                            ? const Icon(Icons.person)
-                            : null,
+                      child: ClipOval(
+                        child: avatarUrl != null && avatarUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: avatarUrl,
+                                width: (hasActiveStory ? 76 : 80),
+                                height: (hasActiveStory ? 76 : 80),
+                                fit: BoxFit.cover,
+                                cacheManager: CustomCacheManager.instance,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.person),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.person),
+                                ),
+                              )
+                            : Container(
+                                width: (hasActiveStory ? 76 : 80),
+                                height: (hasActiveStory ? 76 : 80),
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.person),
+                              ),
                       ),
                     ),
                   ),
@@ -1063,17 +780,17 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       setState(() => _isUploading = true);
       
       final mediaType = media.name.endsWith('.mp4') ? 'video' : 'image';
-      print('Selected media type: $mediaType'); // Debug log
-      print('File path: ${media.path}'); // Debug log
+      debugPrint('Selected media type: $mediaType');
+      debugPrint('File path: ${media.path}');
       
       try {
         await StoryService().uploadStory(File(media.path), mediaType);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Story uploaded successfully'),
+            const SnackBar(
+              content: Text('Story uploaded successfully'),
               behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.only(
+              margin: EdgeInsets.only(
                 top: 20,
                 right: 20,
                 left: 20,
@@ -1082,7 +799,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           );
         }
       } catch (e) {
-        print('Error uploading story: $e'); // Debug log
+        debugPrint('Error uploading story: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1098,7 +815,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         }
       }
     } catch (e) {
-      print('Error in _addStory: $e'); // Debug log
+      debugPrint('Error in _addStory: $e');
     } finally {
       if (mounted) {
         setState(() => _isUploading = false);
@@ -1298,138 +1015,331 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
   }
 
-  Widget _buildBookmarkedVideosGrid() {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Only show VideoGroupsSection
-                VideoGroupsSection(
-                  showAddButton: isCurrentUserProfile,
-                  userId: profileUserId,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTryLaterGrid() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    
+  Widget _buildMealPostsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('tryLater')
+          .collection('meal_posts')
+          .where('userId', isEqualTo: profileUserId)
           .orderBy('createdAt', descending: true)
           .snapshots(),
-      builder: (context, tryLaterSnapshot) {
-        if (tryLaterSnapshot.hasError) {
-          return Center(child: Text('Error: ${tryLaterSnapshot.error}'));
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        if (tryLaterSnapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final tryLater = tryLaterSnapshot.data?.docs ?? [];
-
-        if (tryLater.isEmpty) {
-          return SizedBox(
-            height: MediaQuery.of(context).size.height * 0.3,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No dishes to try later',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
-              ),
+        final posts = snapshot.data?.docs ?? [];
+        if (posts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.restaurant, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No meal posts yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
             ),
           );
         }
 
-        return FutureBuilder<List<DocumentSnapshot>>(
-          future: Future.wait(
-            tryLater.map((item) {
-              final itemData = item.data() as Map<String, dynamic>;
-              final videoId = itemData['videoId'] as String;
-              return FirebaseFirestore.instance
-                  .collection('videos')
-                  .doc(videoId)
-                  .get();
-            }).toList(),
+        return ListView.builder(
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final postData = posts[index].data() as Map<String, dynamic>;
+            final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+            
+            // Convert string to MealType enum
+            MealType getMealType(String? type) {
+              switch (type?.toLowerCase()) {
+                case 'breakfast':
+                  return MealType.breakfast;
+                case 'lunch':
+                  return MealType.lunch;
+                case 'dinner':
+                  return MealType.dinner;
+                case 'snack':
+                  return MealType.snack;
+                default:
+                  return MealType.breakfast;
+              }
+            }
+            
+            // Safely get likes array
+            final likes = postData['likes'];
+            List<String> likesList = [];
+            if (likes != null) {
+              if (likes is List) {
+                likesList = List<String>.from(likes);
+              } else if (likes is int) {
+                // If likes is stored as a count instead of a list
+                likesList = List.generate(likes, (index) => '');
+              }
+            }
+            
+            final mealPost = MealPost(
+              userId: postData['userId'] ?? '',
+              userName: postData['userName'] ?? '',
+              title: postData['title'] ?? '',
+              description: postData['description'] ?? '',
+              imageUrl: postData['imageUrl'] ?? '',
+              createdAt: (postData['createdAt'] as Timestamp).toDate(),
+              likes: likesList.length,
+              id: posts[index].id,
+              photoUrls: List<String>.from(postData['photoUrls'] ?? []),
+              mealType: getMealType(postData['mealType'] as String?),
+              cookTime: postData['cookTime'] ?? '',
+              calories: int.parse(postData['calories']?.toString() ?? '0'),
+              protein: int.parse(postData['protein']?.toString() ?? '0'),
+              isVegetarian: postData['isVegetarian'] ?? false,
+              carbonSaved: double.parse(postData['carbonSaved']?.toString() ?? '0'),
+              comments: 0,
+              isLiked: likesList.contains(currentUserId),
+              isPublic: postData['isPublic'] ?? true,
+            );
+            
+            return MealPostWrapper(
+              post: mealPost,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildVideosGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videos')
+          .where('userId', isEqualTo: profileUserId)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          debugPrint('❌ Error loading videos: ${snapshot.error}');
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final videos = snapshot.data?.docs ?? [];
+        debugPrint('📊 Loaded ${videos.length} videos');
+
+        if (videos.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No videos yet',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Sort videos to show pinned ones first
+        final sortedVideos = [...videos];
+        sortedVideos.sort((a, b) {
+          final isPinnedA = (a.data() as Map<String, dynamic>)['isPinned'] ?? false;
+          final isPinnedB = (b.data() as Map<String, dynamic>)['isPinned'] ?? false;
+          if (isPinnedA && !isPinnedB) return -1;
+          if (!isPinnedA && isPinnedB) return 1;
+          return 0;
+        });
+
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 1,
+            mainAxisSpacing: 1,
+            childAspectRatio: 0.8,
           ),
-          builder: (context, videoSnapshot) {
-            if (!videoSnapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
+          itemCount: sortedVideos.length,
+          itemBuilder: (context, index) {
+            final videoData = sortedVideos[index].data() as Map<String, dynamic>;
+            final videoId = sortedVideos[index].id;
+            final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+            
+            debugPrint('🎬 Building video tile $index:');
+            debugPrint('Video ID: $videoId');
+            debugPrint('Thumbnail URL: "$thumbnailUrl"');
+            
+            if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
+              return Container(
+                color: Colors.grey[200],
+                child: const Center(
+                  child: Icon(Icons.video_library, color: Colors.grey),
+                ),
+              );
             }
 
-            final videos = videoSnapshot.data ?? [];
-
-            return GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 1,
-                mainAxisSpacing: 1,
-                childAspectRatio: 0.8,
-              ),
-              itemCount: videos.length,
-              itemBuilder: (context, index) {
-                final videoData = videos[index].data() as Map<String, dynamic>?;
-                if (videoData == null) return const SizedBox();
-
-                final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-                final likes = videoData['likesCount'] as int? ?? 0;
-                final comments = videoData['commentCount'] as int? ?? 0;
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(
-                          videoData: videoData,
-                          videoId: videos[index].id,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CustomCacheManager.isValidImageUrl(thumbnailUrl)
-                          ? CachedNetworkImage(
-                              imageUrl: thumbnailUrl!,
-                              fit: BoxFit.cover,
-                              cacheManager: CustomCacheManager.instance,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[200],
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.error),
-                              ),
-                            )
-                          : Container(
-                              color: Colors.grey[200],
-                              child: const Icon(Icons.image_not_supported),
-                            ),
-                    ],
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoPlayerScreen(
+                      videoData: videoData,
+                      videoId: videoId,
+                    ),
                   ),
                 );
               },
+              onLongPress: () {
+                final RenderBox box = context.findRenderObject() as RenderBox;
+                final position = box.localToGlobal(Offset.zero);
+                _handleVideoLongPress(context, videoData, videoId, position);
+              },
+              child: CachedNetworkImage(
+                imageUrl: thumbnailUrl,
+                fit: BoxFit.cover,
+                cacheManager: CustomCacheManager.instance,
+                placeholder: (context, url) => Container(
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                errorWidget: (context, url, error) {
+                  debugPrint('❌ Image loading error for video $videoId: $error');
+                  return Container(
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(Icons.error, color: Colors.grey),
+                    ),
+                  );
+                },
+              ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildBookmarkedVideosGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videos')
+          .where('bookmarkedBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final videos = snapshot.data?.docs ?? [];
+        if (videos.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No bookmarked videos',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return _buildVideoGrid(videos);
+      },
+    );
+  }
+
+  Widget _buildTryLaterGrid() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('videos')
+          .where('tryLaterBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final videos = snapshot.data?.docs ?? [];
+        if (videos.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No videos saved for later',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return _buildVideoGrid(videos);
+      },
+    );
+  }
+
+  // Helper method to build video grid
+  Widget _buildVideoGrid(List<QueryDocumentSnapshot> videos) {
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 1,
+        mainAxisSpacing: 1,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: videos.length,
+      itemBuilder: (context, index) {
+        final videoData = videos[index].data() as Map<String, dynamic>;
+        final videoId = videos[index].id;
+        final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+        if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
+          return Container(
+            color: Colors.grey[200],
+            child: const Center(child: Icon(Icons.video_library)),
+          );
+        }
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  videoData: videoData,
+                  videoId: videoId,
+                ),
+              ),
+            );
+          },
+          child: CachedNetworkImage(
+            imageUrl: thumbnailUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              color: Colors.grey[200],
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: Colors.grey[200],
+              child: const Center(child: Icon(Icons.error)),
+            ),
+          ),
         );
       },
     );
@@ -1454,6 +1364,100 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     } else {
       return '${(difference.inDays / 365).floor()}y ago';
     }
+  }
+
+  Widget _buildAvatar(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return CircleAvatar(
+        radius: 40,
+        backgroundColor: Colors.grey[200],
+        child: Icon(Icons.person, size: 40, color: Colors.grey[400]),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 40,
+      backgroundColor: Colors.grey[200],
+      child: ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: avatarUrl,
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+          cacheManager: CustomCacheManager.instance,
+          placeholder: (context, url) => Icon(Icons.person, size: 40, color: Colors.grey[400]),
+          errorWidget: (context, url, error) => Icon(Icons.person, size: 40, color: Colors.grey[400]),
+        ),
+      ),
+    );
+  }
+
+  bool _isValidUrl(String? url, {String debugContext = ''}) {
+    if (url == null || url.trim().isEmpty) {
+      debugPrint('⚠️ Empty URL detected in: $debugContext');
+      debugPrint('Stack trace:');
+      debugPrint(StackTrace.current.toString());
+      return false;
+    }
+
+    try {
+      final uri = Uri.parse(url);
+      if (!uri.hasScheme || !uri.hasAuthority) {
+        debugPrint('⚠️ Invalid URL format in $debugContext: $url');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ URL parsing error in $debugContext: $e');
+      return false;
+    }
+  }
+
+  Future<void> _showLogoutDialog(BuildContext context, Map<String, dynamic> userData) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return SimpleDialog(
+          title: const Text('Menu'),
+          children: <Widget>[
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context); // Close the dialog
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(
+                      userData: userData,
+                    ),
+                  ),
+                );
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.edit),
+                  SizedBox(width: 12),
+                  Text('Edit Profile'),
+                ],
+              ),
+            ),
+            const Divider(),
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                _signOut(context);
+              },
+              child: Row(
+                children: [
+                  const Icon(Icons.logout, color: Colors.red),
+                  const SizedBox(width: 12),
+                  Text('Logout', style: TextStyle(color: Colors.red[700])),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 

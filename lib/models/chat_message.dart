@@ -14,11 +14,7 @@ class ChatMessage {
   final String? imageUrl;
   final DateTime timestamp;
   final MessageType type;
-  // New fields for post like messages
-  final String? postId;
-  final String? postThumbnailUrl;
-  final String? postTitle;
-  final String? postDescription;
+  final String? postId;  // We'll only use postId for post likes
 
   ChatMessage({
     required this.id,
@@ -29,9 +25,6 @@ class ChatMessage {
     required this.timestamp,
     required this.type,
     this.postId,
-    this.postThumbnailUrl,
-    this.postTitle,
-    this.postDescription,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,9 +36,6 @@ class ChatMessage {
       'timestamp': timestamp,
       'type': type.toString(),
       'postId': postId,
-      'postThumbnailUrl': postThumbnailUrl,
-      'postTitle': postTitle,
-      'postDescription': postDescription,
     };
   }
 
@@ -62,9 +52,6 @@ class ChatMessage {
         orElse: () => MessageType.text,
       ),
       postId: map['postId'] as String?,
-      postThumbnailUrl: map['postThumbnailUrl'] as String?,
-      postTitle: map['postTitle'] as String?,
-      postDescription: map['postDescription'] as String?,
     );
   }
 } 
