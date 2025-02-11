@@ -271,7 +271,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                           .collection('meal_posts')
                           .doc(widget.post.id)
                           .collection('likes')
-                          .limit(3)
+                          .limit(3)  // Keep limit for avatar display
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -279,7 +279,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                         }
                         
                         final likes = snapshot.data!.docs;
-                        final likeCount = likes.length;
+                        final totalLikes = widget.post.likes;  // Use total likes from post
 
                         return Row(
                           children: [
@@ -324,13 +324,56 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              '$likeCount gave props',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+                            if (totalLikes <= 2)
+                              FutureBuilder<List<String>>(
+                                future: Future.wait(
+                                  likes.map((like) async {
+                                    final userDoc = await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(like.id)
+                                        .get();
+                                    return userDoc.data()?['firstName'] ?? 'Unknown';
+                                  }),
+                                ),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return Text(
+                                      '$totalLikes gave props',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    );
+                                  }
+
+                                  final names = snapshot.data!;
+                                  if (names.length == 1) {
+                                    return Text(
+                                      '${names[0]} gave props',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    );
+                                  } else {
+                                    return Text(
+                                      '${names[0]} and ${names[1]} gave props',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    );
+                                  }
+                                },
+                              )
+                            else
+                              Text(
+                                '$totalLikes gave props',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            ),
                           ],
                         );
                       },

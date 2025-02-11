@@ -20,8 +20,6 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _usernameController;
   late TextEditingController _bioController;
   late TextEditingController _firstNameController;
   late TextEditingController _lastNameController;
@@ -33,8 +31,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.userData['displayName'] ?? '');
-    _usernameController = TextEditingController(text: widget.userData['username'] ?? '');
     _bioController = TextEditingController(text: widget.userData['bio'] ?? '');
     _firstNameController = TextEditingController(text: widget.userData['firstName'] ?? '');
     _lastNameController = TextEditingController(text: widget.userData['lastName'] ?? '');
@@ -46,8 +42,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _usernameController.dispose();
     _bioController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
@@ -107,13 +101,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Update Firebase Auth display name
-      await user.updateDisplayName(_nameController.text);
-
       // Update Firestore user data
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'displayName': _nameController.text,
-        'username': _usernameController.text,
         'bio': _bioController.text,
         'firstName': _firstNameController.text,
         'lastName': _lastNameController.text,
@@ -348,23 +337,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          // Rest of the existing fields
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Display Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _usernameController,
-            decoration: const InputDecoration(
-              labelText: 'Username',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
+          // Bio field
           TextField(
             controller: _bioController,
             decoration: const InputDecoration(
