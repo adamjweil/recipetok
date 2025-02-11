@@ -43,11 +43,42 @@ class _VideoScreenState extends State<VideoScreen> {
     }
   }
 
-  Stream<QuerySnapshot> _getVideosStream() {
+  Stream<List<QueryDocumentSnapshot>> _getVideosStream() {
     return _firestore
         .collection('videos')
         .orderBy('createdAt', descending: true)
-        .snapshots();
+        .snapshots()
+        .map((snapshot) {
+          final docs = snapshot.docs;
+          if (docs.isEmpty) return docs;
+          
+          // Create a new list to store the reordered videos
+          List<QueryDocumentSnapshot> reordered = [];
+          List<QueryDocumentSnapshot> remaining = List.from(docs);
+          
+          // Add the first video
+          reordered.add(remaining.removeAt(0));
+          
+          // Keep track of the last user ID to avoid consecutive videos
+          String lastUserId = (reordered.last.data() as Map<String, dynamic>)['userId'] ?? '';
+          
+          while (remaining.isNotEmpty) {
+            // Try to find a video from a different user
+            int nextIndex = remaining.indexWhere((doc) {
+              String userId = (doc.data() as Map<String, dynamic>)['userId'] ?? '';
+              return userId != lastUserId;
+            });
+            
+            // If no video from a different user is found, just take the next one
+            if (nextIndex == -1) nextIndex = 0;
+            
+            // Add the selected video and update lastUserId
+            reordered.add(remaining.removeAt(nextIndex));
+            lastUserId = (reordered.last.data() as Map<String, dynamic>)['userId'] ?? '';
+          }
+          
+          return reordered;
+        });
   }
 
   Future<void> _toggleVideoLike(String videoId) async {
@@ -157,7 +188,7 @@ class _VideoScreenState extends State<VideoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<List<QueryDocumentSnapshot>>(
         stream: _getVideosStream(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -168,10 +199,10 @@ class _VideoScreenState extends State<VideoScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final videos = snapshot.data?.docs ?? _cachedVideos ?? [];
+          final videos = snapshot.data ?? _cachedVideos ?? [];
           
           if (snapshot.hasData) {
-            _cachedVideos = snapshot.data?.docs;
+            _cachedVideos = snapshot.data;
             if (_currentlyPlayingVideo == null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _playInitialVideo();

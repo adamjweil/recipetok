@@ -184,24 +184,25 @@ class SaveOptionsModal extends StatelessWidget {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
-      final tryLaterRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('tryLater')
+      final videoRef = FirebaseFirestore.instance
+          .collection('videos')
           .doc(videoId);
 
-      final tryLaterDoc = await tryLaterRef.get();
+      final videoDoc = await videoRef.get();
+      final List<dynamic> tryLaterBy = videoDoc.data()?['tryLaterBy'] ?? [];
+      final bool isInTryLater = tryLaterBy.contains(userId);
       
-      if (tryLaterDoc.exists) {
-        await tryLaterRef.delete();
+      if (isInTryLater) {
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayRemove([userId])
+        });
         if (context.mounted) {
           Navigator.pop(context);
           _showTopSnackBar(context, 'Removed from Try Later');
         }
       } else {
-        await tryLaterRef.set({
-          'createdAt': FieldValue.serverTimestamp(),
-          'videoId': videoId,
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayUnion([userId])
         });
 
         if (context.mounted) {
@@ -209,8 +210,6 @@ class SaveOptionsModal extends StatelessWidget {
           _showTopSnackBar(context, 'Added to Try Later');
         }
       }
-
-      await tryLaterRef.get();
     } catch (e) {
       if (context.mounted) {
         _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
@@ -287,13 +286,14 @@ class SaveOptionsModal extends StatelessWidget {
           // Add Try Later option
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('tryLater')
+                .collection('videos')
                 .doc(videoId)
                 .snapshots(),
             builder: (context, tryLaterSnapshot) {
-              final isTryLater = tryLaterSnapshot.data?.exists ?? false;
+              final videoData = tryLaterSnapshot.data?.data() as Map<String, dynamic>?;
+              final List<dynamic> tryLaterBy = videoData?['tryLaterBy'] ?? [];
+              final bool isTryLater = tryLaterBy.contains(userId);
+              
               return ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Colors.grey,
