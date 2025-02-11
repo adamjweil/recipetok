@@ -284,6 +284,26 @@ async function createUser() {
   const password = 'password123';
   const displayName = `${firstName} ${lastName}`;
   const username = faker.internet.userName({ firstName, lastName });
+  
+  // Generate a random birth date between 18 and 60 years ago
+  const birthDate = faker.date.between({
+    from: new Date(Date.now() - 60 * 365 * 24 * 60 * 60 * 1000),
+    to: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000)
+  }).toISOString().split('T')[0];
+
+  // Random gender selection
+  const genders = ['Man', 'Woman', 'Prefer not to say'];
+  const gender = genders[Math.floor(Math.random() * genders.length)];
+
+  // Random food preferences (2-4 preferences)
+  const allFoodTypes = [
+    'Italian', 'Japanese', 'Mexican', 'Chinese', 'Indian', 'Thai',
+    'Mediterranean', 'American', 'Korean', 'Vietnamese', 'French', 'Greek'
+  ];
+  const numPreferences = Math.floor(Math.random() * 3) + 2; // 2-4 preferences
+  const foodPreferences = [...allFoodTypes]
+    .sort(() => 0.5 - Math.random())
+    .slice(0, numPreferences);
 
   try {
     // Create auth user
@@ -300,6 +320,11 @@ async function createUser() {
       email,
       displayName,
       username,
+      firstName,
+      lastName,
+      birthDate,
+      gender,
+      foodPreferences,
       bio: faker.lorem.sentence(),
       avatarUrl: faker.image.avatar(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -333,6 +358,17 @@ async function createVideo(userId: string) {
   });
 
   try {
+    // Get random likers (between 5 and 20)
+    const numLikes = Math.floor(Math.random() * 16) + 5;
+    const potentialLikers = (await db.collection('users')
+      .where('uid', '!=', userId)
+      .limit(30)
+      .get()).docs.map(doc => doc.id);
+    
+    const likedBy = [...potentialLikers]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, numLikes);
+
     const videoDoc = await db.collection('videos').add({
       userId,
       videoUrl: randomVideo.videoUrl,
@@ -341,8 +377,9 @@ async function createVideo(userId: string) {
       description: recipeDescriptions[Math.floor(Math.random() * recipeDescriptions.length)],
       ingredients,
       instructions,
-      likes: 0,
-      views: 0,
+      likes: likedBy.length,
+      likedBy: likedBy,
+      views: Math.floor(Math.random() * 100) + 50, // Random views between 50-150
       commentCount: 0,
       isPinned: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -358,7 +395,7 @@ async function createVideo(userId: string) {
       videoCount: admin.firestore.FieldValue.increment(1),
     });
 
-    console.log(`Created recipe video: ${videoDoc.id}`);
+    console.log(`Created recipe video: ${videoDoc.id} with ${likedBy.length} likes`);
     return videoDoc.id;
   } catch (error) {
     console.error('Error creating video:', error);
@@ -366,27 +403,43 @@ async function createVideo(userId: string) {
   }
 }
 
-// Add this function after the other helper functions
+// Update the createRandomConnections function
 async function createRandomConnections(userIds: string[], adamId: string) {
   try {
-    // Make 5-7 random users follow Adam
-    const numberOfFollowers = Math.floor(Math.random() * 3) + 5; // Random number between 5-7
+    // Make 3-5 random users follow Adam
+    const numberOfFollowers = Math.floor(Math.random() * 3) + 3; // Random number between 3 and 5
     const randomFollowers = [...userIds]
       .filter(id => id !== adamId)
       .sort(() => 0.5 - Math.random())
       .slice(0, numberOfFollowers);
 
+    // Make Adam follow 3-5 random users (different from followers)
+    const remainingUsers = [...userIds]
+      .filter(id => id !== adamId && !randomFollowers.includes(id));
+    const numberOfFollowing = Math.floor(Math.random() * 3) + 3; // Random number between 3 and 5
+    const randomFollowing = remainingUsers
+      .sort(() => 0.5 - Math.random())
+      .slice(0, numberOfFollowing);
+
     const batch = admin.firestore().batch();
 
-    // Add followers to Adam's followers array
+    // Update Adam's followers array
     batch.update(admin.firestore().collection('users').doc(adamId), {
       followers: admin.firestore.FieldValue.arrayUnion(...randomFollowers),
+      following: admin.firestore.FieldValue.arrayUnion(...randomFollowing),
     });
 
-    // Add Adam to each follower's following array
+    // Update following array for each follower
     for (const followerId of randomFollowers) {
       batch.update(admin.firestore().collection('users').doc(followerId), {
         following: admin.firestore.FieldValue.arrayUnion(adamId),
+      });
+    }
+
+    // Update followers array for each user Adam follows
+    for (const followingId of randomFollowing) {
+      batch.update(admin.firestore().collection('users').doc(followingId), {
+        followers: admin.firestore.FieldValue.arrayUnion(adamId),
       });
     }
 
@@ -415,7 +468,7 @@ async function createRandomConnections(userIds: string[], adamId: string) {
     }
 
     await batch.commit();
-    console.log('Created random follow connections');
+    console.log(`Created random follow connections with ${numberOfFollowers} users following Adam and Adam following ${numberOfFollowing} users`);
   } catch (error) {
     console.error('Error creating random connections:', error);
     throw error;
@@ -522,12 +575,33 @@ async function createConversations(adamId: string, otherUserIds: string[]) {
   }
 }
 
-// Add this function to create meal posts
+// Add this function to create meal post with likes
 async function createMealPost(userId: string, postData: any) {
   try {
     // First get the user's data
     const userDoc = await db.collection('users').doc(userId).get();
     const userData = userDoc.data() || {};
+
+    // Get all users for potential likers with their data
+    const usersSnapshot = await db.collection('users')
+      .where('uid', '!=', userId)
+      .get();
+    
+    const potentialLikers = usersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      firstName: doc.data().firstName || 'Unknown',
+      lastName: doc.data().lastName || '',
+      displayName: doc.data().displayName || 'Unknown'
+    }));
+    
+    // Generate random number of likes (between 5 and 20)
+    const numLikes = Math.floor(Math.random() * 16) + 5;
+    const selectedLikers = [...potentialLikers]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, numLikes);
+
+    // Store just the IDs in the likedBy array
+    const likedByIds = selectedLikers.map(liker => liker.id);
 
     const mealPost = {
       userId,
@@ -546,13 +620,29 @@ async function createMealPost(userId: string, postData: any) {
       carbonSaved: postData.carbonSaved || 0.0,
       isPublic: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      likesCount: 0,
+      likes: likedByIds.length,
+      likesCount: likedByIds.length,
       commentsCount: 0,
-      likedBy: [],
+      likedBy: likedByIds, // Just store the array of user IDs
     };
 
     const postDoc = await db.collection('meal_posts').add(mealPost);
-    console.log(`Created meal post: ${postDoc.id}`);
+    
+    // Create a likes subcollection for the meal post with user details
+    const batch = admin.firestore().batch();
+    selectedLikers.forEach(liker => {
+      const likeDoc = postDoc.collection('likes').doc(liker.id);
+      batch.set(likeDoc, {
+        userId: liker.id,
+        firstName: liker.firstName,
+        lastName: liker.lastName,
+        displayName: liker.displayName,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    await batch.commit();
+
+    console.log(`Created meal post: ${postDoc.id} with ${likedByIds.length} likes`);
     return postDoc.id;
   } catch (error) {
     console.error('Error creating meal post:', error);
@@ -562,15 +652,17 @@ async function createMealPost(userId: string, postData: any) {
 
 async function seedDatabase() {
   try {
-    // Initialize videos first
-    await initializeSampleVideos();
-    
     // First create your specific user
     const adamUser = {
       email: 'adamjweil@gmail.com',
       password: 'password',
       displayName: 'Adam Weil',
       username: 'adam',
+      firstName: 'Adam',
+      lastName: 'Weil',
+      birthDate: '1989-02-14',
+      gender: 'Man',
+      foodPreferences: ['Italian', 'Japanese', 'American'],
       bio: 'Food enthusiast and home chef',
       avatarUrl: faker.image.avatar(),
     };
@@ -595,6 +687,11 @@ async function seedDatabase() {
         email: adamUser.email,
         displayName: adamUser.displayName,
         username: adamUser.username,
+        firstName: adamUser.firstName,
+        lastName: adamUser.lastName,
+        birthDate: adamUser.birthDate,
+        gender: adamUser.gender,
+        foodPreferences: adamUser.foodPreferences,
         bio: adamUser.bio,
         avatarUrl: adamUser.avatarUrl,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

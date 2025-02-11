@@ -6,6 +6,8 @@ import 'package:recipetok/screens/login_screen.dart';
 import 'package:recipetok/screens/register_screen.dart';
 import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/main_navigation_screen.dart';
+import 'package:recipetok/screens/onboarding_screen.dart';
+import 'package:recipetok/screens/food_preferences_screen.dart';
 import 'package:recipetok/firebase_options.dart';
 import 'package:recipetok/screens/auth_wrapper.dart';
 import 'package:recipetok/utils/custom_cache_manager.dart';
@@ -57,6 +59,8 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterScreen(),
         '/main': (context) => const MainNavigationScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/onboarding': (context) => const OnboardingScreen(),
+        '/food-preferences': (context) => const FoodPreferencesScreen(),
       },
     );
   }

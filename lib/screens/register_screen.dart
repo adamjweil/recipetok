@@ -15,7 +15,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
@@ -27,79 +26,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       try {
-        print('Starting user registration...');
-        
-        // Add the test calls here
-        print('Running Firebase connection tests...');
-        await _checkFirebaseConnection();
-        await _testFirestore();
-        
         // Create user with email and password
         final userCredential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        print('Firebase Auth account created successfully');
         
         // Verify user is authenticated
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) {
-          print('Error: User is not authenticated after registration');
           throw Exception('User authentication failed');
         }
-        print('Current user ID: ${user.uid}');
-        
-        // Update user profile with username
-        await user.updateDisplayName(_usernameController.text);
-        print('Display name updated successfully');
 
-        try {
-          // Create user document in Firestore
-          print('Attempting to create Firestore document...');
-          print('User ID: ${user.uid}');
-          print('Is user authenticated? ${user != null}');
-          print('User email verified? ${user.emailVerified}');
-          print('User email: ${user.email}');
-          
-          // Wait a moment to ensure auth state is fully propagated
-          await Future.delayed(const Duration(seconds: 1));
-          
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
-            'username': _usernameController.text,
-            'email': _emailController.text.trim(),
-            'createdAt': FieldValue.serverTimestamp(),
-            'followers': [],
-            'following': [],
-            'videoCount': 0,
-            'bio': '',
-            'uid': user.uid,
-            'displayName': _usernameController.text,
-            'avatarUrl': user.photoURL ?? '',
-          });
-          print('Firestore document created successfully');
-          
-          // Navigate to main screen and remove all previous routes
-          if (mounted) {
-            Navigator.pushNamedAndRemoveUntil(
-              context,
-              '/main',
-              (route) => false,
-            );
-          }
-        } catch (firestoreError) {
-          print('Error creating Firestore document: $firestoreError');
-          print('Error details: ${firestoreError.toString()}');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error creating user profile: $firestoreError')),
+        // Create user document in Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'email': _emailController.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'followers': [],
+          'following': [],
+          'videoCount': 0,
+          'bio': '',
+          'uid': user.uid,
+          'displayName': _emailController.text.split('@')[0], // Default display name from email
+          'avatarUrl': user.photoURL ?? '',
+        });
+
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/onboarding',
+            (route) => false,
           );
         }
       } catch (e) {
-        print('Error in registration process: $e');
-        print('Error details: ${e.toString()}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString())),
         );
@@ -117,28 +80,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      // Initialize Google Sign In
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) return;
 
-      // Obtain auth details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      // Create credential
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Sign in with Firebase
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
 
-      // Create or update user document in Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
           .set({
-        'username': userCredential.user!.displayName ?? 'User',
         'email': userCredential.user!.email,
         'createdAt': FieldValue.serverTimestamp(),
         'followers': [],
@@ -146,14 +102,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'videoCount': 0,
         'bio': '',
         'uid': userCredential.user!.uid,
-        'displayName': userCredential.user!.displayName ?? 'User',
+        'displayName': userCredential.user!.displayName ?? userCredential.user!.email!.split('@')[0],
         'avatarUrl': userCredential.user!.photoURL ?? '',
       });
 
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/main',
+          '/onboarding',
           (route) => false,
         );
       }
@@ -168,37 +124,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _testFirestore() async {
-    try {
-      print('Testing Firestore access...');
-      final testDoc = await FirebaseFirestore.instance
-          .collection('test')
-          .doc('test')
-          .set({
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-      print('Firestore test successful');
-    } catch (e) {
-      print('Firestore test failed: $e');
-    }
-  }
-
-  Future<void> _checkFirebaseConnection() async {
-    try {
-      final result = await InternetAddress.lookup('firestore.googleapis.com');
-      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-        print('Network connection to Firebase available');
-      }
-    } catch (e) {
-      print('Network connection to Firebase failed: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Register'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -209,49 +144,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Create Account',
+                  'Create an Account',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Please fill in the form to continue',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.grey,
+                        fontSize: 28,
                       ),
                 ),
                 const SizedBox(height: 32),
                 TextFormField(
-                  controller: _usernameController,
-                  decoration: InputDecoration(
-                    labelText: 'Username',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
                   controller: _emailController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Email',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.email),
+                    border: UnderlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
                     }
                     return null;
                   },
@@ -259,23 +171,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Password',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: const Icon(Icons.lock),
+                    border: UnderlineInputBorder(),
                   ),
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a password';
                     }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
+                    if (value.length < 8) {
+                      return 'Password must be at least 8 characters';
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Passwords must contain at least 8 characters.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[600],
+                      ),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -283,46 +199,82 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black87,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Register'),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text(
+                            'Sign Up',
+                            style: TextStyle(fontSize: 16),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                Center(
-                  child: Text('OR', style: TextStyle(color: Colors.grey)),
+                RichText(
+                  textAlign: TextAlign.left,
+                  text: TextSpan(
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    children: [
+                      const TextSpan(text: 'By signing up you are agreeing to our '),
+                      TextSpan(
+                        text: 'Terms of Service',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      const TextSpan(text: '. View our '),
+                      TextSpan(
+                        text: 'Privacy Policy',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      const TextSpan(text: '.'),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'or',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _isLoading ? null : _signInWithGoogle,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(color: Colors.grey[300]!),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                    icon: Icon(
-                      Icons.g_mobiledata,
-                      size: 24,
-                      color: Colors.blue,
+                    icon: Image.asset(
+                      'assets/images/google_logo.png',
+                      height: 20,
                     ),
                     label: const Text('Continue with Google'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/login');
-                    },
-                    child: const Text('Already have an account? Login'),
                   ),
                 ),
               ],
@@ -335,7 +287,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();

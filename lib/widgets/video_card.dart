@@ -175,7 +175,7 @@ class VideoCardState extends State<VideoCard> {
       builder: (context) => SaveOptionsModal(
         videoId: widget.videoId,
         videoData: widget.videoData,
-        currentUserId: widget.currentUserId ?? '',
+        currentUserId: widget.currentUserId,
       ),
     );
   }
@@ -382,33 +382,20 @@ class VideoCardState extends State<VideoCard> {
 
                           // Bookmark button
                           Expanded(
-                            child: StreamBuilder<bool>(
-                              stream: Rx.combineLatest2(
-                                FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(widget.currentUserId)
-                                    .collection('bookmarks')
-                                    .doc(widget.videoId)
-                                    .snapshots(),
-                                FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(widget.currentUserId)
-                                    .collection('groups')
-                                    .snapshots(),
-                                (DocumentSnapshot bookmarkDoc, QuerySnapshot groupsSnapshot) {
-                                  final isFavorited = bookmarkDoc.exists;
-                                  final isInGroup = groupsSnapshot.docs.any((groupDoc) {
-                                    final groupData = groupDoc.data() as Map<String, dynamic>;
-                                    final videos = groupData['videos'] as Map<String, dynamic>?;
-                                    return videos?.containsKey(widget.videoId) ?? false;
-                                  });
-                                  return isFavorited || isInGroup;
-                                },
-                              ).distinct(),
+                            child: StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('videos')
+                                  .doc(widget.videoId)
+                                  .snapshots(),
                               builder: (context, snapshot) {
-                                final isSaved = snapshot.data ?? false;
+                                if (!snapshot.hasData) return const SizedBox.shrink();
+                                
+                                final videoData = snapshot.data!.data() as Map<String, dynamic>;
+                                final tryLaterBy = List<String>.from(videoData['tryLaterBy'] ?? []);
+                                final isBookmarked = tryLaterBy.contains(widget.currentUserId);
+
                                 return _buildActionButtonHorizontal(
-                                  icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
+                                  icon: isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                                   label: '',
                                   onTap: () => _toggleBookmark(context),
                                   color: Colors.white,

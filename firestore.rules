@@ -64,7 +64,7 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        onlyUpdatingAllowedFields()
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tryLaterBy', 'likes', 'views', 'commentCount'])
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
 
@@ -84,14 +84,15 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likesCount', 'likedBy', 'commentsCount'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy'])
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       
-      // Add rules for likes subcollection
+      // Likes subcollection
       match /likes/{userId} {
         allow read: if isSignedIn();
-        allow create, delete: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && userId == request.auth.uid;
+        allow delete: if isSignedIn() && userId == request.auth.uid;
       }
       
       // Comments subcollection
