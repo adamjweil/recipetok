@@ -76,34 +76,35 @@ class CustomCacheManager {
     }
   }
 
-  // Add a separate method for URL validation
+  // Update the URL validation method to be more permissive and better at debugging
   static bool isValidImageUrl(String? url) {
-    if (url == null || url.isEmpty) {
-      debugPrint('❌ CustomCacheManager: Empty URL detected');
-      debugPrint('Call stack:');
-      debugPrint(StackTrace.current.toString());
+    if (url == null) {
+      debugPrint('❌ CustomCacheManager: URL is null');
+      return false;
+    }
+
+    if (url.trim().isEmpty) {
+      debugPrint('❌ CustomCacheManager: URL is empty');
       return false;
     }
 
     try {
       final uri = Uri.parse(url.trim());
-      final isValid = uri.hasScheme && 
-                     (uri.scheme == 'http' || uri.scheme == 'https') &&
-                     uri.host.isNotEmpty;
+      
+      // More permissive validation that only requires a scheme and host
+      final isValid = uri.hasScheme && uri.host.isNotEmpty;
       
       if (!isValid) {
-        debugPrint('❌ CustomCacheManager: Invalid URL format: "$url"');
-        debugPrint('Scheme: ${uri.scheme}, Host: ${uri.host}');
-        debugPrint('Call stack:');
-        debugPrint(StackTrace.current.toString());
+        debugPrint('❌ CustomCacheManager: Invalid URL format detected');
+        debugPrint('URL: "$url"');
+        debugPrint('Scheme: ${uri.scheme}');
+        debugPrint('Host: ${uri.host}');
       }
       
       return isValid;
     } catch (e) {
-      debugPrint('❌ CustomCacheManager: URL parsing error: "$url"');
+      debugPrint('❌ CustomCacheManager: Error parsing URL: "$url"');
       debugPrint('Error: $e');
-      debugPrint('Call stack:');
-      debugPrint(StackTrace.current.toString());
       return false;
     }
   }
@@ -124,22 +125,21 @@ class CustomCacheManager {
     }
   }
 
-  // Add a helper method for CachedNetworkImage
+  // Update the buildCachedImage method to handle edge cases better
   static Widget buildCachedImage({
     required String? url,
     required double width,
     required double height,
     BoxFit fit = BoxFit.cover,
+    Widget? placeholder,
+    Widget? errorWidget,
   }) {
-    debugPrint('🔍 Attempting to build cached image with URL: "$url"');
-    
     if (!isValidImageUrl(url)) {
-      debugPrint('⚠️ Falling back to placeholder due to invalid URL');
       return Container(
         width: width,
         height: height,
         color: Colors.grey[200],
-        child: const Center(
+        child: errorWidget ?? const Center(
           child: Icon(Icons.image_not_supported, color: Colors.grey),
         ),
       );
@@ -151,17 +151,14 @@ class CustomCacheManager {
       width: width,
       height: height,
       fit: fit,
-      placeholder: (context, url) {
-        debugPrint('⌛ Loading placeholder for: $url');
-        return Container(
-          width: width,
-          height: height,
-          color: Colors.grey[200],
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      },
+      placeholder: (context, url) => placeholder ?? Container(
+        width: width,
+        height: height,
+        color: Colors.grey[200],
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      ),
       errorWidget: (context, url, error) {
         debugPrint('❌ Error loading image from: $url');
         debugPrint('Error details: $error');
@@ -169,11 +166,63 @@ class CustomCacheManager {
           width: width,
           height: height,
           color: Colors.grey[200],
-          child: const Center(
+          child: errorWidget ?? const Center(
             child: Icon(Icons.error_outline, color: Colors.grey),
           ),
         );
       },
+    );
+  }
+
+  // Add a method specifically for avatar images
+  static Widget buildProfileAvatar({
+    required String? url,
+    required double radius,
+    Widget? placeholder,
+    Widget? errorWidget,
+  }) {
+    if (!isValidImageUrl(url)) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: Colors.grey[200],
+        child: errorWidget ?? Icon(
+          Icons.person,
+          size: radius * 0.8,
+          color: Colors.grey[400],
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.grey[200],
+      child: ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: url!,
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          cacheManager: instance,
+          placeholder: (context, url) => placeholder ?? Center(
+            child: Icon(
+              Icons.person,
+              size: radius * 0.8,
+              color: Colors.grey[400],
+            ),
+          ),
+          errorWidget: (context, url, error) {
+            debugPrint('❌ Error loading avatar from: $url');
+            debugPrint('Error details: $error');
+            return errorWidget ?? Center(
+              child: Icon(
+                Icons.person,
+                size: radius * 0.8,
+                color: Colors.grey[400],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 } 

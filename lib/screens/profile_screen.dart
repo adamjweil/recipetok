@@ -1171,16 +1171,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             final videoId = sortedVideos[index].id;
             final thumbnailUrl = videoData['thumbnailUrl'] as String?;
             
-            debugPrint('🎬 Building video tile $index:');
-            debugPrint('Video ID: $videoId');
-            debugPrint('Thumbnail URL: "$thumbnailUrl"');
-            
             if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
               return Container(
                 color: Colors.grey[200],
-                child: const Center(
-                  child: Icon(Icons.video_library, color: Colors.grey),
-                ),
+                child: const Center(child: Icon(Icons.video_library)),
               );
             }
 
@@ -1196,30 +1190,52 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   ),
                 );
               },
-              onLongPress: () {
-                final RenderBox box = context.findRenderObject() as RenderBox;
-                final position = box.localToGlobal(Offset.zero);
-                _handleVideoLongPress(context, videoData, videoId, position);
+              onLongPressStart: (LongPressStartDetails details) {
+                // This provides the correct tap position for the menu
+                _handleVideoLongPress(
+                  context,
+                  videoData,
+                  videoId,
+                  details.globalPosition,
+                );
               },
-              child: CachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                fit: BoxFit.cover,
-                cacheManager: CustomCacheManager.instance,
-                placeholder: (context, url) => Container(
-                  color: Colors.grey[200],
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                errorWidget: (context, url, error) {
-                  debugPrint('❌ Image loading error for video $videoId: $error');
-                  return Container(
-                    color: Colors.grey[200],
-                    child: const Center(
-                      child: Icon(Icons.error, color: Colors.grey),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CachedNetworkImage(
+                    imageUrl: thumbnailUrl,
+                    fit: BoxFit.cover,
+                    cacheManager: CustomCacheManager.instance,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[200],
+                      child: const Center(child: CircularProgressIndicator()),
                     ),
-                  );
-                },
+                    errorWidget: (context, url, error) {
+                      debugPrint('❌ Image loading error for video $videoId: $error');
+                      return Container(
+                        color: Colors.grey[200],
+                        child: const Center(child: Icon(Icons.error)),
+                      );
+                    },
+                  ),
+                  // Show pin indicator if video is pinned
+                  if (videoData['isPinned'] == true)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Icon(
+                        Icons.push_pin,
+                        color: Colors.white,
+                        size: 20,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             );
           },
@@ -1240,23 +1256,21 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         }
         
         final videos = snapshot.data?.docs ?? [];
-        if (videos.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No bookmarked videos',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
+        
+        return CustomScrollView(
+          slivers: [
+            // Add VideoGroupsSection at the top
+            SliverToBoxAdapter(
+              child: VideoGroupsSection(),
             ),
-          );
-        }
-
-        return _buildVideoGrid(videos);
+            
+            // Only show video grid if there are videos
+            if (videos.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _buildVideoGrid(videos),
+              ),
+          ],
+        );
       },
     );
   }
@@ -1367,28 +1381,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildAvatar(String? avatarUrl) {
-    if (avatarUrl == null || avatarUrl.isEmpty) {
-      return CircleAvatar(
-        radius: 40,
-        backgroundColor: Colors.grey[200],
-        child: Icon(Icons.person, size: 40, color: Colors.grey[400]),
-      );
-    }
-
-    return CircleAvatar(
+    return CustomCacheManager.buildProfileAvatar(
+      url: avatarUrl,
       radius: 40,
-      backgroundColor: Colors.grey[200],
-      child: ClipOval(
-        child: CachedNetworkImage(
-          imageUrl: avatarUrl,
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-          cacheManager: CustomCacheManager.instance,
-          placeholder: (context, url) => Icon(Icons.person, size: 40, color: Colors.grey[400]),
-          errorWidget: (context, url, error) => Icon(Icons.person, size: 40, color: Colors.grey[400]),
-        ),
-      ),
     );
   }
 
