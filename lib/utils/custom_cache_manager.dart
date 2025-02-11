@@ -2,6 +2,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 class CustomCacheManager {
   static const key = 'customCache';
@@ -76,12 +77,22 @@ class CustomCacheManager {
   // Add a separate method for URL validation
   static bool isValidImageUrl(String? url) {
     if (url == null || url.isEmpty) {
+      debugPrint('Debug: URL is null or empty');
       return false;
     }
+    
     try {
       final uri = Uri.parse(url);
-      return uri.hasScheme;
+      final isValid = uri.hasScheme && 
+                     (uri.scheme == 'http' || uri.scheme == 'https') &&
+                     uri.host.isNotEmpty;
+      
+      debugPrint('Debug: URL validation for $url: $isValid');
+      debugPrint('Debug: Scheme: ${uri.scheme}, Host: ${uri.host}');
+      
+      return isValid;
     } catch (e) {
+      debugPrint('Debug: URL parsing error: $e');
       return false;
     }
   }
