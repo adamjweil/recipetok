@@ -131,15 +131,18 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         // Unlike
         batch.delete(likeRef);
         batch.update(postRef, {
-          'likeCount': FieldValue.increment(-1),
+          'likes': FieldValue.increment(-1),
+          'likedBy': FieldValue.arrayRemove([userId])
         });
       } else {
         // Like
         batch.set(likeRef, {
           'timestamp': FieldValue.serverTimestamp(),
+          'userId': userId
         });
         batch.update(postRef, {
-          'likeCount': FieldValue.increment(1),
+          'likes': FieldValue.increment(1),
+          'likedBy': FieldValue.arrayUnion([userId])
         });
       }
 
@@ -205,202 +208,212 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   }
 
   Widget _buildCompactPost() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .snapshots(),
+      builder: (context, postSnapshot) {
+        final postData = postSnapshot.data?.data() as Map<String, dynamic>?;
+        final totalLikes = postData?['likes'] ?? widget.post.likes;
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Middle column: Image
-          if (widget.post.photoUrls.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 70,  // Reduced size
-                height: 70, // Reduced size
-                child: CachedNetworkImage(
-                  imageUrl: widget.post.photoUrls.first,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[200],
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[200],
-                    child: const Icon(Icons.error),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Middle column: Image
+              if (widget.post.photoUrls.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 70,  // Reduced size
+                    height: 70, // Reduced size
+                    child: CachedNetworkImage(
+                      imageUrl: widget.post.photoUrls.first,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.error),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          const SizedBox(width: 12),
-          
-          // Right column: Description and Buttons
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (widget.post.description != null)
-                  Text(
-                    widget.post.description!,
-                    style: const TextStyle(fontSize: 13),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+              const SizedBox(width: 12),
+              
+              // Right column: Description and Buttons
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    LikeButton(
-                      postId: widget.post.id,
-                      userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                      onLikeToggle: _toggleLike,
-                    ),
-                    const SizedBox(width: 8),
-                    // Likes avatars and count
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('meal_posts')
-                          .doc(widget.post.id)
-                          .collection('likes')
-                          .limit(3)  // Keep limit for avatar display
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const SizedBox();  // Return empty widget if no likes
-                        }
-                        
-                        final likes = snapshot.data!.docs;
-                        final totalLikes = widget.post.likes;  // Use total likes from post
+                    if (widget.post.description != null)
+                      Text(
+                        widget.post.description!,
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        LikeButton(
+                          postId: widget.post.id,
+                          userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                          onLikeToggle: _toggleLike,
+                        ),
+                        const SizedBox(width: 8),
+                        // Likes avatars and count
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('meal_posts')
+                              .doc(widget.post.id)
+                              .collection('likes')
+                              .limit(3)  // Keep limit for avatar display
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                              return const SizedBox();  // Return empty widget if no likes
+                            }
+                            
+                            final likes = snapshot.data!.docs;
 
-                        return Row(
-                          children: [
-                            SizedBox(
-                              width: likes.length * 20.0 - (likes.length - 1) * 12.0,
-                              height: 24,
-                              child: Stack(
-                                children: likes.asMap().entries.map((entry) {
-                                  final index = entry.key;
-                                  final like = entry.value;
-                                  return Positioned(
-                                    left: index * 12.0,
-                                    child: StreamBuilder<DocumentSnapshot>(
-                                      stream: FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(like.id)
-                                          .snapshots(),
-                                      builder: (context, userSnapshot) {
-                                        final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                                        return Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Colors.white,
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                          child: CircleAvatar(
-                                            radius: 10,
-                                            backgroundImage: userData?['avatarUrl'] != null
-                                                ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                                : null,
-                                            child: userData?['avatarUrl'] == null
-                                                ? const Icon(Icons.person, size: 12)
-                                                : null,
+                            return Row(
+                              children: [
+                                SizedBox(
+                                  width: likes.length * 20.0 - (likes.length - 1) * 12.0,
+                                  height: 24,
+                                  child: Stack(
+                                    children: likes.asMap().entries.map((entry) {
+                                      final index = entry.key;
+                                      final like = entry.value;
+                                      return Positioned(
+                                        left: index * 12.0,
+                                        child: StreamBuilder<DocumentSnapshot>(
+                                          stream: FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(like.id)
+                                              .snapshots(),
+                                          builder: (context, userSnapshot) {
+                                            final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                                            return Container(
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: CircleAvatar(
+                                                radius: 10,
+                                                backgroundImage: userData?['avatarUrl'] != null
+                                                    ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                                    : null,
+                                                child: userData?['avatarUrl'] == null
+                                                    ? const Icon(Icons.person, size: 12)
+                                                    : null,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (totalLikes <= 2)
+                                  FutureBuilder<List<String>>(
+                                    future: Future.wait(
+                                      likes.map((like) async {
+                                        final userDoc = await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(like.id)
+                                            .get();
+                                        return userDoc.data()?['firstName'] ?? 'Unknown';
+                                      }),
+                                    ),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData) {
+                                        return Text(
+                                          '$totalLikes gave props',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
                                           ),
                                         );
-                                      },
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (totalLikes <= 2)
-                              FutureBuilder<List<String>>(
-                                future: Future.wait(
-                                  likes.map((like) async {
-                                    final userDoc = await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(like.id)
-                                        .get();
-                                    return userDoc.data()?['firstName'] ?? 'Unknown';
-                                  }),
-                                ),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return Text(
-                                      '$totalLikes gave props',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                    );
-                                  }
+                                      }
 
-                                  final names = snapshot.data!;
-                                  if (names.length == 1) {
-                                    return Text(
-                                      '${names[0]} gave props',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                    );
-                                  } else {
-                                    return Text(
-                                      '${names[0]} and ${names[1]} gave props',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                      ),
-                                    );
-                                  }
-                                },
-                              )
-                            else
-                              Text(
-                                '$totalLikes gave props',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        Icons.share_outlined,
-                        color: Colors.grey[600],
-                        size: 18,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: () {
-                        Share.share(
-                          'Check out this meal post: ${widget.post.description}',
-                          subject: 'Check out this meal post!',
-                        );
-                      },
+                                      final names = snapshot.data!;
+                                      if (names.length == 1) {
+                                        return Text(
+                                          '${names[0]} gave props',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        );
+                                      } else {
+                                        return Text(
+                                          '${names[0]} and ${names[1]} gave props',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  )
+                                else
+                                  Text(
+                                    '$totalLikes gave props',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            Icons.share_outlined,
+                            color: Colors.grey[600],
+                            size: 18,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () {
+                            Share.share(
+                              'Check out this meal post: ${widget.post.description}',
+                              subject: 'Check out this meal post!',
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

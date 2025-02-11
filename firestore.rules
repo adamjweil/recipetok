@@ -84,21 +84,25 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy', 'likesCount'])
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       
       // Likes subcollection
       match /likes/{userId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && userId == request.auth.uid;
-        allow delete: if isSignedIn() && userId == request.auth.uid;
+        allow create, delete: if isSignedIn() && userId == request.auth.uid;
+        allow update: if isSignedIn() && userId == request.auth.uid;
       }
       
       // Comments subcollection
       match /comments/{commentId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && (
+          request.auth.uid == resource.data.userId || 
+          request.auth.uid == get(/databases/$(database)/documents/meal_posts/$(postId)).data.userId
+        );
       }
     }
 
