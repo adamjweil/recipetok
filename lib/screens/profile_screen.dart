@@ -610,11 +610,23 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     final avatarUrl = userData['avatarUrl'] as String?;
     debugPrint('👤 Building avatar with URL: "$avatarUrl"');
     
-    if (!_isValidUrl(avatarUrl, debugContext: 'Profile Avatar')) {
+    Widget buildAvatarWidget() {
       return CircleAvatar(
         radius: 40,
         backgroundColor: Colors.grey[200],
-        child: const Icon(Icons.person),
+        child: avatarUrl != null && avatarUrl.isNotEmpty
+          ? ClipOval(
+              child: CachedNetworkImage(
+                imageUrl: avatarUrl,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
+                cacheManager: CustomCacheManager.instance,
+                placeholder: (context, url) => const Icon(Icons.person, size: 40, color: Colors.grey),
+                errorWidget: (context, url, error) => const Icon(Icons.person, size: 40, color: Colors.grey),
+              ),
+            )
+          : const Icon(Icons.person, size: 40, color: Colors.grey),
       );
     }
 
@@ -664,34 +676,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                         end: Alignment.bottomRight,
                       ),
                     ) : null,
-                    child: CircleAvatar(
-                      radius: hasActiveStory ? 38 : 40,
-                      backgroundColor: Colors.white,
-                      child: ClipOval(
-                        child: avatarUrl != null && avatarUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: avatarUrl,
-                                width: (hasActiveStory ? 76 : 80),
-                                height: (hasActiveStory ? 76 : 80),
-                                fit: BoxFit.cover,
-                                cacheManager: CustomCacheManager.instance,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.person),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.person),
-                                ),
-                              )
-                            : Container(
-                                width: (hasActiveStory ? 76 : 80),
-                                height: (hasActiveStory ? 76 : 80),
-                                color: Colors.grey[200],
-                                child: const Icon(Icons.person),
-                              ),
-                      ),
-                    ),
+                    child: buildAvatarWidget(),
                   ),
                 ),
                 if (!hasActiveStory && isCurrentUserProfile)
@@ -1280,13 +1265,21 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       stream: FirebaseFirestore.instance
           .collection('videos')
           .where('tryLaterBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.hasError) {
+          debugPrint('❌ Error loading Try Later videos: ${snapshot.error}');
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         
         final videos = snapshot.data?.docs ?? [];
+        debugPrint('📊 Loaded ${videos.length} Try Later videos');
+
         if (videos.isEmpty) {
           return Center(
             child: Column(
@@ -1303,7 +1296,62 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           );
         }
 
-        return _buildVideoGrid(videos);
+        // Use a SingleChildScrollView to allow scrolling within the tab
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              GridView.builder(
+                shrinkWrap: true, // Important!
+                physics: const NeverScrollableScrollPhysics(), // Important!
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 1,
+                  mainAxisSpacing: 1,
+                  childAspectRatio: 0.8,
+                ),
+                itemCount: videos.length,
+                itemBuilder: (context, index) {
+                  final videoData = videos[index].data() as Map<String, dynamic>;
+                  final videoId = videos[index].id;
+                  final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+                  if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
+                    return Container(
+                      color: Colors.grey[200],
+                      child: const Center(child: Icon(Icons.video_library)),
+                    );
+                  }
+
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VideoPlayerScreen(
+                            videoData: videoData,
+                            videoId: videoId,
+                          ),
+                        ),
+                      );
+                    },
+                    child: CachedNetworkImage(
+                      imageUrl: thumbnailUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(child: Icon(Icons.error)),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
       },
     );
   }

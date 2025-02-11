@@ -96,34 +96,44 @@ class _VideoScreenState extends State<VideoScreen> {
 
   Future<void> _toggleBookmark(String videoId, Map<String, dynamic> videoData) async {
     try {
-      final userBookmarkRef = _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('bookmarks')
-          .doc(videoId);
+      final videoRef = _firestore.collection('videos').doc(videoId);
+      final videoDoc = await videoRef.get();
+      
+      // Initialize tryLaterBy array if it doesn't exist
+      if (!videoDoc.exists || !videoDoc.data()!.containsKey('tryLaterBy')) {
+        await videoRef.set({
+          'tryLaterBy': [],
+        }, SetOptions(merge: true));
+      }
 
-      final bookmarkDoc = await userBookmarkRef.get();
-      final isBookmarked = bookmarkDoc.exists;
+      final tryLaterBy = List<String>.from(videoDoc.data()?['tryLaterBy'] ?? []);
+      final isBookmarked = tryLaterBy.contains(currentUserId);
 
       if (isBookmarked) {
-        await userBookmarkRef.delete();
+        // Remove from tryLaterBy array
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayRemove([currentUserId])
+        });
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video removed from bookmarks')),
+            const SnackBar(content: Text('Video removed from Try Later')),
           );
         }
       } else {
-        await userBookmarkRef.set({
-          'videoId': videoId,
-          'createdAt': FieldValue.serverTimestamp(),
+        // Add to tryLaterBy array
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayUnion([currentUserId])
         });
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video added to bookmarks')),
+            const SnackBar(content: Text('Video added to Try Later')),
           );
         }
       }
     } catch (e) {
+      debugPrint('Error toggling bookmark: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),

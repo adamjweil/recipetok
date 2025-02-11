@@ -18,12 +18,24 @@ import '../../utils/custom_cache_manager.dart';
 class MealPostWrapper extends StatelessWidget {
   final MealPost post;
   final bool showUserInfo;
+  
+  // Add static cache for user data
+  static final Map<String, Future<DocumentSnapshot>> _userCache = {};
 
   const MealPostWrapper({
     super.key,
     required this.post,
     this.showUserInfo = true,
   });
+
+  Future<DocumentSnapshot> _getUserData(String userId) {
+    // Return cached future if it exists
+    _userCache[userId] ??= FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    return _userCache[userId]!;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,92 +48,50 @@ class MealPostWrapper extends StatelessWidget {
           if (showUserInfo)
             Padding(
               padding: const EdgeInsets.all(12),
-              child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(post.userId)
-                    .snapshots(),
+              child: FutureBuilder<DocumentSnapshot>(
+                future: _getUserData(post.userId),
                 builder: (context, snapshot) {
-                  debugPrint('👤 User data snapshot for ${post.userId}: ${snapshot.hasData}');
                   if (!snapshot.hasData) {
                     return const UserListItemSkeleton();
                   }
 
                   final userData = snapshot.data!.data() as Map<String, dynamic>;
                   final avatarUrl = userData['avatarUrl'] as String?;
-                  debugPrint('👤 User avatar URL: $avatarUrl');
                   
                   return Row(
                     children: [
-                      // Avatar with story indicator
-                      StreamBuilder<List<Story>>(
-                        stream: StoryService().getUserActiveStories(post.userId),
-                        builder: (context, storySnapshot) {
-                          debugPrint('📖 Story snapshot for ${post.userId}: ${storySnapshot.hasData}');
-                          final hasActiveStory = storySnapshot.hasData && storySnapshot.data!.isNotEmpty;
-                          final timeRemaining = hasActiveStory 
-                              ? getTimeAgo(storySnapshot.data!.first.expiresAt)
-                              : '';
-                          
-                          return GestureDetector(
-                            onTap: () {
-                              if (hasActiveStory) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => StoryViewer(
-                                      story: storySnapshot.data!.first,
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ProfileScreen(userId: post.userId),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: hasActiveStory ? BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Colors.purple,
-                                    Colors.pink,
-                                    Colors.orange,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ) : null,
-                              child: CircleAvatar(
-                                radius: hasActiveStory ? 13 : 16,
-                                backgroundColor: Colors.grey[200],
-                                child: ClipOval(
-                                  child: avatarUrl != null && avatarUrl.isNotEmpty
-                                      ? CustomCacheManager.buildCachedImage(
-                                          url: avatarUrl,
-                                          width: (hasActiveStory ? 26 : 32),
-                                          height: (hasActiveStory ? 26 : 32),
-                                        )
-                                      : Container(
-                                          width: (hasActiveStory ? 26 : 32),
-                                          height: (hasActiveStory ? 26 : 32),
-                                          color: Colors.grey[200],
-                                          child: Icon(
-                                            Icons.person,
-                                            size: hasActiveStory ? 13 : 16,
-                                            color: Colors.grey[400],
-                                          ),
-                                        ),
-                                ),
-                              ),
+                      // Avatar with optional story indicator
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProfileScreen(userId: post.userId),
                             ),
                           );
                         },
+                        child: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: Colors.grey[200],
+                          child: ClipOval(
+                            child: avatarUrl != null && avatarUrl.isNotEmpty
+                                ? CustomCacheManager.buildCachedImage(
+                                    url: avatarUrl,
+                                    width: 32,
+                                    height: 32,
+                                  )
+                                : Container(
+                                    width: 32,
+                                    height: 32,
+                                    color: Colors.grey[200],
+                                    child: Icon(
+                                      Icons.person,
+                                      size: 16,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       // Username and timestamp
@@ -239,6 +209,7 @@ class MealPostWrapper extends StatelessWidget {
                     LikeButton(
                       postId: post.id,
                       userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      onLikeToggle: _toggleLike,
                     ),
                     const SizedBox(width: 12),
                     GestureDetector(
@@ -287,86 +258,119 @@ class MealPostWrapper extends StatelessWidget {
                       .collection('meal_posts')
                       .doc(post.id)
                       .collection('likes')
-                      .limit(3)
+                      .limit(3)  // Keep limit for avatar display
                       .snapshots(),
                   builder: (context, snapshot) {
-                    debugPrint('❤️ Likes snapshot for post ${post.id}: ${snapshot.hasData}');
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const SizedBox(width: 0);
+                    if (!snapshot.hasData) {
+                      return const SizedBox();
                     }
                     
                     final likes = snapshot.data!.docs;
-                    debugPrint('❤️ Number of likes: ${likes.length}');
-                    final likeCount = likes.length;
+                    final totalLikes = post.likes;  // Use the total likes from post
 
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: likes.length * 20.0 - (likes.length - 1) * 12.0,
-                          height: 24,
-                          child: Stack(
-                            children: likes.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final like = entry.value;
-                              return Positioned(
-                                left: index * 12.0,
-                                child: StreamBuilder<DocumentSnapshot>(
-                                  stream: FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(like.id)
-                                      .snapshots(),
-                                  builder: (context, userSnapshot) {
-                                    if (!userSnapshot.hasData) {
+                        // Overlapping Avatars
+                        if (likes.isNotEmpty)
+                          SizedBox(
+                            width: likes.length * 20.0 - (likes.length - 1) * 12.0,
+                            height: 24,
+                            child: Stack(
+                              children: likes.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final like = entry.value;
+                                return Positioned(
+                                  left: index * 12.0,
+                                  child: StreamBuilder<DocumentSnapshot>(
+                                    stream: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(like.id)
+                                        .snapshots(),
+                                    builder: (context, userSnapshot) {
+                                      final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
                                       return Container(
-                                        width: 20,
-                                        height: 20,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: Colors.grey[200],
-                                        ),
-                                      );
-                                    }
-
-                                    final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                                    final avatarUrl = userData?['avatarUrl'] as String?;
-                                    debugPrint('🔍 Like avatar URL for user ${like.id}: $avatarUrl');
-
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: ClipOval(
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CustomCacheManager.buildCachedImage(
-                                            url: avatarUrl,
-                                            width: 20,
-                                            height: 20,
-                                            fit: BoxFit.cover,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 1.5,
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              );
-                            }).toList(),
+                                        child: CircleAvatar(
+                                          radius: 10,
+                                          backgroundImage: userData?['avatarUrl'] != null
+                                              ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                              : null,
+                                          child: userData?['avatarUrl'] == null
+                                              ? const Icon(Icons.person, size: 12)
+                                              : null,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
                           ),
-                        ),
                         const SizedBox(width: 8),
-                        Text(
-                          '$likeCount gave props',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                        
+                        // Names or Count Text
+                        if (totalLikes <= 2)
+                          FutureBuilder<List<String>>(
+                            future: Future.wait(
+                              likes.map((like) async {
+                                final userDoc = await FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(like.id)
+                                    .get();
+                                final fullName = userDoc.data()?['displayName'] ?? 'Unknown';
+                                return fullName.split(' ')[0];
+                              }),
+                            ),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return totalLikes == 0 ? const SizedBox() : Text(
+                                  '$totalLikes gave props',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                );
+                              }
+
+                              final names = snapshot.data!;
+                              if (names.isEmpty) {
+                                return const SizedBox();
+                              } else if (names.length == 1) {
+                                return Text(
+                                  '${names[0]} gave props',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                );
+                              } else {
+                                return Text(
+                                  '${names[0]} and ${names[1]} gave props',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                );
+                              }
+                            },
+                          )
+                        else if (totalLikes > 0)
+                          Text(
+                            '$totalLikes gave props',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          )
+                        else
+                          const SizedBox(),
                       ],
                     );
                   },
@@ -416,5 +420,39 @@ class MealPostWrapper extends StatelessWidget {
         child: Icon(Icons.error_outline, color: Colors.grey[400]),
       ),
     );
+  }
+
+  Future<void> _toggleLike(String postId, String userId) async {
+    try {
+      final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(postId);
+      final likeRef = postRef.collection('likes').doc(userId);
+
+      final likeDoc = await likeRef.get();
+      final batch = FirebaseFirestore.instance.batch();
+
+      if (likeDoc.exists) {
+        // Unlike
+        batch.delete(likeRef);
+        batch.update(postRef, {
+          'likes': FieldValue.increment(-1),
+          'likedBy': FieldValue.arrayRemove([userId])
+        });
+      } else {
+        // Like
+        batch.set(likeRef, {
+          'timestamp': FieldValue.serverTimestamp(),
+          'userId': userId
+        });
+        batch.update(postRef, {
+          'likes': FieldValue.increment(1),
+          'likedBy': FieldValue.arrayUnion([userId])
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error toggling like: $e');
+      // Optionally show error message to user
+    }
   }
 } 

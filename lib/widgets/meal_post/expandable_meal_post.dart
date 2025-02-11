@@ -74,6 +74,36 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
     }
   }
 
+  Future<void> _toggleLike(String postId, String userId) async {
+    try {
+      final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(postId);
+      final likeRef = postRef.collection('likes').doc(userId);
+
+      final likeDoc = await likeRef.get();
+      final batch = FirebaseFirestore.instance.batch();
+
+      if (likeDoc.exists) {
+        // Unlike
+        batch.delete(likeRef);
+        batch.update(postRef, {
+          'likeCount': FieldValue.increment(-1),
+        });
+      } else {
+        // Like
+        batch.set(likeRef, {
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        batch.update(postRef, {
+          'likeCount': FieldValue.increment(1),
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error toggling like: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -151,6 +181,7 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
                     LikeButton(
                       postId: widget.post.id,
                       userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      onLikeToggle: _toggleLike,
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,6 +23,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _usernameController;
   late TextEditingController _bioController;
+  late TextEditingController _firstNameController;
+  late TextEditingController _lastNameController;
+  String? _gender;
+  DateTime? _birthDate;
   bool _isLoading = false;
   bool _isUploadingImage = false;
 
@@ -31,6 +36,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: widget.userData['displayName'] ?? '');
     _usernameController = TextEditingController(text: widget.userData['username'] ?? '');
     _bioController = TextEditingController(text: widget.userData['bio'] ?? '');
+    _firstNameController = TextEditingController(text: widget.userData['firstName'] ?? '');
+    _lastNameController = TextEditingController(text: widget.userData['lastName'] ?? '');
+    _gender = widget.userData['gender'];
+    _birthDate = widget.userData['birthDate'] != null 
+        ? DateTime.parse(widget.userData['birthDate'])
+        : null;
   }
 
   @override
@@ -38,7 +49,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _usernameController.dispose();
     _bioController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    await showCupertinoModalPopup(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                height: 50,
+                color: const Color(0xFFF9F9F9),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      child: const Text('Cancel'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    CupertinoButton(
+                      child: const Text('OK'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: _birthDate ?? DateTime.now(),
+                  onDateTimeChanged: (DateTime newDate) {
+                    setState(() {
+                      _birthDate = newDate;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveProfile() async {
@@ -58,6 +115,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'displayName': _nameController.text,
         'username': _usernameController.text,
         'bio': _bioController.text,
+        'firstName': _firstNameController.text,
+        'lastName': _lastNameController.text,
+        'gender': _gender,
+        'birthDate': _birthDate?.toIso8601String(),
       });
 
       if (mounted) {
@@ -214,11 +275,84 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          // Rest of the form fields
+          // First Name field
+          TextField(
+            controller: _firstNameController,
+            decoration: const InputDecoration(
+              labelText: 'First Name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Last Name field
+          TextField(
+            controller: _lastNameController,
+            decoration: const InputDecoration(
+              labelText: 'Last Name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Birthday field
+          GestureDetector(
+            onTap: () => _selectDate(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    _birthDate == null
+                        ? 'Select Birthday'
+                        : '${_birthDate!.month}/${_birthDate!.day}/${_birthDate!.year}',
+                    style: TextStyle(
+                      color: _birthDate == null ? Colors.grey[600] : Colors.black,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Gender selection
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 8),
+                child: Text(
+                  'Gender',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+              ...['Man', 'Woman', 'Prefer not to say'].map((option) {
+                return RadioListTile<String>(
+                  title: Text(option),
+                  value: option,
+                  groupValue: _gender,
+                  onChanged: (value) {
+                    setState(() {
+                      _gender = value;
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  visualDensity: const VisualDensity(
+                    horizontal: VisualDensity.minimumDensity,
+                    vertical: VisualDensity.minimumDensity,
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Rest of the existing fields
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(
-              labelText: 'Name',
+              labelText: 'Display Name',
               border: OutlineInputBorder(),
             ),
           ),
