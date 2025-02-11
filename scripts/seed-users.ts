@@ -74,6 +74,25 @@ const recipeTitles = [
   'French Onion Soup'
 ];
 
+// Add food-focused bios array
+const foodBios = [
+  "Passionate home cook exploring global flavors 🌎",
+  "Always experimenting with new recipes in the kitchen 👨‍🍳",
+  "Food photographer and recipe developer 📸",
+  "Healthy eating enthusiast | Meal prep lover 🥗",
+  "Culinary student sharing my cooking journey 🔪",
+  "Plant-based recipes and sustainable cooking 🌱",
+  "BBQ master and grilling enthusiast 🔥",
+  "Baking addict | Sourdough specialist 🍞",
+  "Farm to table cooking | Seasonal recipes 🌾",
+  "Comfort food with a healthy twist 🥘",
+  "Food science nerd | Recipe tester 🧪",
+  "Traditional recipes with modern flair 👩‍🍳",
+  "Meal prep pro | Fitness foodie 💪",
+  "Dessert lover sharing sweet creations 🧁",
+  "International cuisine explorer | Spice lover 🌶"
+];
+
 const recipeDescriptions = [
   'Made this delicious dish for dinner tonight! The flavors turned out amazing 😋',
   'Finally perfected my grandmother\'s recipe after months of practice 👩‍🍳',
@@ -325,7 +344,7 @@ async function createUser() {
       birthDate,
       gender,
       foodPreferences,
-      bio: faker.lorem.sentence(),
+      bio: foodBios[Math.floor(Math.random() * foodBios.length)],
       avatarUrl: faker.image.avatar(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       followers: [],

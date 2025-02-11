@@ -65,9 +65,29 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   void initState() {
     super.initState();
     
-    // Initialize profileUserId
-    profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    // Check Firebase Auth state first
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      debugPrint('❌ No authenticated user found');
+      // Add a delay to allow the widget to properly mount before navigation
+      Future.microtask(() async {
+        try {
+          await GoogleSignIn().signOut();
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+          }
+        } catch (e) {
+          debugPrint('❌ Error during sign out: $e');
+        }
+      });
+      return;
+    }
     
+    // Initialize profileUserId
+    profileUserId = widget.userId ?? currentUser.uid;
+    
+    // Check for invalid user state
     if (profileUserId.isEmpty) {
       debugPrint('❌ No valid user ID found for profile');
       return;
@@ -95,15 +115,24 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       return Stream.empty();
     }
 
+    debugPrint('🔍 Fetching user data for ID: $profileUserId');
     return FirebaseFirestore.instance
         .collection('users')
         .doc(profileUserId)
         .snapshots()
-        .where((snapshot) => snapshot.exists && snapshot.data() != null)
         .map((snapshot) {
+          if (!snapshot.exists) {
+            debugPrint('❌ No user document found for ID: $profileUserId');
+            throw Exception('User not found');
+          }
           final data = snapshot.data() as Map<String, dynamic>? ?? {};
-          debugPrint('👤 User data loaded for $profileUserId: ${data.isNotEmpty}');
+          debugPrint('👤 User data loaded: ${data.toString()}');
           return snapshot;
+        })
+        .handleError((error) {
+          debugPrint('❌ Error fetching user data: $error');
+          // Instead of returning a missing document, we'll propagate the error
+          throw error;
         });
   }
 
@@ -437,8 +466,28 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     if (profileUserId.isEmpty) {
-      return const Scaffold(
-        body: Center(child: Text('Invalid user profile')),
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Invalid user profile',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -448,15 +497,37 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         child: StreamBuilder<DocumentSnapshot>(
           stream: _getUserData(),
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: const Text(
+                  'User not found',
+                  style: TextStyle(color: Colors.black),
+                ),
+              );
+            }
+
             if (!snapshot.hasData) {
               return AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: const Text(
+                  'Loading...',
+                  style: TextStyle(color: Colors.black),
+                ),
               );
             }
 
             final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-            
             return AppBar(
               leading: isCurrentUserProfile
                   ? IconButton(
@@ -468,7 +539,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       onPressed: () => Navigator.pop(context),
                     ),
               title: Text(
-                userData['displayName'] ?? '',
+                '${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}',
                 style: const TextStyle(color: Colors.black),
               ),
               backgroundColor: Colors.transparent,
@@ -483,15 +554,89 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       body: StreamBuilder<DocumentSnapshot>(
         stream: _getUserData(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_off_outlined, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'User not found',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'The user you\'re looking for doesn\'t exist',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Go Back'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
           final userData = snapshot.data?.data() as Map<String, dynamic>? ?? {};
           if (userData.isEmpty) {
-            return const Center(child: Text('User data not found'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_off_outlined, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'User not found',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'The user you\'re looking for doesn\'t exist',
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Go Back'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
+          debugPrint('👤 Body user data loaded: ${userData['displayName']}');
+          
           return NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
@@ -768,39 +913,35 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       debugPrint('Selected media type: $mediaType');
       debugPrint('File path: ${media.path}');
       
-      try {
-        await StoryService().uploadStory(File(media.path), mediaType);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Story uploaded successfully'),
-              behavior: SnackBarBehavior.floating,
-              margin: EdgeInsets.only(
-                top: 20,
-                right: 20,
-                left: 20,
-              ),
+      await StoryService().uploadStory(File(media.path), mediaType);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Story uploaded successfully'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
             ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Error uploading story: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error uploading story: $e'),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.only(
-                top: 20,
-                right: 20,
-                left: 20,
-              ),
-            ),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Error in _addStory: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading story: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isUploading = false);
@@ -834,11 +975,12 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (userData['bio'] != null && userData['bio'].toString().isNotEmpty)
+        if (userData['bio'] != null && userData['bio'].toString().isNotEmpty) ...[
           Text(
             userData['bio'],
             style: const TextStyle(fontSize: 14),
           ),
+        ],
       ],
     );
   }

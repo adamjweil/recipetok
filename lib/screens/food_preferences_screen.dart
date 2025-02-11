@@ -54,7 +54,7 @@ class _FoodPreferencesScreenState extends State<FoodPreferencesScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (context) => const MainNavigationScreen(initialIndex: 4),
+            builder: (context) => const MainNavigationScreen(initialIndex: 0),
           ),
           (route) => false,
         );

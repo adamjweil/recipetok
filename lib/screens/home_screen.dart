@@ -11,6 +11,7 @@ import '../widgets/meal_post_card.dart';
 import '../models/meal_post.dart';
 import 'package:intl/intl.dart';
 import '../widgets/meal_post/meal_post_wrapper.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -163,6 +164,26 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Activity Feed'),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, size: 20),
+            onPressed: () async {
+              try {
+                await GoogleSignIn().signOut();
+                await FirebaseAuth.instance.signOut();
+                if (mounted) {
+                  Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error signing out: $e')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: StreamBuilder<List<String>>(
         stream: _getFollowingUsers(),
@@ -177,6 +198,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final followingUsers = followingSnapshot.data!;
 
+          // If user isn't following anyone, show recommendations
+          if (followingUsers.length <= 1) {  // <= 1 because it includes the user themselves
+            return SingleChildScrollView(
+              child: _buildRecommendedUsers(),
+            );
+          }
+
+          // Rest of the existing code for showing the feed
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('meal_posts')
@@ -245,6 +274,317 @@ class _HomeScreenState extends State<HomeScreen> {
       following.add(currentUserId); // Include user's own posts
       return following;
     });
+  }
+
+  // Update the method to get recommended users with better metrics
+  Future<List<Map<String, dynamic>>> _getRecommendedUsers() async {
+    try {
+      // Get current user's food preferences
+      final currentUser = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      final userPreferences = List<String>.from(currentUser.data()?['foodPreferences'] ?? []);
+
+      // Query all potential users to recommend
+      final usersQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('uid', isNotEqualTo: currentUserId)
+          .get();
+
+      // Calculate activity score for each user
+      List<Map<String, dynamic>> rankedUsers = [];
+      
+      for (var userDoc in usersQuery.docs) {
+        final userData = userDoc.data();
+        final userFoodPrefs = List<String>.from(userData['foodPreferences'] ?? []);
+        
+        // Calculate matching preferences score
+        final matchingPreferences = userPreferences.where((pref) => userFoodPrefs.contains(pref)).length;
+        
+        // Get user's posts for activity metrics
+        final posts = await FirebaseFirestore.instance
+            .collection('meal_posts')
+            .where('userId', isEqualTo: userDoc.id)
+            .orderBy('createdAt', descending: true)
+            .get();
+
+        // Calculate activity metrics
+        double totalLikes = 0;
+        double totalComments = 0;
+        final recentPosts = posts.docs.take(3).toList();  // Get 3 most recent posts
+        
+        for (var post in posts.docs) {
+          final postData = post.data();
+          totalLikes += (postData['likes'] as num?)?.toDouble() ?? 0;
+          // Get comment count
+          final comments = await post.reference.collection('comments').count().get();
+          totalComments += comments.count?.toDouble() ?? 0;
+        }
+
+        // Calculate activity score (convert to int for final score)
+        final activityScore = (posts.docs.length * 10) +  // Each post worth 10 points
+            (totalLikes * 2).toInt() +                    // Each like worth 2 points
+            (totalComments * 3).toInt() +                 // Each comment worth 3 points
+            (matchingPreferences * 15);                   // Each matching preference worth 15 points
+
+        rankedUsers.add({
+          'userData': userData,
+          'activityScore': activityScore,
+          'matchingPreferences': matchingPreferences,
+          'recentPosts': recentPosts,
+          'stats': {
+            'posts': posts.docs.length,
+            'avgLikes': posts.docs.isEmpty ? 0.0 : totalLikes / posts.docs.length,
+            'avgComments': posts.docs.isEmpty ? 0.0 : totalComments / posts.docs.length,
+          },
+          'userId': userDoc.id,
+        });
+      }
+
+      // Sort by activity score and take top 3
+      rankedUsers.sort((a, b) => b['activityScore'].compareTo(a['activityScore']));
+      return rankedUsers.take(3).toList();
+    } catch (e) {
+      debugPrint('Error getting recommended users: $e');
+      return [];
+    }
+  }
+
+  // Update the UI building method
+  Widget _buildRecommendedUsers() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getRecommendedUsers(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final recommendedUsers = snapshot.data!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Welcome to RecipeTok! 👋',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Based on your food preferences, we recommend following these amazing chefs:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: recommendedUsers.length,
+              itemBuilder: (context, index) {
+                final recommendation = recommendedUsers[index];
+                final userData = recommendation['userData'] as Map<String, dynamic>;
+                final stats = recommendation['stats'] as Map<String, dynamic>;
+                final recentPosts = recommendation['recentPosts'] as List<QueryDocumentSnapshot>;
+                final matchingPreferences = recommendation['matchingPreferences'] as int;
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // User info section
+                      ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: CircleAvatar(
+                          radius: 24,
+                          backgroundImage: userData['avatarUrl'] != null
+                              ? NetworkImage(userData['avatarUrl'])
+                              : null,
+                          child: userData['avatarUrl'] == null
+                              ? const Icon(Icons.person, size: 20)
+                              : null,
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                userData['displayName'] ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => _followUser(userData['uid']),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              ),
+                              child: const Text(
+                                'Follow',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (userData['bio'] != null) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                userData['bio'],
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 11,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 6),
+                            // Stats row
+                            Row(
+                              children: [
+                                _buildStat(stats['posts'].toString(), 'posts'),
+                                const SizedBox(width: 12),
+                                _buildStat(
+                                  stats['avgLikes'].toStringAsFixed(1),
+                                  'avg likes',
+                                ),
+                                const SizedBox(width: 12),
+                                _buildStat(
+                                  stats['avgComments'].toStringAsFixed(1),
+                                  'avg comments',
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Recent posts preview
+                      if (recentPosts.isNotEmpty)
+                        Container(
+                          height: 90,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: recentPosts.map((post) {
+                              final postData = post.data() as Map<String, dynamic>;
+                              return Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: Image.network(
+                                      postData['photoUrls'][0],
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      // Recommendation reason
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.recommend, color: Colors.grey[600], size: 16),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Matches ${matchingPreferences} of your food preferences and posts regularly with high engagement',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStat(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Add this method to follow a user
+  Future<void> _followUser(String userId) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      
+      // Update current user's following array
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(currentUserId),
+        {
+          'following': FieldValue.arrayUnion([userId])
+        }
+      );
+
+      // Update target user's followers array
+      batch.update(
+        FirebaseFirestore.instance.collection('users').doc(userId),
+        {
+          'followers': FieldValue.arrayUnion([currentUserId])
+        }
+      );
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error following user: $e');
+    }
   }
 }
 
