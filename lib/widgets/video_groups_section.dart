@@ -29,7 +29,7 @@ class VideoGroupsSection extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const SizedBox.shrink(); // Hide on error
+          return const SizedBox.shrink();
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -38,28 +38,48 @@ class VideoGroupsSection extends StatelessWidget {
 
         final groups = snapshot.data?.docs ?? [];
 
-        // If there are no groups and this isn't the current user's profile, hide the section
         if (groups.isEmpty && !showAddButton) {
           return const SizedBox.shrink();
         }
 
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          child: SizedBox(
-            height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: groups.length + (showAddButton ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == groups.length && showAddButton) {
-                  return _buildCreateGroupButton(context);
-                }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Collections',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: groups.length + (showAddButton ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == groups.length && showAddButton) {
+                    return _buildCreateGroupButton(context);
+                  }
 
-                final group = groups[index].data() as Map<String, dynamic>;
-                return _buildGroupItem(context, group, groups[index].id);
-              },
-            ),
+                  final group = groups[index].data() as Map<String, dynamic>;
+                  return _buildGroupItem(context, group, groups[index].id);
+                },
+              ),
+            ],
           ),
         );
       },
@@ -69,46 +89,48 @@ class VideoGroupsSection extends StatelessWidget {
   Widget _buildGroupItem(BuildContext context, Map<String, dynamic> group, String groupId) {
     return GestureDetector(
       onTap: () => _showGroupModal(context, group, groupId),
-      child: Container(
-        width: 64,
-        margin: const EdgeInsets.only(right: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: ClipOval(
-                child: group['imageUrl'] != null
-                    ? CachedNetworkImage(
-                        imageUrl: group['imageUrl'],
-                        fit: BoxFit.cover,
-                        cacheManager: CustomCacheManager.instance,
-                        errorWidget: (context, url, error) => Container(
+      child: Column(
+        children: [
+          Expanded(
+            child: FractionallySizedBox(
+              widthFactor: 0.75,
+              heightFactor: 0.75,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipOval(
+                  child: group['imageUrl'] != null
+                      ? CachedNetworkImage(
+                          imageUrl: group['imageUrl'],
+                          fit: BoxFit.cover,
+                          cacheManager: CustomCacheManager.instance,
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.collections, color: Colors.grey),
+                          ),
+                        )
+                      : Container(
                           color: Colors.grey[200],
                           child: const Icon(Icons.collections, color: Colors.grey),
                         ),
-                      )
-                    : Container(
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.collections, color: Colors.grey),
-                      ),
+                ),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              group['name'] ?? '',
-              style: const TextStyle(fontSize: 11),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            group['name'] ?? '',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -116,30 +138,34 @@ class VideoGroupsSection extends StatelessWidget {
   Widget _buildCreateGroupButton(BuildContext context) {
     return GestureDetector(
       onTap: () => _showCreateGroupModal(context),
-      child: Container(
-        width: 64,
-        margin: const EdgeInsets.only(right: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey[100],
-                border: Border.all(color: Colors.grey[300]!),
+      child: Column(
+        children: [
+          Expanded(
+            child: FractionallySizedBox(
+              widthFactor: 0.75,
+              heightFactor: 0.75,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[300]!),
+                  color: Colors.grey[100],
+                ),
+                child: Center(
+                  child: Icon(Icons.add, color: Colors.grey[600], size: 32),
+                ),
               ),
-              child: Icon(Icons.add, color: Colors.grey[600], size: 24),
             ),
-            const SizedBox(height: 2),
-            const Text(
-              'New',
-              style: TextStyle(fontSize: 11),
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'New Collection',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
