@@ -9,6 +9,7 @@ import '../widgets/meal_post/like_button.dart';
 import '../utils/custom_cache_manager.dart';
 import 'dart:io';
 import '../utils/time_formatter.dart';
+import './profile_screen.dart';
 
 class CommentScreen extends StatefulWidget {
   final MealPost post;
@@ -90,23 +91,42 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         // imageUrl = await uploadImage(_selectedImage!);
       }
 
-      final commentRef = FirebaseFirestore.instance
-          .collection('meal_posts')
-          .doc(widget.post.id)
-          .collection('comments')
-          .doc();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
 
-      await commentRef.set({
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-        'text': _commentController.text.trim(),
-        'imageUrl': imageUrl,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isPinned': false,
+      // Create references
+      final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(widget.post.id);
+      final commentRef = postRef.collection('comments').doc();
+
+      // Use a transaction to update both the comment and the post's comment count
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // Get the current post data
+        final postDoc = await transaction.get(postRef);
+        final currentComments = postDoc.data()?['commentsCount'] ?? 0;
+
+        // Create the comment with all required fields
+        transaction.set(commentRef, {
+          'userId': currentUser.uid,
+          'text': _commentController.text.trim(),
+          'imageUrl': imageUrl,
+          'createdAt': FieldValue.serverTimestamp(),
+          'isPinned': false,
+          'displayName': currentUser.displayName ?? 'User',
+          'avatarUrl': currentUser.photoURL,
+        });
+
+        // Update the post's comment count
+        transaction.update(postRef, {
+          'commentsCount': currentComments + 1
+        });
       });
 
       if (mounted) {
         _commentController.clear();
-        setState(() => _selectedImage = null);
+        setState(() {
+          _selectedImage = null;
+          _isPostingComment = false;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -114,8 +134,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
           SnackBar(content: Text('Error posting comment: $e')),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isPostingComment = false);
+      setState(() => _isPostingComment = false);
     }
   }
 
@@ -319,12 +338,12 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                                 ),
                                               ),
                                               child: CircleAvatar(
-                                                radius: 10,
+                                                radius: 9,
                                                 backgroundImage: userData?['avatarUrl'] != null
                                                     ? CachedNetworkImageProvider(userData!['avatarUrl'])
                                                     : null,
                                                 child: userData?['avatarUrl'] == null
-                                                    ? const Icon(Icons.person, size: 12)
+                                                    ? const Icon(Icons.person, size: 11)
                                                     : null,
                                               ),
                                             );
@@ -351,9 +370,10 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                         return Text(
                                           '$totalLikes gave props',
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 9,
                                             color: Colors.grey[600],
                                           ),
+                                          overflow: TextOverflow.ellipsis,
                                         );
                                       }
 
@@ -362,17 +382,19 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                         return Text(
                                           '${names[0]} gave props',
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 9,
                                             color: Colors.grey[600],
                                           ),
+                                          overflow: TextOverflow.ellipsis,
                                         );
                                       } else {
                                         return Text(
                                           '${names[0]} and ${names[1]} gave props',
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 9,
                                             color: Colors.grey[600],
                                           ),
+                                          overflow: TextOverflow.ellipsis,
                                         );
                                       }
                                     },
@@ -381,9 +403,10 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                   Text(
                                     '$totalLikes gave props',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 9,
                                       color: Colors.grey[600],
                                     ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                               ],
                             );
@@ -424,7 +447,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
           .doc(widget.post.id)
           .collection('comments')
           .orderBy('isPinned', descending: true)
-          .orderBy('timestamp', descending: true)
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -454,7 +477,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(top: 16, bottom: 16),
           itemCount: comments.length,
           itemBuilder: (context, index) {
             final comment = comments[index].data() as Map<String, dynamic>;
@@ -462,22 +485,25 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
             final isPinned = comment['isPinned'] ?? false;
             
             // Handle null timestamp by using current time as fallback
-            final timestamp = comment['timestamp'] as Timestamp?;
+            final timestamp = comment['createdAt'] as Timestamp?;
             final dateTime = timestamp?.toDate() ?? DateTime.now();
             
-            return _CommentItem(
-              key: ValueKey(commentId),
-              commentId: commentId,
-              postId: widget.post.id,
-              userId: comment['userId'] as String,
-              text: comment['text'] as String,
-              imageUrl: comment['imageUrl'] as String?,
-              timestamp: dateTime,  // Use the handled timestamp
-              isPinned: isPinned,
-              isPostOwner: widget.post.userId == FirebaseAuth.instance.currentUser?.uid,
-              onPin: () => _togglePinComment(commentId, isPinned),
-              onDelete: () => _deleteComment(commentId),
-              animationController: _animationController,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _CommentItem(
+                key: ValueKey(commentId),
+                commentId: commentId,
+                postId: widget.post.id,
+                userId: comment['userId'] as String,
+                text: comment['text'] as String,
+                imageUrl: comment['imageUrl'] as String?,
+                timestamp: dateTime,
+                isPinned: isPinned,
+                isPostOwner: widget.post.userId == FirebaseAuth.instance.currentUser?.uid,
+                onPin: () => _togglePinComment(commentId, isPinned),
+                onDelete: () => _deleteComment(commentId),
+                animationController: _animationController,
+              ),
             );
           },
         );
@@ -695,7 +721,7 @@ class _CommentItemState extends State<_CommentItem> {
       child: SlideTransition(
         position: _slideAnimation,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -708,39 +734,51 @@ class _CommentItemState extends State<_CommentItem> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar and Username Column
-                  Column(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pushNamed(context, '/profile/${widget.userId}');
-                        },
-                        child: CircleAvatar(
-                          radius: 12,
-                          backgroundImage: userData?['avatarUrl'] != null
-                              ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                              : null,
-                          child: userData?['avatarUrl'] == null
-                              ? const Icon(Icons.person, size: 12)
-                              : null,
+                  // Avatar and Username Column - Give it a fixed width
+                  SizedBox(
+                    width: 50, // Fixed width for the user info column
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProfileScreen(userId: widget.userId),
+                              ),
+                            );
+                          },
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundImage: userData?['avatarUrl'] != null
+                                ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                : null,
+                            child: userData?['avatarUrl'] == null
+                                ? const Icon(Icons.person, size: 12)
+                                : null,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        userData?['username'] ?? 'Unknown',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(height: 4),
+                        Text(
+                          userData?['firstName'] != null && userData?['lastName'] != null
+                              ? '${userData!['firstName']} ${userData['lastName'][0]}.'
+                              : userData?['displayName'] ?? 'Unknown',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis, // Add this to handle long names
+                          textAlign: TextAlign.center, // Center the text
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 8),
                   
                   // Comment Bubble
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -756,6 +794,29 @@ class _CommentItemState extends State<_CommentItem> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (widget.isPinned)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.push_pin,
+                                    size: 12,
+                                    color: Color(0xFFD32F2F), // Firetruck red color
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Pinned by author',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           // Top row with comment and more options
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -764,9 +825,18 @@ class _CommentItemState extends State<_CommentItem> {
                                 child: Text(
                                   widget.text,
                                   style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black,
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: Colors.black87,
                                   ),
+                                ),
+                              ),
+                              const SizedBox(width: 8), // Add some spacing between comment and timestamp
+                              Text(
+                                getTimeAgo(widget.timestamp),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[600],
                                 ),
                               ),
                               if (isCurrentUser || widget.isPostOwner)
@@ -811,15 +881,6 @@ class _CommentItemState extends State<_CommentItem> {
                                   },
                                 ),
                             ],
-                          ),
-                          // Timestamp below with reduced spacing
-                          const SizedBox(height: 2),  // Reduced from 4 to 2
-                          Text(
-                            getTimeAgo(widget.timestamp),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
-                            ),
                           ),
                         ],
                       ),

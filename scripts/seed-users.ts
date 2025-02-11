@@ -56,6 +56,60 @@ const sampleVideos = [
 ];
 
 // Add these arrays at the top of the file
+const avatarUrls = [
+  // Professional headshots and portraits
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e',
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
+  'https://images.unsplash.com/photo-1554151228-14d9def656e4',
+  'https://images.unsplash.com/photo-1499952127939-9bbf5af6c51c',
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9',
+  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
+  // Animal portraits for variety
+  'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8',
+  'https://images.unsplash.com/photo-1518791841217-8f162f1e1131',
+  'https://images.unsplash.com/photo-1573865526739-10659fec78a5',
+  'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba',
+  'https://images.unsplash.com/photo-1543852786-1cf6624b9987'
+];
+
+const adamCollections = [
+  {
+    name: 'Pizza',
+    description: 'My favorite pizza recipes',
+    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRevNsmPB3e-9h1eS48vt2dRJSi32eGw9eWFw&s',
+    videos: {},
+  },
+  {
+    name: 'Burgers',
+    description: 'Best burger recipes',
+    imageUrl: 'https://plus.unsplash.com/premium_photo-1683619761468-b06992704398?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8YnVyZ2VyJTIwcG5nfGVufDB8fDB8fHww',
+    videos: {},
+  },
+  {
+    name: 'Donuts',
+    description: 'Sweet donut recipes',
+    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT9za753NZ8JZfpdMxdGvYIMyFYsQJ6FgexIpuhhZx7fE7mQ8zNxLZogwUehpjdULMX85M&usqp=CAU',
+    videos: {},
+  },
+  {
+    name: 'Sushi',
+    description: 'Roll with it! 🍱',
+    imageUrl: 'https://int.japanesetaste.com/cdn/shop/articles/how-to-make-makizushi-sushi-rolls-japanese-taste.jpg?v=1707914944&width=1280',
+    videos: {},
+  },
+  {
+    name: 'Steaks',
+    description: 'Rare finds, well done! 🥩',
+    imageUrl: 'https://www.howtocook.recipes/wp-content/uploads/2022/11/rare-steak-recipejpg.jpg',
+    videos: {},
+  },
+];
+
+// Add these arrays at the top of the file
 const recipeTitles = [
   'Easy Homemade Pasta',
   'Perfect Chocolate Cake',
@@ -94,16 +148,16 @@ const foodBios = [
 ];
 
 const recipeDescriptions = [
-  'Made this delicious dish for dinner tonight! The flavors turned out amazing 😋',
-  'Finally perfected my grandmother\'s recipe after months of practice 👩‍🍳',
-  'Quick and healthy meal prep for the week ahead! #MealPrep',
-  'Sunday cooking session - meal prepped for the entire week! 🥘',
-  'My take on a classic recipe with a modern twist 🌟',
-  'Tried this recipe from @ChefJohn and it turned out perfect! Thanks for the inspiration',
-  'Experimenting with new flavors today - absolutely love how it turned out! 🔥',
-  'Simple ingredients, maximum flavor. Sometimes less is more! 👨‍🍳',
-  'Meal prepping doesn\'t have to be boring - look at these colors! 🌈',
-  'Late night cooking session - worth every minute of prep time 🌙'
+  'Living my best breakfast life with this avocado toast 🥑 #BreakfastGoals',
+  'When your pasta game is stronger than your Monday motivation 🍝✨',
+  'Plot twist: I can actually cook! 👨‍🍳 Mom would be proud',
+  'This took way longer than the recipe said but worth every minute 😅',
+  'Meal prep Sunday because adulting is hard but being hangry is harder 🥘',
+  'Not to brag but even my picky roommate asked for seconds 💁‍♂️',
+  'Pro tip: Everything tastes better with garlic. Trust me on this one 🧄',
+  'Finally nailed this recipe after 3 failed attempts. Fourth time\'s the charm! 🎉',
+  'My contribution to the potluck: Making store-bought look homemade 😇',
+  'When the recipe says "easy" but you still manage to set off the smoke alarm 🚨'
 ];
 
 const commonIngredients = [
@@ -135,40 +189,6 @@ const cookingInstructions = [
   'Let rest for 5 minutes before serving',
   'Garnish with fresh herbs',
   'Serve hot and enjoy!'
-];
-
-// Add this near the top of the file with other constants
-const adamCollections = [
-  {
-    name: 'Pizza',
-    description: 'My favorite pizza recipes',
-    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRevNsmPB3e-9h1eS48vt2dRJSi32eGw9eWFw&s',
-    videos: {},
-  },
-  {
-    name: 'Burgers',
-    description: 'Best burger recipes',
-    imageUrl: 'https://plus.unsplash.com/premium_photo-1683619761468-b06992704398?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8YnVyZ2VyJTIwcG5nfGVufDB8fDB8fHww',
-    videos: {},
-  },
-  {
-    name: 'Donuts',
-    description: 'Sweet donut recipes',
-    imageUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT9za753NZ8JZfpdMxdGvYIMyFYsQJ6FgexIpuhhZx7fE7mQ8zNxLZogwUehpjdULMX85M&usqp=CAU',
-    videos: {},
-  },
-  {
-    name: 'Sushi',
-    description: 'Roll with it! 🍱',
-    imageUrl: 'https://int.japanesetaste.com/cdn/shop/articles/how-to-make-makizushi-sushi-rolls-japanese-taste.jpg?v=1707914944&width=1280',
-    videos: {},
-  },
-  {
-    name: 'Steaks',
-    description: 'Rare finds, well done! 🥩',
-    imageUrl: 'https://www.howtocook.recipes/wp-content/uploads/2022/11/rare-steak-recipejpg.jpg',
-    videos: {},
-  },
 ];
 
 // Add this after other sample data arrays
@@ -257,6 +277,30 @@ const sampleMealPosts = [
   },
 ];
 
+// Add this after other sample data arrays
+const sampleMealComments = [
+  "This looks absolutely delicious! 😋",
+  "Love your plating! Could you share the recipe?",
+  "Making this tonight! Thanks for sharing 🙏",
+  "Your food always looks amazing! 👨‍🍳",
+  "What temperature do you cook this at?",
+  "Perfect comfort food! 😍",
+  "I tried this recipe and it turned out great!",
+  "The colors in this dish are beautiful 📸",
+  "How long did this take to make?",
+  "This is definitely going on my must-try list ✨",
+  "Love how simple yet elegant this looks",
+  "My kids would love this! Saving for later",
+  "The texture looks perfect! Any special tips?",
+  "This is making me hungry! 🤤",
+  "Where do you get your ingredients from?",
+  "Your presentation is always on point! 👌",
+  "Can this be made vegetarian?",
+  "Perfect weeknight dinner idea!",
+  "The seasoning looks spot on 👏",
+  "This would be great for meal prep!"
+];
+
 // Add function to upload video and get URL
 async function uploadVideoAndGetUrl(filename: string): Promise<{videoUrl: string, thumbnailUrl: string}> {
   try {
@@ -297,12 +341,27 @@ async function initializeSampleVideos() {
 }
 
 async function createUser() {
-  const firstName = faker.person.firstName();
-  const lastName = faker.person.lastName();
+  // Common first names
+  const firstNames = [
+    'James', 'John', 'Robert', 'Michael', 'William',
+    'David', 'Richard', 'Joseph', 'Thomas', 'Christopher',
+    'Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia',
+    'Mia', 'Charlotte', 'Amelia', 'Harper', 'Evelyn'
+  ];
+
+  // Common last names
+  const lastNames = [
+    'Smith', 'Johnson', 'Williams', 'Brown', 'Jones',
+    'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
+    'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson',
+    'Martin', 'Lee', 'Thompson', 'White', 'Harris'
+  ];
+
+  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
   const email = faker.internet.email({ firstName, lastName });
   const password = 'password123';
   const displayName = `${firstName} ${lastName}`;
-  const username = faker.internet.userName({ firstName, lastName });
   
   // Generate a random birth date between 18 and 60 years ago
   const birthDate = faker.date.between({
@@ -330,7 +389,7 @@ async function createUser() {
       email,
       password,
       displayName,
-      photoURL: faker.image.avatar(),
+      photoURL: avatarUrls[Math.floor(Math.random() * avatarUrls.length)],
     });
 
     // Create user document in Firestore
@@ -338,14 +397,13 @@ async function createUser() {
       uid: userRecord.uid,
       email,
       displayName,
-      username,
       firstName,
       lastName,
       birthDate,
       gender,
       foodPreferences,
       bio: foodBios[Math.floor(Math.random() * foodBios.length)],
-      avatarUrl: faker.image.avatar(),
+      avatarUrl: avatarUrls[Math.floor(Math.random() * avatarUrls.length)],
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       followers: [],
       following: [],
@@ -395,7 +453,6 @@ async function createVideo(userId: string) {
     const videoDoc = await db.collection('videos').add({
       userId,
       username: userData?.displayName || 'Anonymous',
-      userHandle: userData?.username || 'user',
       userImage: userData?.avatarUrl,
       videoUrl: randomVideo.videoUrl,
       thumbnailUrl: randomVideo.thumbnailUrl,
@@ -601,8 +658,15 @@ async function createConversations(adamId: string, otherUserIds: string[]) {
   }
 }
 
-// Add this function to create meal post with likes
-async function createMealPost(userId: string, postData: any) {
+// Add this helper function at the top level
+function getRandomTimestampInLastTwoWeeks() {
+  const now = new Date();
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  return new Date(twoWeeksAgo.getTime() + Math.random() * (now.getTime() - twoWeeksAgo.getTime()));
+}
+
+// Update the createMealPost function signature and implementation
+async function createMealPost(userId: string, postData: any, timestamp: Date) {
   try {
     // First get the user's data
     const userDoc = await db.collection('users').doc(userId).get();
@@ -613,18 +677,39 @@ async function createMealPost(userId: string, postData: any) {
       .where('uid', '!=', userId)
       .get();
     
-    const potentialLikers = usersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      firstName: doc.data().firstName || 'Unknown',
-      lastName: doc.data().lastName || '',
-      displayName: doc.data().displayName || 'Unknown'
-    }));
+    if (!usersSnapshot.docs.length) {
+      console.log('No users found for liking/commenting');
+      return null;
+    }
+
+    const potentialLikers = usersSnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        firstName: doc.data().firstName || 'Unknown',
+        lastName: doc.data().lastName || '',
+        displayName: doc.data().displayName || 'Unknown',
+        avatarUrl: doc.data().avatarUrl
+      }))
+      .filter(user => user.id);
     
-    // Generate random number of likes (between 5 and 20)
-    const numLikes = Math.floor(Math.random() * 16) + 5;
+    // Determine number of likes based on a distribution
+    // 25% chance each for 0, 1, 2, and 3+ likes
+    const likesDistribution = Math.random();
+    let numLikes;
+    if (likesDistribution < 0.25) {
+      numLikes = 0; // 25% chance of 0 likes
+    } else if (likesDistribution < 0.5) {
+      numLikes = 1; // 25% chance of 1 like
+    } else if (likesDistribution < 0.75) {
+      numLikes = 2; // 25% chance of 2 likes
+    } else {
+      numLikes = Math.floor(Math.random() * 8) + 3; // 25% chance of 3-10 likes
+    }
+
+    // Select random likers based on the determined number
     const selectedLikers = [...potentialLikers]
       .sort(() => 0.5 - Math.random())
-      .slice(0, numLikes);
+      .slice(0, Math.min(numLikes, potentialLikers.length));
 
     // Store just the IDs in the likedBy array
     const likedByIds = selectedLikers.map(liker => liker.id);
@@ -635,46 +720,301 @@ async function createMealPost(userId: string, postData: any) {
       userAvatarUrl: userData.avatarUrl,
       title: postData.title,
       description: postData.description,
-      photoUrls: postData.photoUrls,
+      photoUrls: postData.photoUrls || [],
       ingredients: postData.ingredients,
       instructions: postData.instructions,
-      mealType: postData.mealType,
+      mealType: postData.mealType.toLowerCase(), // Ensure mealType is lowercase
       cookTime: postData.cookTime || 0,
       calories: postData.calories || 0,
       protein: postData.protein || 0,
       isVegetarian: postData.isVegetarian || false,
       carbonSaved: postData.carbonSaved || 0.0,
       isPublic: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.Timestamp.fromDate(timestamp),
       likes: likedByIds.length,
       likesCount: likedByIds.length,
       commentsCount: 0,
-      likedBy: likedByIds, // Just store the array of user IDs
+      likedBy: likedByIds,
     };
+
+    console.log('Creating meal post with data:', {
+      userId,
+      title: mealPost.title,
+      mealType: mealPost.mealType,
+      timestamp: timestamp.toISOString()
+    });
 
     const postDoc = await db.collection('meal_posts').add(mealPost);
     
     // Create a likes subcollection for the meal post with user details
     const batch = admin.firestore().batch();
     selectedLikers.forEach(liker => {
-      const likeDoc = postDoc.collection('likes').doc(liker.id);
-      batch.set(likeDoc, {
-        userId: liker.id,
-        firstName: liker.firstName,
-        lastName: liker.lastName,
-        displayName: liker.displayName,
-        timestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
+      if (liker && liker.id) {
+        const likeDoc = postDoc.collection('likes').doc(liker.id);
+        batch.set(likeDoc, {
+          userId: liker.id,
+          firstName: liker.firstName,
+          lastName: liker.lastName,
+          displayName: liker.displayName,
+          timestamp: admin.firestore.Timestamp.fromDate(timestamp)
+        });
+      }
     });
     await batch.commit();
 
-    console.log(`Created meal post: ${postDoc.id} with ${likedByIds.length} likes`);
+    // Add random number of comments (0-3)
+    const numComments = Math.floor(Math.random() * 4);
+    if (numComments > 0) {
+      const potentialCommenters = potentialLikers.filter(user => user.id !== userId);
+
+      if (potentialCommenters.length > 0) {
+        for (let i = 0; i < numComments; i++) {
+          const commenter = potentialCommenters[Math.floor(Math.random() * potentialCommenters.length)];
+          
+          if (commenter && commenter.id) {
+            const commentText = sampleMealComments[Math.floor(Math.random() * sampleMealComments.length)];
+            const commentTime = new Date(timestamp.getTime() + Math.random() * (Date.now() - timestamp.getTime()));
+            
+            await postDoc.collection('comments').add({
+              userId: commenter.id,
+              displayName: commenter.displayName,
+              avatarUrl: commenter.avatarUrl,
+              text: commentText,
+              createdAt: admin.firestore.Timestamp.fromDate(commentTime),
+              likes: 0,
+              isPinned: false,
+              imageUrl: null,
+            });
+          }
+        }
+
+        await postDoc.update({
+          commentsCount: numComments
+        });
+      }
+    }
+
+    console.log(`Successfully created meal post: ${postDoc.id}`);
     return postDoc.id;
   } catch (error) {
     console.error('Error creating meal post:', error);
+    console.error('Error details:', {
+      userId,
+      postTitle: postData?.title,
+      timestamp: timestamp?.toISOString()
+    });
     throw error;
   }
 }
+
+// Add these arrays before the seedDatabase function
+const adamMealPosts = [
+  {
+    title: 'Perfect Morning Avocado Toast',
+    description: 'Starting my day right with this protein-packed avocado toast! Added a poached egg and everything bagel seasoning 🥑',
+    photoUrls: ['https://images.unsplash.com/photo-1541519227354-08fa5d50c44d'],
+    ingredients: 'Sourdough bread, ripe avocado, eggs, everything bagel seasoning, red pepper flakes',
+    instructions: 'Toast bread, mash avocado, poach egg, assemble, and season',
+    mealType: 'breakfast',
+    cookTime: 15,
+    calories: 350,
+    protein: 15,
+    isVegetarian: true,
+    carbonSaved: 0.8,
+  },
+  {
+    title: 'Homemade Sushi Rolls',
+    description: 'Finally mastered the art of rolling sushi at home! 🍱 These spicy tuna rolls are a game changer',
+    photoUrls: ['https://images.unsplash.com/photo-1579871494447-9811cf80d66c'],
+    ingredients: 'Sushi rice, nori, fresh tuna, spicy mayo, cucumber',
+    instructions: 'Prepare rice, mix spicy tuna, roll carefully, slice',
+    mealType: 'dinner',
+    cookTime: 45,
+    calories: 450,
+    protein: 22,
+    isVegetarian: false,
+    carbonSaved: 1.2,
+  },
+  {
+    title: 'Protein Power Bowl',
+    description: 'Post-workout fuel that tastes amazing! Quinoa base with grilled chicken and roasted veggies 💪',
+    photoUrls: ['https://images.unsplash.com/photo-1543339308-43e59d6b73a6'],
+    ingredients: 'Quinoa, chicken breast, mixed vegetables, olive oil, lemon',
+    instructions: 'Cook quinoa, grill chicken, roast vegetables, assemble',
+    mealType: 'lunch',
+    cookTime: 30,
+    calories: 520,
+    protein: 35,
+    isVegetarian: false,
+    carbonSaved: 0.9,
+  },
+  {
+    title: 'Healthy Overnight Oats',
+    description: 'Meal prep made easy! These overnight oats with berries and honey are perfect for busy mornings 🍯',
+    photoUrls: ['https://images.unsplash.com/photo-1517673400267-0251440c45dc'],
+    ingredients: 'Rolled oats, almond milk, chia seeds, mixed berries, honey',
+    instructions: 'Mix ingredients, refrigerate overnight, top with fresh berries',
+    mealType: 'breakfast',
+    cookTime: 5,
+    calories: 310,
+    protein: 12,
+    isVegetarian: true,
+    carbonSaved: 0.5,
+  },
+  {
+    title: 'Homemade Pizza Night',
+    description: 'Nothing beats a fresh homemade pizza! The secret is in the dough fermentation 🍕',
+    photoUrls: ['https://images.unsplash.com/photo-1574071318508-1cdbab80d002'],
+    ingredients: 'Pizza dough, San Marzano tomatoes, fresh mozzarella, basil',
+    instructions: 'Stretch dough, add toppings, bake at high heat',
+    mealType: 'dinner',
+    cookTime: 25,
+    calories: 850,
+    protein: 28,
+    isVegetarian: true,
+    carbonSaved: 1.1,
+  },
+  {
+    title: 'Mediterranean Lunch Bowl',
+    description: 'Fresh and light Mediterranean bowl with homemade hummus and falafel 🥙',
+    photoUrls: ['https://images.unsplash.com/photo-1529059997568-3d847b1154f0'],
+    ingredients: 'Chickpeas, tahini, mixed greens, falafel, olive oil',
+    instructions: 'Make hummus, prepare falafel, assemble bowl',
+    mealType: 'lunch',
+    cookTime: 40,
+    calories: 480,
+    protein: 18,
+    isVegetarian: true,
+    carbonSaved: 1.4,
+  },
+  {
+    title: 'Healthy Afternoon Smoothie',
+    description: 'The perfect afternoon pick-me-up! Packed with superfoods and protein 🥤',
+    photoUrls: ['https://images.unsplash.com/photo-1502741224143-90386d7f8c82'],
+    ingredients: 'Banana, spinach, protein powder, almond milk, chia seeds',
+    instructions: 'Blend all ingredients until smooth',
+    mealType: 'snack',
+    cookTime: 5,
+    calories: 220,
+    protein: 20,
+    isVegetarian: true,
+    carbonSaved: 0.3,
+  },
+  {
+    title: 'Grilled Steak & Veggies',
+    description: 'Perfect medium-rare steak with grilled seasonal vegetables 🥩',
+    photoUrls: ['https://images.unsplash.com/photo-1544025162-d76694265947'],
+    ingredients: 'Ribeye steak, asparagus, mushrooms, garlic butter',
+    instructions: 'Season steak, grill to preference, rest, serve',
+    mealType: 'dinner',
+    cookTime: 20,
+    calories: 680,
+    protein: 45,
+    isVegetarian: false,
+    carbonSaved: 0.0,
+  },
+  {
+    title: 'Energy Protein Balls',
+    description: 'No-bake protein balls - perfect pre-workout snack or afternoon treat! 🍪',
+    photoUrls: ['https://images.unsplash.com/photo-1604329760661-e71dc83f8f26'],
+    ingredients: 'Dates, almonds, protein powder, cocoa powder, honey',
+    instructions: 'Process ingredients, form balls, refrigerate',
+    mealType: 'snack',
+    cookTime: 15,
+    calories: 120,
+    protein: 8,
+    isVegetarian: true,
+    carbonSaved: 0.4,
+  },
+  {
+    title: 'Spicy Ramen Bowl',
+    description: 'Homemade ramen with a perfect soft-boiled egg and fresh vegetables 🍜',
+    photoUrls: ['https://images.unsplash.com/photo-1569718212165-3a8278d5f624'],
+    ingredients: 'Ramen noodles, pork belly, soft-boiled egg, green onions',
+    instructions: 'Prepare broth, cook noodles, assemble toppings',
+    mealType: 'dinner',
+    cookTime: 35,
+    calories: 580,
+    protein: 32,
+    isVegetarian: false,
+    carbonSaved: 0.7,
+  }
+];
+
+const adamVideos = [
+  {
+    title: 'Perfect Homemade Pizza',
+    description: 'Learn how to make restaurant-quality pizza at home',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/pizza/300/300',
+    ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
+    instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
+  },
+  {
+    title: 'Classic Pasta Carbonara',
+    description: 'Authentic Italian carbonara recipe',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/pasta/300/300',
+    ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
+    instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
+  },
+  {
+    title: 'Ultimate Burger Guide',
+    description: 'How to make the perfect burger',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/burger/300/300',
+    ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
+    instructions: ['Form patties', 'Season well', 'Grill to perfection'],
+  },
+  {
+    title: 'Creamy Mac and Cheese',
+    description: 'The ultimate comfort food recipe',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/mac/300/300',
+    ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
+    instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
+  },
+  {
+    title: 'Chocolate Chip Cookies',
+    description: 'Soft and chewy chocolate chip cookies',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/cookies/300/300',
+    ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
+    instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
+  },
+  {
+    title: 'Spicy Thai Curry',
+    description: 'Authentic Thai red curry recipe',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/curry/300/300',
+    ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
+    instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
+  },
+  {
+    title: 'Fresh Sushi Rolls',
+    description: 'Learn to make sushi at home',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/sushi/300/300',
+    ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
+    instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
+  },
+  {
+    title: 'Homemade Bread',
+    description: 'Simple no-knead bread recipe',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/bread/300/300',
+    ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
+    instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
+  },
+  {
+    title: 'Grilled Steak',
+    description: 'Perfect steak every time',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    thumbnailUrl: 'https://picsum.photos/seed/steak/300/300',
+    ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
+    instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],
+  }
+];
 
 async function seedDatabase() {
   try {
@@ -683,21 +1023,21 @@ async function seedDatabase() {
       email: 'adamjweil@gmail.com',
       password: 'password',
       displayName: 'Adam Weil',
-      username: 'adam',
       firstName: 'Adam',
       lastName: 'Weil',
       birthDate: '1989-02-14',
       gender: 'Man',
       foodPreferences: ['Italian', 'Japanese', 'American'],
       bio: 'Food enthusiast and home chef',
-      avatarUrl: faker.image.avatar(),
+      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e',
     };
 
     const createdUserIds: string[] = [];
-    let adamId: string; // Define adamId at the top level of the try block
+    let adamId: string;
 
     // Create auth user for Adam
     try {
+      console.log('Creating Adam\'s account...');
       const adamUserRecord = await auth.createUser({
         email: adamUser.email,
         password: adamUser.password,
@@ -705,14 +1045,14 @@ async function seedDatabase() {
         photoURL: adamUser.avatarUrl,
       });
 
-      adamId = adamUserRecord.uid; // Store the ID
+      adamId = adamUserRecord.uid;
+      console.log('Created Adam\'s account with ID:', adamId);
 
       // Create user document in Firestore
       await db.collection('users').doc(adamUserRecord.uid).set({
         uid: adamUserRecord.uid,
         email: adamUser.email,
         displayName: adamUser.displayName,
-        username: adamUser.username,
         firstName: adamUser.firstName,
         lastName: adamUser.lastName,
         birthDate: adamUser.birthDate,
@@ -727,90 +1067,35 @@ async function seedDatabase() {
       });
 
       createdUserIds.push(adamUserRecord.uid);
-      console.log(`Created specific user: ${adamUserRecord.uid}`);
 
-      // Create 9 specific videos for Adam
-      const adamVideos = [
-        {
-          title: 'Perfect Homemade Pizza',
-          description: 'Learn how to make restaurant-quality pizza at home',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/pizza/300/300',
-          ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
-          instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
-        },
-        {
-          title: 'Classic Pasta Carbonara',
-          description: 'Authentic Italian carbonara recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/pasta/300/300',
-          ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
-          instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
-        },
-        {
-          title: 'Ultimate Burger Guide',
-          description: 'How to make the perfect burger',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/burger/300/300',
-          ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
-          instructions: ['Form patties', 'Season well', 'Grill to perfection'],
-        },
-        {
-          title: 'Creamy Mac and Cheese',
-          description: 'The ultimate comfort food recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/mac/300/300',
-          ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
-          instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
-        },
-        {
-          title: 'Chocolate Chip Cookies',
-          description: 'Soft and chewy chocolate chip cookies',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/cookies/300/300',
-          ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
-          instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
-        },
-        {
-          title: 'Spicy Thai Curry',
-          description: 'Authentic Thai red curry recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/curry/300/300',
-          ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
-          instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
-        },
-        {
-          title: 'Fresh Sushi Rolls',
-          description: 'Learn to make sushi at home',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/sushi/300/300',
-          ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
-          instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
-        },
-        {
-          title: 'Homemade Bread',
-          description: 'Simple no-knead bread recipe',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/bread/300/300',
-          ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
-          instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
-        },
-        {
-          title: 'Grilled Steak',
-          description: 'Perfect steak every time',
-          videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-          thumbnailUrl: 'https://picsum.photos/seed/steak/300/300',
-          ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
-          instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],
+      // Create other users first to have them available for likes and comments
+      console.log('Creating random users...');
+      for (let i = 0; i < 10; i++) {
+        const userId = await createUser();
+        createdUserIds.push(userId);
+        console.log(`Created user ${i + 1}/10 with ID: ${userId}`);
+      }
+
+      // Now create Adam's meal posts
+      console.log('Creating meal posts for Adam...');
+      for (const postData of adamMealPosts) {
+        try {
+          const timestamp = getRandomTimestampInLastTwoWeeks();
+          const postId = await createMealPost(adamId, postData, timestamp);
+          console.log(`Successfully created meal post for Adam: ${postData.title} with ID: ${postId} at ${timestamp.toISOString()}`);
+        } catch (error) {
+          console.error(`Failed to create meal post: ${postData.title}`, error);
+          console.error('Error details:', error);
         }
-      ];
+      }
 
+      // Create videos for Adam
+      console.log('Creating videos for Adam...');
       const createdVideos = [];
       for (const videoData of adamVideos) {
         const videoDoc = await db.collection('videos').add({
-          userId: adamUserRecord.uid,
+          userId: adamId,
           username: adamUser.displayName,
-          userHandle: adamUser.username,
           userImage: adamUser.avatarUrl,
           ...videoData,
           likes: 0,
@@ -820,7 +1105,6 @@ async function seedDatabase() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Create the likes subcollection document
         await videoDoc.collection('likes').doc('placeholder').set({
           timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -829,57 +1113,52 @@ async function seedDatabase() {
         console.log(`Created video for Adam: ${videoDoc.id}`);
       }
 
-      await db.collection('users').doc(adamUserRecord.uid).update({
+      // Update video count
+      await db.collection('users').doc(adamId).update({
         videoCount: adamVideos.length,
       });
 
-      // Pass the created videos to createAdamCollections
-      await createAdamCollections(adamUserRecord.uid, createdVideos);
+      // Create Adam's collections
+      await createAdamCollections(adamId, createdVideos);
 
-      // Add Adam's meal posts
-      for (const postData of sampleMealPosts) {
-        await createMealPost(adamUserRecord.uid, postData);
-        console.log(`Created meal post for Adam: ${postData.title}`);
+      // Create videos for other users
+      console.log('Creating content for other users...');
+      for (const userId of createdUserIds) {
+        if (userId === adamId) continue;
+
+        // Create 1-2 videos for each user
+        const numVideos = Math.random() < 0.5 ? 1 : 2;
+        for (let j = 0; j < numVideos; j++) {
+          const videoId = await createVideo(userId);
+          console.log(`Created video ${j + 1}/${numVideos} for user ${userId}: ${videoId}`);
+        }
+
+        // Create 3 random meal posts for each user
+        for (let j = 0; j < 3; j++) {
+          const randomPost = sampleMealPosts[Math.floor(Math.random() * sampleMealPosts.length)];
+          const timestamp = getRandomTimestampInLastTwoWeeks();
+          await createMealPost(userId, {
+            ...randomPost,
+            title: `${randomPost.title} ${j + 1}`,
+            description: `${faker.lorem.sentence()} ${randomPost.description}`,
+          }, timestamp);
+          console.log(`Created meal post ${j + 1}/3 for user ${userId}`);
+        }
       }
+
+      // Create follow connections
+      await createRandomConnections(createdUserIds, adamId);
+
+      // Create conversations
+      const otherUserIds = createdUserIds.filter(id => id !== adamId);
+      await createConversations(adamId, otherUserIds);
+
+      console.log('Database seeding completed successfully');
+      process.exit(0);
     } catch (error) {
       console.error('Error creating Adam\'s account:', error);
-      throw error; // Re-throw the error to stop the seeding process
+      throw error;
     }
-
-    // Create random users
-    for (let i = 0; i < 10; i++) {
-      const userId = await createUser();
-      createdUserIds.push(userId);
-      console.log(`Created user ${i + 1}/10 with ID: ${userId}`);
-
-      // Create 1-2 videos for each user
-      const numVideos = Math.random() < 0.5 ? 1 : 2;
-      for (let j = 0; j < numVideos; j++) {
-        const videoId = await createVideo(userId);
-        console.log(`Created video ${j + 1}/${numVideos} for user ${userId}: ${videoId}`);
-      }
-
-      // Create 3 random meal posts for each user
-      for (let j = 0; j < 3; j++) {
-        const randomPost = sampleMealPosts[Math.floor(Math.random() * sampleMealPosts.length)];
-        await createMealPost(userId, {
-          ...randomPost,
-          title: `${randomPost.title} ${j + 1}`,
-          description: `${faker.lorem.sentence()} ${randomPost.description}`,
-        });
-        console.log(`Created meal post ${j + 1}/3 for user ${userId}`);
-      }
-    }
-
-    // Create follow connections
-    await createRandomConnections(createdUserIds, adamId);
-
-    // Create conversations using adamId instead of adamUserRecord
-    const otherUserIds = createdUserIds.filter(id => id !== adamId);
-    await createConversations(adamId, otherUserIds);
-
-    console.log('Database seeding completed successfully');
-    process.exit(0);
   } catch (error) {
     console.error('Error during seeding:', error);
     process.exit(1);

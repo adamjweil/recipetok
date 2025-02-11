@@ -109,7 +109,7 @@ class MealPost {
       ingredients: data['ingredients'],
       instructions: data['instructions'],
       mealType: MealType.values.firstWhere(
-        (e) => e.toString() == data['mealType'],
+        (e) => e.toString().split('.').last == (data['mealType'] as String?)?.toLowerCase(),
         orElse: () => MealType.snack,
       ),
       cookTime: data['cookTime']?.toInt() ?? 0,

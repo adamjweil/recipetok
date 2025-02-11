@@ -2,7 +2,10 @@
   "name": "firebase-cleanup-scripts",
   "version": "1.0.0",
   "scripts": {
-    "clear-users": "ts-node clear-users.ts"
+    "clear-users": "ts-node clear-users.ts",
+    "seed-users": "ts-node seed-users.ts",
+    "reseed": "ts-node clear-users.ts && ts-node seed-users.ts"
+
   },
   "dependencies": {
     "firebase-admin": "^11.0.0",

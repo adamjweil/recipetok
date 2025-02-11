@@ -135,6 +135,7 @@ class CustomCacheManager {
     Widget? errorWidget,
   }) {
     if (!isValidImageUrl(url)) {
+      debugPrint('❌ Invalid image URL detected: $url');
       return Container(
         width: width,
         height: height,
@@ -147,10 +148,12 @@ class CustomCacheManager {
 
     return CachedNetworkImage(
       imageUrl: url!,
-      cacheManager: instance,
       width: width,
       height: height,
       fit: fit,
+      fadeInDuration: const Duration(milliseconds: 300),
+      fadeOutDuration: const Duration(milliseconds: 300),
+      placeholderFadeInDuration: const Duration(milliseconds: 300),
       placeholder: (context, url) => placeholder ?? Container(
         width: width,
         height: height,
@@ -162,6 +165,36 @@ class CustomCacheManager {
       errorWidget: (context, url, error) {
         debugPrint('❌ Error loading image from: $url');
         debugPrint('Error details: $error');
+        
+        // For 404 errors, try an alternative URL format
+        if (error is HttpException && error.toString().contains('404')) {
+          final altUrl = url.replaceAll('images.unsplash.com', 'source.unsplash.com');
+          debugPrint('🔄 Retrying with alternative URL: $altUrl');
+          
+          return CachedNetworkImage(
+            imageUrl: altUrl,
+            width: width,
+            height: height,
+            fit: fit,
+            placeholder: (context, url) => placeholder ?? Container(
+              width: width,
+              height: height,
+              color: Colors.grey[200],
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            errorWidget: (context, url, finalError) => Container(
+              width: width,
+              height: height,
+              color: Colors.grey[200],
+              child: errorWidget ?? const Center(
+                child: Icon(Icons.error_outline, color: Colors.grey),
+              ),
+            ),
+          );
+        }
+        
         return Container(
           width: width,
           height: height,

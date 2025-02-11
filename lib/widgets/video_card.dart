@@ -179,79 +179,21 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
             child: VideoPlayer(_videoController),
           ),
         ),
-
-        // User Info Overlay
-        Positioned(
-          left: 16,
-          bottom: 16,
-          right: 16,
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundImage: widget.videoData['userImage'] != null
-                    ? NetworkImage(widget.videoData['userImage'])
-                    : null,
-                child: widget.videoData['userImage'] == null
-                    ? const Icon(Icons.person, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.videoData['username'] ?? 'Anonymous',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '@${widget.videoData['userHandle'] ?? 'user'}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (widget.videoData['userId'] != widget.currentUserId) // Don't show follow button for own videos
-                ElevatedButton(
-                  onPressed: _toggleFollow,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isFollowing ? Colors.transparent : primaryColor,
-                    foregroundColor: _isFollowing ? Colors.white70 : Colors.white,
-                    elevation: _isFollowing ? 0 : 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: _isFollowing 
-                          ? const BorderSide(color: Colors.white30)
-                          : BorderSide.none,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                  ),
-                  child: Text(_isFollowing ? 'Following' : 'Follow'),
-                ),
-            ],
-          ),
-        ),
       ],
     );
   }
 
   Widget _buildActionButtons() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey[200]!,
+            width: 1,
+          ),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -261,48 +203,103 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildAnimatedActionButton(
-            icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
-            label: '$_localLikeCount',
-            color: _localIsLiked ? accentColor : secondaryColor,
-            onTap: () {
-              _handleLike();
-              _animationController
-                ..reset()
-                ..forward();
-            },
+          // User Info Section
+          CircleAvatar(
+            radius: 15,
+            backgroundImage: widget.videoData['userImage'] != null
+                ? NetworkImage(widget.videoData['userImage'])
+                : null,
+            child: widget.videoData['userImage'] == null
+                ? const Icon(Icons.person, color: Colors.white, size: 15)
+                : null,
           ),
-          _buildAnimatedActionButton(
-            icon: Icons.comment_outlined,
-            label: 'Comment',
-            onTap: () => _showComments(context),
+          const SizedBox(width: 8),
+          // Username and Follow Button
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.videoData['username'] ?? 'Anonymous',
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                if (widget.videoData['userId'] != widget.currentUserId)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: ElevatedButton(
+                      onPressed: _toggleFollow,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isFollowing ? Colors.transparent : primaryColor,
+                        foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
+                        elevation: _isFollowing ? 0 : 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: _isFollowing 
+                              ? const BorderSide(color: Colors.black26)
+                              : BorderSide.none,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        minimumSize: const Size(60, 0),
+                        maximumSize: const Size(80, 22),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        _isFollowing ? 'Following' : 'Follow',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          _buildAnimatedActionButton(
-            icon: _isTryLater ? Icons.bookmark : Icons.bookmark_border,
-            label: 'Save',
-            color: _isTryLater ? accentColor : secondaryColor,
-            onTap: () => _toggleBookmark(context),
-          ),
-          _buildAnimatedActionButton(
-            icon: Icons.remove_red_eye_outlined,
-            label: '$_localViewCount',
-            onTap: () {},
+          // Action Buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildAnimatedLikeButton(),
+              _buildActionButton(
+                icon: Icons.comment_outlined,
+                label: 'Comment',
+                onTap: () => _showComments(context),
+              ),
+              _buildActionButton(
+                icon: _isTryLater ? Icons.bookmark : Icons.bookmark_border,
+                label: 'Save',
+                color: _isTryLater ? Theme.of(context).primaryColor : secondaryColor,
+                onTap: () => _toggleBookmark(context),
+              ),
+              _buildActionButton(
+                icon: Icons.remove_red_eye_outlined,
+                label: '$_localViewCount',
+                onTap: () {},
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAnimatedActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color color = secondaryColor,
-  }) {
+  Widget _buildAnimatedLikeButton() {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        _handleLike();
+        _animationController
+          ..reset()
+          ..forward();
+      },
       child: ScaleTransition(
         scale: Tween<double>(begin: 1.0, end: 0.9).animate(
           CurvedAnimation(
@@ -311,17 +308,21 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           ),
         ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 4),
+              Icon(
+                _localIsLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                color: _localIsLiked ? Theme.of(context).primaryColor : secondaryColor,
+                size: 20,
+              ),
+              const SizedBox(height: 2),
               Text(
-                label,
+                '$_localLikeCount',
                 style: TextStyle(
-                  color: color,
-                  fontSize: 12,
+                  color: _localIsLiked ? Theme.of(context).primaryColor : secondaryColor,
+                  fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -332,30 +333,82 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     );
   }
 
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = secondaryColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTitleSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.videoData['title'] ?? 'Untitled Recipe',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: secondaryColor,
+          // Title with subtle accent line
+          Container(
+            padding: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: Theme.of(context).primaryColor.withOpacity(0.6),
+                  width: 3,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                widget.videoData['title'] ?? 'Untitled Recipe',
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w600,
+                  color: secondaryColor,
+                  height: 1.3,
+                  letterSpacing: -0.2,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            widget.videoData['description'] ?? '',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black87,
-              height: 1.5,
+          const SizedBox(height: 12),
+          // Description with matching style but smaller
+          if (widget.videoData['description'] != null && widget.videoData['description'].toString().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                widget.videoData['description'] ?? '',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[700],
+                  height: 1.5,
+                  letterSpacing: 0.1,
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -363,7 +416,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
 
   Widget _buildContentSections() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Column(
         children: [
           _buildExpandableSection(
@@ -373,7 +426,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
             onTap: () => setState(() => _isIngredientsExpanded = !_isIngredientsExpanded),
             child: _buildIngredientsList(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           _buildExpandableSection(
             title: 'Instructions',
             icon: Icons.format_list_numbered,
@@ -396,12 +449,12 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -409,17 +462,17 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         children: [
           InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(10),
               child: Row(
                 children: [
-                  Icon(icon, color: primaryColor),
-                  const SizedBox(width: 12),
+                  Icon(icon, color: primaryColor, size: 16),
+                  const SizedBox(width: 8),
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: secondaryColor,
                     ),
@@ -431,6 +484,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                     child: const Icon(
                       Icons.keyboard_arrow_down,
                       color: secondaryColor,
+                      size: 16,
                     ),
                   ),
                 ],
@@ -454,27 +508,27 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     final ingredients = (widget.videoData['ingredients'] as List<dynamic>?) ?? [];
     
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
         children: ingredients.map<Widget>((ingredient) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
+                  width: 4,
+                  height: 4,
                   decoration: const BoxDecoration(
                     color: primaryColor,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     ingredient.toString(),
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       color: Colors.black87,
                     ),
                   ),
@@ -491,17 +545,17 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     final instructions = (widget.videoData['instructions'] as List<dynamic>?) ?? [];
     
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
         children: instructions.asMap().entries.map<Widget>((entry) {
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 20,
-                  height: 20,
+                  width: 14,
+                  height: 14,
                   decoration: const BoxDecoration(
                     color: primaryColor,
                     shape: BoxShape.circle,
@@ -512,19 +566,19 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                        fontSize: 9,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     entry.value.toString(),
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       color: Colors.black87,
-                      height: 1.4,
+                      height: 1.3,
                     ),
                   ),
                 ),
