@@ -95,7 +95,7 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy', 'likesCount'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedBy', 'likesCount', 'commentsCount'])
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       

@@ -12,6 +12,7 @@ import '../models/meal_post.dart';
 import 'package:intl/intl.dart';
 import '../widgets/meal_post/meal_post_wrapper.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/rendering.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,7 +21,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   final PageController _pageController = PageController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -28,12 +29,52 @@ class _HomeScreenState extends State<HomeScreen> {
   List<QueryDocumentSnapshot>? _cachedVideos;
   final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
 
+  // Add this to maintain state when switching tabs
+  @override
+  bool get wantKeepAlive => true;
+
+  // Add a posts cache
+  final Map<String, MealPost> _postsCache = {};
+
+  static const int _postsPerBatch = 10;
+  DocumentSnapshot? _lastDocument;
+  bool _hasMorePosts = true;
+  bool _isLoadingMore = false;
+
+  // Add these new declarations
+  final ScrollController _scrollController = ScrollController();
+  List<String> followingUsers = [];
+
   @override
   void initState() {
     super.initState();
-    // Add this to initialize the first video
+    _initializeFollowingUsers();
+    
+    // Add scroll listener for pagination
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent * 0.8 && // Load when 80% scrolled
+          !_isLoadingMore &&
+          _hasMorePosts) {
+        _loadMorePosts();
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _playInitialVideo();
+    });
+  }
+
+  // Add this method to initialize following users
+  Future<void> _initializeFollowingUsers() async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    
+    setState(() {
+      followingUsers = List<String>.from(userDoc.data()?['following'] ?? []);
+      followingUsers.add(currentUserId); // Include user's own posts
     });
   }
 
@@ -155,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _videoKeys.clear();
     _pageController.dispose();
+    _scrollController.dispose(); // Don't forget to dispose the controller
     super.dispose();
   }
 
@@ -207,12 +249,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Rest of the existing code for showing the feed
           return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('meal_posts')
-                .where('userId', whereIn: followingUsers)
-                .where('isPublic', isEqualTo: true)
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
+            stream: _getPostsStream(),
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text('Error: ${snapshot.error}'));
@@ -249,11 +286,31 @@ class _HomeScreenState extends State<HomeScreen> {
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: posts.length,
+                key: const PageStorageKey('home_posts_list'),
+                addAutomaticKeepAlives: true,
+                addRepaintBoundaries: true,
+                controller: _scrollController,
+                // Increase cache extent to preload more items
+                cacheExtent: 3000.0,
                 itemBuilder: (context, index) {
-                  final post = MealPost.fromFirestore(posts[index]);
-                  return MealPostWrapper(
-                    post: post,
-                    showUserInfo: true,
+                  // Try to get post from cache first
+                  final String postId = posts[index].id;
+                  MealPost? post = _postsCache[postId];
+                  
+                  // If not in cache, create and cache it
+                  if (post == null) {
+                    post = MealPost.fromFirestore(posts[index]);
+                    _postsCache[postId] = post;
+                  }
+                  
+                  return KeyedSubtree(
+                    key: ValueKey(post.id),
+                    child: RepaintBoundary(
+                      child: MealPostWrapper(
+                        post: post,
+                        showUserInfo: true,
+                      ),
+                    ),
                   );
                 },
               );
@@ -264,6 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Add this method to optimize following users stream
   Stream<List<String>> _getFollowingUsers() {
     return FirebaseFirestore.instance
         .collection('users')
@@ -274,6 +332,38 @@ class _HomeScreenState extends State<HomeScreen> {
       following.add(currentUserId); // Include user's own posts
       return following;
     });
+  }
+
+  // Update the posts stream to be more efficient
+  Stream<QuerySnapshot> _getPostsStream() {
+    return FirebaseFirestore.instance
+        .collection('meal_posts')
+        .where('userId', whereIn: followingUsers)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50) // Increased from default to load more posts initially
+        .snapshots()
+        .asyncMap((snapshot) async {
+          if (snapshot.docs.isNotEmpty) {
+            _lastDocument = snapshot.docs.last;
+            
+            // Pre-cache all images from all posts immediately
+            for (var doc in snapshot.docs) {
+              final post = MealPost.fromFirestore(doc);
+              // Pre-cache user avatar
+              if (post.userAvatarUrl != null) {
+                unawaited(CustomCacheManager.instance.getSingleFile(post.userAvatarUrl!));
+              }
+              // Pre-cache all post photos
+              for (var url in post.photoUrls) {
+                unawaited(CustomCacheManager.instance.getSingleFile(url));
+              }
+              // Cache the post data
+              _postsCache[post.id] = post;
+            }
+          }
+          return snapshot;
+        });
   }
 
   // Update the method to get recommended users with better metrics
@@ -584,6 +674,38 @@ class _HomeScreenState extends State<HomeScreen> {
       await batch.commit();
     } catch (e) {
       debugPrint('Error following user: $e');
+    }
+  }
+
+  // Add method to load more posts
+  Future<void> _loadMorePosts() async {
+    if (!_hasMorePosts || _isLoadingMore || _lastDocument == null) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final query = FirebaseFirestore.instance
+          .collection('meal_posts')
+          .where('userId', whereIn: followingUsers)
+          .where('isPublic', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .startAfterDocument(_lastDocument!)
+          .limit(_postsPerBatch);
+
+      final snapshot = await query.get();
+      if (snapshot.docs.length < _postsPerBatch) {
+        _hasMorePosts = false;
+      }
+      
+      if (snapshot.docs.isNotEmpty) {
+        _lastDocument = snapshot.docs.last;
+      }
+    } catch (e) {
+      debugPrint('Error loading more posts: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
     }
   }
 }

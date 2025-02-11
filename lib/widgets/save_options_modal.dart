@@ -48,71 +48,36 @@ class SaveOptionsModal extends StatelessWidget {
     });
   }
 
-  Future<void> _saveToBookmarks(BuildContext context) async {
+  Future<void> _saveToTryLater(BuildContext context) async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
-      final bookmarkRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('favorites')
+      final videoRef = FirebaseFirestore.instance
+          .collection('videos')
           .doc(videoId);
 
-      // Check if already bookmarked
-      final bookmarkDoc = await bookmarkRef.get();
+      final videoDoc = await videoRef.get();
+      final List<dynamic> tryLaterBy = videoDoc.data()?['tryLaterBy'] ?? [];
+      final bool isInTryLater = tryLaterBy.contains(userId);
       
-      if (bookmarkDoc.exists) {
-        // Remove bookmark
-        await bookmarkRef.delete();
+      if (isInTryLater) {
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayRemove([userId])
+        });
         if (context.mounted) {
           Navigator.pop(context);
-          _showTopSnackBar(context, 'Removed from favorites');
+          _showTopSnackBar(context, 'Removed from Try Later');
         }
       } else {
-        // Add bookmark
-        await bookmarkRef.set({
-          'createdAt': FieldValue.serverTimestamp(),
-          'videoId': videoId,
+        await videoRef.update({
+          'tryLaterBy': FieldValue.arrayUnion([userId])
         });
 
         if (context.mounted) {
           Navigator.pop(context);
-          _showTopSnackBar(context, 'Saved to favorites');
+          _showTopSnackBar(context, 'Added to Try Later');
         }
-      }
-
-      // Force a refresh
-      await bookmarkRef.get();
-
-    } catch (e) {
-      if (context.mounted) {
-        _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
-      }
-    }
-  }
-
-  Future<void> _saveToGroup(BuildContext context, String groupId) async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('groups')
-          .doc(groupId)
-          .update({
-        'videos.$videoId': {
-          'addedAt': FieldValue.serverTimestamp(),
-          'videoId': videoId,
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (context.mounted) {
-        Navigator.pop(context);
-        _showTopSnackBar(context, 'Added to collection');
       }
     } catch (e) {
       if (context.mounted) {
@@ -179,44 +144,6 @@ class SaveOptionsModal extends StatelessWidget {
     }
   }
 
-  Future<void> _saveToTryLater(BuildContext context) async {
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
-
-      final videoRef = FirebaseFirestore.instance
-          .collection('videos')
-          .doc(videoId);
-
-      final videoDoc = await videoRef.get();
-      final List<dynamic> tryLaterBy = videoDoc.data()?['tryLaterBy'] ?? [];
-      final bool isInTryLater = tryLaterBy.contains(userId);
-      
-      if (isInTryLater) {
-        await videoRef.update({
-          'tryLaterBy': FieldValue.arrayRemove([userId])
-        });
-        if (context.mounted) {
-          Navigator.pop(context);
-          _showTopSnackBar(context, 'Removed from Try Later');
-        }
-      } else {
-        await videoRef.update({
-          'tryLaterBy': FieldValue.arrayUnion([userId])
-        });
-
-        if (context.mounted) {
-          Navigator.pop(context);
-          _showTopSnackBar(context, 'Added to Try Later');
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        _showTopSnackBar(context, 'Error: ${e.toString()}', isError: true);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -258,30 +185,6 @@ class SaveOptionsModal extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          // Bookmarks option
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('favorites')
-                .doc(videoId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final isBookmarked = snapshot.data?.exists ?? false;
-              return ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.grey,
-                  child: Icon(Icons.bookmark, color: Colors.white),
-                ),
-                title: const Text('Favorites'),
-                trailing: Icon(
-                  isBookmarked ? Icons.check_circle : Icons.add_circle_outline,
-                  color: isBookmarked ? Colors.green : Colors.grey,
-                ),
-                onTap: () => _saveToBookmarks(context),
-              );
-            },
           ),
           // Add Try Later option
           StreamBuilder<DocumentSnapshot>(
