@@ -348,6 +348,11 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   // Update the posts stream to be more efficient
   Stream<QuerySnapshot> _getPostsStream() {
+    // If followingUsers is empty, return an empty stream
+    if (followingUsers.isEmpty) {
+      return Stream.empty();
+    }
+
     return FirebaseFirestore.instance
         .collection('meal_posts')
         .where('userId', whereIn: followingUsers)

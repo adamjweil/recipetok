@@ -148,16 +148,16 @@ const foodBios = [
 ];
 
 const recipeDescriptions = [
-  'Living my best breakfast life with this avocado toast 🥑 #BreakfastGoals',
-  'When your pasta game is stronger than your Monday motivation 🍝✨',
-  'Plot twist: I can actually cook! 👨‍🍳 Mom would be proud',
-  'This took way longer than the recipe said but worth every minute 😅',
-  'Meal prep Sunday because adulting is hard but being hangry is harder 🥘',
-  'Not to brag but even my picky roommate asked for seconds 💁‍♂️',
-  'Pro tip: Everything tastes better with garlic. Trust me on this one 🧄',
-  'Finally nailed this recipe after 3 failed attempts. Fourth time\'s the charm! 🎉',
-  'My contribution to the potluck: Making store-bought look homemade 😇',
-  'When the recipe says "easy" but you still manage to set off the smoke alarm 🚨'
+  'Nailed this sourdough after 6 months of practice! Look at that crumb structure 🍞✨',
+  'First attempt at homemade ramen and the broth is PERFECT. 18-hour process totally worth it 🍜',
+  'Made croissants from scratch and my French grandmother would be proud! Those layers though 🥐',
+  'Finally mastered the art of tempering chocolate. Look at that shine! No more blooming 🍫',
+  'My homemade pasta game is getting stronger! Made these ravioli completely from scratch 🍝',
+  'Been working on my plating skills and I think I am ready for MasterChef now 👨‍🍳',
+  'The secret is in the 24-hour marinade. Best grilled chicken I have ever made! 🔥',
+  'Three days of prep for this authentic Pho but just look at that clear broth! 🥣',
+  'Made macarons and NOT ONE cracked! Third time is the charm 🤩',
+  'My knife skills are finally paying off - brunoise cut in under 2 minutes! 🔪'
 ];
 
 const commonIngredients = [
@@ -209,7 +209,7 @@ const sampleMessages = [
 const sampleMealPosts = [
   {
     title: 'Homemade Margherita Pizza',
-    description: 'First time making pizza from scratch! The fresh basil and buffalo mozzarella make all the difference 🍕 #HomemadePizza #ItalianCooking',
+    description: 'Finally achieved that perfect Neapolitan crust! 72-hour cold fermented dough and my new pizza steel made all the difference 🍕 #HomemadePizza #ItalianCooking',
     photoUrls: [
       'https://images.unsplash.com/photo-1574071318508-1cdbab80d002',
       'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e',
@@ -225,7 +225,7 @@ const sampleMealPosts = [
   },
   {
     title: 'Avocado Toast Brunch',
-    description: 'Starting my day right with this protein-packed avocado toast! Added a poached egg and everything bagel seasoning 🥑 #HealthyBreakfast #BrunchGoals',
+    description: 'Leveled up my poaching game - look at that perfectly runny yolk! The homemade sourdough makes all the difference 🥑 #HealthyBreakfast #BrunchGoals',
     photoUrls: [
       'https://images.unsplash.com/photo-1541519227354-08fa5d50c44d',
       'https://images.unsplash.com/photo-1588137378633-dea1336ce1e2',
@@ -241,7 +241,7 @@ const sampleMealPosts = [
   },
   {
     title: 'Grilled Salmon Bowl',
-    description: 'Meal prep done right! This omega-3 rich bowl keeps me energized all day. The secret is in the marinade 🐟 #CleanEating #HealthyMealPrep',
+    description: 'Mastered the art of crispy salmon skin while keeping the inside perfectly medium-rare. That color is all natural, no filters needed! 🐟 #CleanEating #HealthyMealPrep',
     photoUrls: [
       'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
       'https://images.unsplash.com/photo-1580476262798-bddd9f4b7369',
@@ -257,7 +257,7 @@ const sampleMealPosts = [
   },
   {
     title: 'Post-Workout Protein Bowl',
-    description: 'My go-to post-gym fuel! Packed with 30g of protein and tons of antioxidants from fresh berries 💪 #PostWorkout #HealthyEating',
+    description: 'Who says healthy cant be Instagram-worthy? Made my own granola and that protein content is insane! 💪 #PostWorkout #HealthyEating',
     photoUrls: [
       'https://images.unsplash.com/photo-1577805947697-89e18249d767',
     ],
@@ -267,7 +267,7 @@ const sampleMealPosts = [
   },
   {
     title: 'Quick Chicken Stir Fry',
-    description: 'When you need dinner in 20 minutes! Used fresh veggies from the farmers market and my homemade stir fry sauce 🥢 #QuickMeals #StirFry',
+    description: 'Wok hei achieved! Finally got that restaurant-style char on my veggies. The secret? Getting that wok smoking hot 🥢 #QuickMeals #StirFry',
     photoUrls: [
       'https://images.unsplash.com/photo-1603133872878-684f208fb84b',
     ],
@@ -666,7 +666,7 @@ function getRandomTimestampInLastTwoWeeks() {
 }
 
 // Update the createMealPost function signature and implementation
-async function createMealPost(userId: string, postData: any, timestamp: Date) {
+async function createMealPost(userId: string, postData: any, timestamp: Date): Promise<string> {
   try {
     // First get the user's data
     const userDoc = await db.collection('users').doc(userId).get();
@@ -679,7 +679,7 @@ async function createMealPost(userId: string, postData: any, timestamp: Date) {
     
     if (!usersSnapshot.docs.length) {
       console.log('No users found for liking/commenting');
-      return null;
+      throw new Error('No users found for liking/commenting');
     }
 
     const potentialLikers = usersSnapshot.docs
@@ -737,13 +737,6 @@ async function createMealPost(userId: string, postData: any, timestamp: Date) {
       likedBy: likedByIds,
     };
 
-    console.log('Creating meal post with data:', {
-      userId,
-      title: mealPost.title,
-      mealType: mealPost.mealType,
-      timestamp: timestamp.toISOString()
-    });
-
     const postDoc = await db.collection('meal_posts').add(mealPost);
     
     // Create a likes subcollection for the meal post with user details
@@ -762,47 +755,9 @@ async function createMealPost(userId: string, postData: any, timestamp: Date) {
     });
     await batch.commit();
 
-    // Add random number of comments (0-3)
-    const numComments = Math.floor(Math.random() * 4);
-    if (numComments > 0) {
-      const potentialCommenters = potentialLikers.filter(user => user.id !== userId);
-
-      if (potentialCommenters.length > 0) {
-        for (let i = 0; i < numComments; i++) {
-          const commenter = potentialCommenters[Math.floor(Math.random() * potentialCommenters.length)];
-          
-          if (commenter && commenter.id) {
-            const commentText = sampleMealComments[Math.floor(Math.random() * sampleMealComments.length)];
-            const commentTime = new Date(timestamp.getTime() + Math.random() * (Date.now() - timestamp.getTime()));
-            
-            await postDoc.collection('comments').add({
-              userId: commenter.id,
-              displayName: commenter.displayName,
-              avatarUrl: commenter.avatarUrl,
-              text: commentText,
-              createdAt: admin.firestore.Timestamp.fromDate(commentTime),
-              likes: 0,
-              isPinned: false,
-              imageUrl: null,
-            });
-          }
-        }
-
-        await postDoc.update({
-          commentsCount: numComments
-        });
-      }
-    }
-
-    console.log(`Successfully created meal post: ${postDoc.id}`);
     return postDoc.id;
   } catch (error) {
     console.error('Error creating meal post:', error);
-    console.error('Error details:', {
-      userId,
-      postTitle: postData?.title,
-      timestamp: timestamp?.toISOString()
-    });
     throw error;
   }
 }
@@ -1016,6 +971,63 @@ const adamVideos = [
   }
 ];
 
+// Add test user data
+const testUser = {
+  email: 'test@test.com',
+  password: 'password',
+  displayName: 'Chef Jamie',
+  firstName: 'Jamie',
+  lastName: 'Thompson',
+  birthDate: '1995-08-21',
+  gender: 'Prefer not to say',
+  foodPreferences: ['Italian', 'French', 'Japanese', 'Mediterranean'],
+  bio: 'Former restaurant chef turned home cooking enthusiast. Specializing in French techniques with a modern twist 🔪✨',
+  avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
+};
+
+// Add test user's meal posts
+const testUserMealPosts = [
+  {
+    title: 'Duck Confit',
+    description: 'After 3 days of curing and 6 hours of slow cooking, this duck confit is EVERYTHING! That crispy skin though... 🦆✨ #FrenchCuisine #ChefLife',
+    photoUrls: ['https://images.unsplash.com/photo-1580476262798-bddd9f4b7369'],
+    ingredients: 'Duck legs, sea salt, garlic, thyme, duck fat, black pepper',
+    instructions: '1. Cure duck for 3 days\n2. Rinse and pat dry\n3. Slow cook in duck fat\n4. Crisp skin before serving',
+    mealType: 'dinner',
+    cookTime: 360,
+    calories: 780,
+    protein: 45,
+    isVegetarian: false,
+    carbonSaved: 0.0,
+  },
+  {
+    title: 'Chocolate Soufflé',
+    description: 'No deflation here! Mastered the perfect rise on these dark chocolate soufflés. The key? Proper egg white technique and preheated ramekins 🍫 #PastryChef #FrenchDesserts',
+    photoUrls: ['https://images.unsplash.com/photo-1470124182917-cc6e71b22ecc'],
+    ingredients: 'Dark chocolate, eggs, butter, sugar, vanilla bean, cream of tartar',
+    instructions: '1. Prepare ramekins\n2. Make chocolate base\n3. Fold in egg whites\n4. Bake immediately',
+    mealType: 'dinner',
+    cookTime: 25,
+    calories: 420,
+    protein: 8,
+    isVegetarian: true,
+    carbonSaved: 0.5,
+  },
+  {
+    title: 'Homemade Ramen',
+    description: 'My 36-hour tonkotsu ramen! That broth clarity and the perfect jammy egg... worth every minute of prep. Even made the noodles from scratch! 🍜 #RamenMaster #ChefTechniques',
+    photoUrls: ['https://images.unsplash.com/photo-1569718212165-3a8278d5f624'],
+    ingredients: 'Pork bones, ramen noodles, chashu pork, soy sauce, mirin, eggs',
+    instructions: '1. Prepare 36-hour broth\n2. Make noodles\n3. Cook chashu\n4. Assemble bowls',
+    mealType: 'dinner',
+    cookTime: 2160,
+    calories: 890,
+    protein: 52,
+    isVegetarian: false,
+    carbonSaved: 0.8,
+  }
+];
+
 async function seedDatabase() {
   try {
     // First create your specific user
@@ -1034,6 +1046,7 @@ async function seedDatabase() {
 
     const createdUserIds: string[] = [];
     let adamId: string;
+    let testUserId: string;
 
     // Create auth user for Adam
     try {
@@ -1068,6 +1081,38 @@ async function seedDatabase() {
 
       createdUserIds.push(adamUserRecord.uid);
 
+      // Create test user
+      console.log('Creating test account...');
+      const testUserRecord = await auth.createUser({
+        email: testUser.email,
+        password: testUser.password,
+        displayName: testUser.displayName,
+        photoURL: testUser.avatarUrl,
+      });
+
+      testUserId = testUserRecord.uid;
+      console.log('Created test account with ID:', testUserId);
+
+      // Create test user document in Firestore
+      await db.collection('users').doc(testUserRecord.uid).set({
+        uid: testUserRecord.uid,
+        email: testUser.email,
+        displayName: testUser.displayName,
+        firstName: testUser.firstName,
+        lastName: testUser.lastName,
+        birthDate: testUser.birthDate,
+        gender: testUser.gender,
+        foodPreferences: testUser.foodPreferences,
+        bio: testUser.bio,
+        avatarUrl: testUser.avatarUrl,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        followers: [],
+        following: [],
+        videoCount: 0,
+      });
+
+      createdUserIds.push(testUserRecord.uid);
+
       // Create other users first to have them available for likes and comments
       console.log('Creating random users...');
       for (let i = 0; i < 10; i++) {
@@ -1076,12 +1121,85 @@ async function seedDatabase() {
         console.log(`Created user ${i + 1}/10 with ID: ${userId}`);
       }
 
+      // Create test user's meal posts with interactions
+      console.log('Creating meal posts for test user...');
+      for (const postData of testUserMealPosts) {
+        try {
+          const timestamp = getRandomTimestampInLastTwoWeeks();
+          const postId = await createMealPost(testUserId!, postData, timestamp);
+          
+          if (!postId) {
+            console.error('Failed to create meal post: postId is null');
+            continue;
+          }
+
+          // Add likes from Adam and 2-4 random users
+          const numRandomLikes = Math.floor(Math.random() * 3) + 2; // 2-4 random likes
+          const randomLikers = [...createdUserIds]
+            .filter(id => id !== testUserId && id !== adamId)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, numRandomLikes);
+          
+          // Always include Adam's like
+          randomLikers.push(adamId!);
+
+          // Update post with likes
+          await db.collection('meal_posts').doc(postId).update({
+            likes: randomLikers.length,
+            likedBy: randomLikers,
+          });
+
+          // Add comments from Adam and random users
+          const commentTexts = [
+            'This looks incredible! Love the attention to detail 👨‍🍳',
+            'Your plating skills are next level! 🔥',
+            'Need the full recipe ASAP! 🙏',
+            'The dedication to perfecting this dish shows!',
+            'This is restaurant quality! Amazing work 👏'
+          ];
+
+          // Add 2-3 comments per post
+          const numComments = Math.floor(Math.random() * 2) + 2;
+          for (let i = 0; i < numComments; i++) {
+            const commenterId = i === 0 ? adamId! : randomLikers[i - 1];
+            await db.collection('meal_posts').doc(postId)
+              .collection('comments')
+              .add({
+                text: commentTexts[i],
+                userId: commenterId,
+                createdAt: admin.firestore.Timestamp.fromDate(
+                  new Date(timestamp.getTime() + (i + 1) * 60000)
+                ),
+              });
+          }
+
+          // Update comment count
+          await db.collection('meal_posts').doc(postId).update({
+            commentsCount: numComments,
+          });
+
+          console.log(`Successfully created meal post for test user: ${postData.title} with ID: ${postId} at ${timestamp.toISOString()}`);
+        } catch (error) {
+          console.error(`Failed to create meal post: ${postData.title}`, error);
+          console.error('Error details:', error);
+        }
+      }
+
+      // Make Adam follow the test user
+      await db.collection('users').doc(adamId!).update({
+        following: admin.firestore.FieldValue.arrayUnion(testUserId!),
+      });
+
+      await db.collection('users').doc(testUserId!).update({
+        followers: admin.firestore.FieldValue.arrayUnion(adamId!),
+      });
+
       // Now create Adam's meal posts
       console.log('Creating meal posts for Adam...');
       for (const postData of adamMealPosts) {
         try {
           const timestamp = getRandomTimestampInLastTwoWeeks();
-          const postId = await createMealPost(adamId, postData, timestamp);
+          const postId = await createMealPost(adamId!, postData, timestamp);
           console.log(`Successfully created meal post for Adam: ${postData.title} with ID: ${postId} at ${timestamp.toISOString()}`);
         } catch (error) {
           console.error(`Failed to create meal post: ${postData.title}`, error);
