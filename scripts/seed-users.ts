@@ -274,6 +274,11 @@ const sampleMealPosts = [
     ingredients: 'Chicken breast, Mixed vegetables, Soy sauce, Ginger, Garlic',
     instructions: '1. Cut chicken\n2. Prepare sauce\n3. Stir fry\n4. Serve hot',
     mealType: 'dinner',
+    cookTime: 30,
+    calories: 450,
+    protein: 35,
+    isVegetarian: false,
+    carbonSaved: 0.9,
   },
 ];
 
@@ -1257,8 +1262,8 @@ async function seedDatabase() {
           const timestamp = getRandomTimestampInLastTwoWeeks();
           await createMealPost(userId, {
             ...randomPost,
-            title: `${randomPost.title} ${j + 1}`,
-            description: `${faker.lorem.sentence()} ${randomPost.description}`,
+            title: randomPost.title,
+            description: randomPost.description,
           }, timestamp);
           console.log(`Created meal post ${j + 1}/3 for user ${userId}`);
         }
