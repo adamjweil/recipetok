@@ -477,13 +477,26 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     opacity: value,
                     child: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'Welcome to RecipeTok! 👋',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Welcome to Munchster!',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const Text(
+                            ' 👋',
+                            style: TextStyle(
+                              fontSize: 28,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -579,7 +592,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Welcome to RecipeTok! 👋',
+                    'Welcome to Munchster! 👋',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
