@@ -166,7 +166,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       children: [
         // Video Player
         Container(
-          height: MediaQuery.of(context).size.height * 0.4,
+          height: MediaQuery.of(context).size.height * 0.5,
           width: double.infinity,
           child: GestureDetector(
             onTap: () {
@@ -364,14 +364,14 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
 
   Widget _buildTitleSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Title with subtle accent line
           Container(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(bottom: 6),
             decoration: BoxDecoration(
               border: Border(
                 left: BorderSide(
@@ -394,11 +394,11 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           // Description with matching style but smaller
           if (widget.videoData['description'] != null && widget.videoData['description'].toString().isNotEmpty)
             Container(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 6),
               child: Text(
                 widget.videoData['description'] ?? '',
                 style: TextStyle(
