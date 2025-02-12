@@ -17,6 +17,7 @@ import '../../models/story.dart';
 import '../../services/story_service.dart';
 import '../../widgets/story_viewer.dart';
 import '../../screens/main_navigation_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class MealPostWrapper extends StatefulWidget {
   final MealPost post;
@@ -137,7 +138,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
 
           // Image and Description Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -212,7 +213,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
 
           // Update the full-width interaction row
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: Row(
               children: [
                 // Like and Comment buttons on the left
@@ -264,15 +265,34 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                 // Likes avatars and count right after comment button
                 StreamBuilder<DocumentSnapshot>(
                   stream: _getPostStream(widget.post.id),
+                  initialData: null,
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
-                      return const SizedBox();
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 60,
+                            height: 24,
+                            child: Shimmer.fromColors(
+                              baseColor: Colors.grey[300]!,
+                              highlightColor: Colors.grey[100]!,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
                     }
                     
                     final postData = snapshot.data!.data() as Map<String, dynamic>?;
                     if (postData == null) return const SizedBox();
                     
-                    final likedBy = (postData['likedBy'] as List<dynamic>?) ?? [];
+                    final likedBy = List<String>.from(postData['likedBy'] ?? []);
                     final totalLikes = likedBy.length;
                     
                     if (totalLikes == 0) return const SizedBox();

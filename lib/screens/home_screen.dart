@@ -468,10 +468,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              // Welcome text with fade-in animation
+              // Welcome text with even longer fade-in animation
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 800),
+                duration: const Duration(milliseconds: 2500), // Increased from 2000
                 builder: (context, value, child) {
                   return Opacity(
                     opacity: value,
@@ -490,10 +490,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 },
               ),
               const SizedBox(height: 40),
-              // Cooking pot animation
+              // Cooking pot animation with even longer duration
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 1000),
+                duration: const Duration(milliseconds: 3000), // Increased from 2500
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: value,
@@ -529,10 +529,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 },
               ),
               const SizedBox(height: 40),
-              // Animated loading text
+              // Animated loading text with even longer fade-in
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 800),
+                duration: const Duration(milliseconds: 2500), // Increased from 2000
                 builder: (context, value, child) {
                   return Opacity(
                     opacity: value,
@@ -551,8 +551,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                         Text(
                           'Based on your food preferences and interests',
                           style: TextStyle(
-                            fontSize: 14,
                             color: Colors.grey[600],
+                            fontSize: 14,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -562,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 },
               ),
               const SizedBox(height: 24),
-              // Loading steps with staggered animation
+              // Loading steps with even longer staggered animation
               ..._buildLoadingSteps(context),
             ],
           );
@@ -608,84 +608,168 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 final matchingPreferences = recommendation['matchingPreferences'] as int;
 
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // User info section
-                      ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: CircleAvatar(
-                          radius: 24,
-                          backgroundImage: userData['avatarUrl'] != null
-                              ? NetworkImage(userData['avatarUrl'])
-                              : null,
-                          child: userData['avatarUrl'] == null
-                              ? const Icon(Icons.person, size: 20)
-                              : null,
+                      // User info section with gradient background
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Theme.of(context).primaryColor.withOpacity(0.05),
+                              Colors.white,
+                            ],
+                          ),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
                         ),
-                        title: Row(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           children: [
-                            Expanded(
-                              child: Text(
-                                userData['displayName'] ?? 'Unknown',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                            // Avatar with border
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Theme.of(context).primaryColor.withOpacity(0.2),
+                                  width: 3,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: CircleAvatar(
+                                radius: 45,
+                                backgroundColor: Colors.white,
+                                backgroundImage: userData['avatarUrl'] != null
+                                    ? NetworkImage(userData['avatarUrl'])
+                                    : null,
+                                child: userData['avatarUrl'] == null
+                                    ? Icon(Icons.person, 
+                                        size: 40, 
+                                        color: Theme.of(context).primaryColor)
+                                    : null,
                               ),
                             ),
-                            _buildFollowButton(userData['uid']),
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (userData['bio'] != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                userData['bio'],
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 11,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              userData['displayName'] ?? 'Unknown',
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            if (userData['bio'] != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                userData['bio'],
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                  fontSize: 13,
+                                                  height: 1.3,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _buildFollowButton(userData['uid']),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Stats row with dividers
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.03),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        _buildStat(stats['posts'].toString(), 'posts'),
+                                        Container(
+                                          height: 24,
+                                          width: 1,
+                                          color: Colors.grey[300],
+                                        ),
+                                        _buildStat(
+                                          stats['avgLikes'].toStringAsFixed(1),
+                                          'avg likes',
+                                        ),
+                                        Container(
+                                          height: 24,
+                                          width: 1,
+                                          color: Colors.grey[300],
+                                        ),
+                                        _buildStat(
+                                          stats['avgComments'].toStringAsFixed(1),
+                                          'avg comments',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                            const SizedBox(height: 6),
-                            // Stats row
-                            Row(
-                              children: [
-                                _buildStat(stats['posts'].toString(), 'posts'),
-                                const SizedBox(width: 12),
-                                _buildStat(
-                                  stats['avgLikes'].toStringAsFixed(1),
-                                  'avg likes',
-                                ),
-                                const SizedBox(width: 12),
-                                _buildStat(
-                                  stats['avgComments'].toStringAsFixed(1),
-                                  'avg comments',
-                                ),
-                              ],
                             ),
                           ],
                         ),
                       ),
-                      // Recent posts preview
+                      // Recent posts preview with improved layout
                       if (recentPosts.isNotEmpty)
                         Container(
-                          height: 90,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          height: 120,
+                          padding: const EdgeInsets.all(12),
                           child: Row(
                             children: recentPosts.map((post) {
                               final postData = post.data() as Map<String, dynamic>;
                               return Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 6),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(12),
                                     child: Image.network(
                                       postData['photoUrls'][0],
                                       fit: BoxFit.cover,
@@ -696,25 +780,37 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             }).toList(),
                           ),
                         ),
-                      // Recommendation reason
+                      // Recommendation reason with improved design
                       Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         child: Container(
-                          padding: const EdgeInsets.all(9),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(6),
+                            color: Theme.of(context).primaryColor.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).primaryColor.withOpacity(0.1),
+                              width: 1,
+                            ),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.recommend, color: Colors.grey[600], size: 16),
-                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.recommend,
+                                color: Theme.of(context).primaryColor,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Matches ${matchingPreferences} of your food preferences and posts regularly with high engagement',
                                   style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 10,
+                                    color: Colors.grey[800],
+                                    fontSize: 13,
+                                    height: 1.4,
                                   ),
                                 ),
                               ),
@@ -735,19 +831,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   Widget _buildStat(String value, String label) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 13,
+            fontSize: 16,
+            letterSpacing: 0.5,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
           style: TextStyle(
             color: Colors.grey[600],
-            fontSize: 10,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.3,
           ),
         ),
       ],
@@ -934,7 +1035,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  // Add this helper method for loading steps
+  // Update the _buildLoadingSteps method
   List<Widget> _buildLoadingSteps(BuildContext context) {
     final steps = [
       {'icon': Icons.restaurant_menu, 'text': 'Analyzing food preferences'},
@@ -948,7 +1049,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       
       return TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
-        duration: Duration(milliseconds: 800 + (index * 200)),
+        duration: Duration(milliseconds: 2500 + (index * 1000)), // Increased base duration and delay between steps
         builder: (context, value, child) {
           return Opacity(
             opacity: value,
