@@ -30,13 +30,16 @@ import '../widgets/profile_tabs/videos_grid.dart';
 import '../widgets/profile_tabs/bookmarked_videos_grid.dart';
 import '../widgets/profile_tabs/try_later_grid.dart';
 import '../utils/time_formatter.dart';
+import '../screens/meal_post_create_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
+  final bool showBackButton;
 
   const ProfileScreen({
     super.key,
     this.userId,
+    this.showBackButton = true,
   });
 
   @override
@@ -534,10 +537,12 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       icon: const Icon(Icons.menu, color: Colors.black),
                       onPressed: () => _showLogoutDialog(context, userData),
                     )
-                  : IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.black),
-                      onPressed: () => Navigator.pop(context),
-                    ),
+                  : widget.showBackButton
+                      ? IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.black),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      : null,
               title: Text(
                 '${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}',
                 style: const TextStyle(color: Colors.black),
@@ -1182,6 +1187,208 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
   }
 
+  Widget _buildEmptyMealPostsState() {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: value,
+            child: Opacity(
+              opacity: value,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header Row with Icon and Text
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 1200),
+                            curve: Curves.elasticOut,
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: value,
+                                child: Stack(
+                                  children: [
+                                    Icon(
+                                      Icons.restaurant_menu,
+                                      size: 64,
+                                      color: Colors.grey[300],
+                                    ),
+                                    Positioned(
+                                      right: -4,
+                                      bottom: -4,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.add_photo_alternate,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              'Share Your First Recipe!',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Description
+                      Text(
+                        'Start your culinary journey by sharing your favorite recipes with the community',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      // Steps
+                      ..._buildAnimatedSteps(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Create Post Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MealPostCreateScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_circle_outline),
+                              SizedBox(width: 8),
+                              Text(
+                                'Create Your First Post',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _buildAnimatedSteps() {
+    final steps = [
+      {
+        'icon': Icons.photo_camera_outlined,
+        'text': 'Take a photo of your dish',
+      },
+      {
+        'icon': Icons.edit_outlined,
+        'text': 'Add a catchy title',
+      },
+      {
+        'icon': Icons.description_outlined,
+        'text': 'Share your recipe details',
+      },
+    ];
+
+    return steps.asMap().entries.map((entry) {
+      final index = entry.key;
+      final step = entry.value;
+      
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: Duration(milliseconds: 800 + (index * 200)),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, 20 * (1 - value)),
+            child: Opacity(
+              opacity: value,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        step['icon'] as IconData,
+                        color: Theme.of(context).primaryColor,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        step['text'] as String,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }).toList();
+  }
+
   Widget _buildMealPostsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -1200,19 +1407,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
         final posts = snapshot.data?.docs ?? [];
         if (posts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.restaurant, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No meal posts yet',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          );
+          return _buildEmptyMealPostsState();
         }
 
         return ListView.builder(

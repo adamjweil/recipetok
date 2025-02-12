@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:math';
+import 'dart:ui';
 import '../../utils/custom_cache_manager.dart';
 import '../../screens/profile_screen.dart';
 import '../../models/meal_post.dart';
@@ -30,12 +32,48 @@ class MealPostWrapper extends StatefulWidget {
   State<MealPostWrapper> createState() => _MealPostWrapperState();
 }
 
-class _MealPostWrapperState extends State<MealPostWrapper> {
+class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProviderStateMixin {
   // Move static caches to the widget class
   static final Map<String, Future<DocumentSnapshot>> _userCache = {};
   static final Map<String, Map<String, dynamic>> _userDataCache = {};
-  static final Map<String, Stream<QuerySnapshot>> _likesStreamCache = {};
-  static final Map<String, Stream<QuerySnapshot>> _commentsStreamCache = {};
+  static final Map<String, Stream<DocumentSnapshot>> _postStreamCache = {};
+
+  late final AnimationController _expandController;
+  late final Animation<double> _expandAnimation;
+  bool _isExpanded = false;
+
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _expandController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _expandController,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _expandController.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _toggleExpand() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _expandController.forward();
+      } else {
+        _expandController.reverse();
+      }
+    });
+  }
 
   Future<DocumentSnapshot> _getUserData(String userId) {
     // Return cached future if it exists
@@ -51,24 +89,21 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
     return _userCache[userId]!;
   }
 
-  Stream<QuerySnapshot> _getLikesStream(String postId) {
-    _likesStreamCache[postId] ??= FirebaseFirestore.instance
+  Stream<DocumentSnapshot> _getPostStream(String postId) {
+    _postStreamCache[postId] ??= FirebaseFirestore.instance
         .collection('meal_posts')
         .doc(postId)
-        .collection('likes')
-        .limit(3)
         .snapshots();
-    return _likesStreamCache[postId]!;
+    return _postStreamCache[postId]!;
   }
 
   Stream<QuerySnapshot> _getCommentsStream(String postId) {
-    _commentsStreamCache[postId] ??= FirebaseFirestore.instance
+    return FirebaseFirestore.instance
         .collection('meal_posts')
         .doc(postId)
         .collection('comments')
         .orderBy('createdAt', descending: true)
         .snapshots();
-    return _commentsStreamCache[postId]!;
   }
 
   @override
@@ -109,58 +144,65 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
                 if (widget.post.photoUrls.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      width: 120,  // Matching profile size
-                      height: 120,
-                      child: CustomCacheManager.buildCachedImage(
-                        url: widget.post.photoUrls.firstOrNull,
-                        width: 120,
-                        height: 120,
-                      ),
+                    child: Stack(
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          height: 120,
+                          child: Hero(
+                            tag: 'post_image_${widget.post.id}',
+                            child: CustomCacheManager.buildCachedImage(
+                              url: widget.post.photoUrls.first,
+                              width: 120,
+                              height: 120,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Material(
+                            color: Colors.black26,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _showExpandedView,
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.open_in_full,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-
                 const SizedBox(width: 12),
-
-                // Description and Interaction Buttons
+                // Title and Description
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
-                            context.findAncestorStateOfType<MainNavigationScreenState>()!
-                              .navigateToUserProfile(widget.post.userId);
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => MainNavigationScreen(
-                                  initialIndex: 4,
-                                  userId: widget.post.userId,
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          widget.post.title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      Text(
+                        widget.post.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      if (widget.post.description != null)
+                      if (widget.post.description != null) ...[
+                        const SizedBox(height: 4),
                         Text(
                           widget.post.description!,
                           style: const TextStyle(fontSize: 12),
                           maxLines: 6,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      const SizedBox(height: 0),
+                      ],
                     ],
                   ),
                 ),
@@ -220,36 +262,38 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
                 ),
                 const SizedBox(width: 12),  // Add spacing between comment button and avatars
                 // Likes avatars and count right after comment button
-                StreamBuilder<QuerySnapshot>(
-                  stream: _getLikesStream(widget.post.id),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: _getPostStream(widget.post.id),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const SizedBox();
                     }
                     
-                    final likes = snapshot.data!.docs;
-                    final totalLikes = widget.post.likes;  // Use the total likes from post
+                    final postData = snapshot.data!.data() as Map<String, dynamic>?;
+                    if (postData == null) return const SizedBox();
+                    
+                    final likedBy = (postData['likedBy'] as List<dynamic>?) ?? [];
+                    final totalLikes = likedBy.length;
+                    
+                    if (totalLikes == 0) return const SizedBox();
 
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // Overlapping Avatars
-                        if (likes.isNotEmpty)
+                        if (likedBy.isNotEmpty)
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 60),
                             child: SizedBox(
-                              width: likes.length * 20.0 - (likes.length - 1) * 12.0,
+                              width: likedBy.take(3).length * 20.0 - (likedBy.take(3).length - 1) * 12.0,
                               height: 24,
                               child: Stack(
-                                children: likes.take(3).map((like) {
-                                  final index = likes.indexOf(like);
+                                children: likedBy.take(3).map((userId) {
+                                  final index = likedBy.indexOf(userId);
                                   return Positioned(
                                     left: index * 12.0,
-                                    child: StreamBuilder<DocumentSnapshot>(
-                                      stream: FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(like.id)
-                                          .snapshots(),
+                                    child: FutureBuilder<DocumentSnapshot>(
+                                      future: _getUserData(userId.toString()),
                                       builder: (context, userSnapshot) {
                                         final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
                                         return Container(
@@ -284,12 +328,9 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
                           child: totalLikes <= 2
                             ? FutureBuilder<List<String>>(
                                 future: Future.wait(
-                                  likes.take(2).map((like) async {
-                                    final userDoc = await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(like.id)
-                                        .get();
-                                    final fullName = userDoc.data()?['displayName'] ?? 'Unknown';
+                                  likedBy.take(2).map((userId) async {
+                                    final userDoc = await _getUserData(userId.toString());
+                                    final fullName = (userDoc.data() as Map<String, dynamic>?)?['displayName'] ?? 'Unknown';
                                     return fullName.split(' ')[0];
                                   }),
                                 ),
@@ -329,16 +370,14 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
                                   }
                                 },
                               )
-                            : totalLikes > 0
-                                ? Text(
-                                    '$totalLikes gave props',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey[600],
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  )
-                                : const SizedBox(),
+                            : Text(
+                                '$totalLikes gave props',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[600],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                         ),
                       ],
                     );
@@ -364,6 +403,132 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
               ],
             ),
           ),
+
+          // Add this after the image section to show comments when expanded
+          if (_isExpanded) ...[
+            AnimatedBuilder(
+              animation: _expandAnimation,
+              builder: (context, child) {
+                return SizeTransition(
+                  sizeFactor: _expandAnimation,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      // Comments section
+                      StreamBuilder<QuerySnapshot>(
+                        stream: _getCommentsStream(widget.post.id),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+
+                          final comments = snapshot.data!.docs;
+                          return Column(
+                            children: [
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: comments.length,
+                                itemBuilder: (context, index) {
+                                  final comment = comments[index].data() as Map<String, dynamic>;
+                                  return FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(comment['userId'])
+                                        .get(),
+                                    builder: (context, userSnapshot) {
+                                      if (!userSnapshot.hasData) {
+                                        return const SizedBox();
+                                      }
+
+                                      final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 16,
+                                              backgroundImage: userData['avatarUrl'] != null
+                                                  ? CachedNetworkImageProvider(userData['avatarUrl'])
+                                                  : null,
+                                              child: userData['avatarUrl'] == null
+                                                  ? const Icon(Icons.person, size: 16)
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    userData['displayName'] ?? 'Unknown',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    comment['text'] ?? '',
+                                                    style: const TextStyle(fontSize: 14),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                              // Comment input field
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _commentController,
+                                        decoration: InputDecoration(
+                                          hintText: 'Add a comment...',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(24),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey[100],
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                        onSubmitted: (_) => _sendComment(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.send),
+                                      color: Theme.of(context).primaryColor,
+                                      onPressed: _sendComment,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -471,22 +636,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
     return Row(
       children: [
         GestureDetector(
-          onTap: () {
-            if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
-              context.findAncestorStateOfType<MainNavigationScreenState>()!
-                .navigateToUserProfile(widget.post.userId);
-            } else {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => MainNavigationScreen(
-                    initialIndex: 4,
-                    userId: widget.post.userId,
-                  ),
-                ),
-              );
-            }
-          },
+          onTap: () => _navigateToUserProfile(context, widget.post.userId),
           child: CircleAvatar(
             radius: 18,
             backgroundColor: Colors.grey[200],
@@ -513,22 +663,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
         const SizedBox(width: 12),
         Expanded(
           child: GestureDetector(
-            onTap: () {
-              if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
-                context.findAncestorStateOfType<MainNavigationScreenState>()!
-                  .navigateToUserProfile(widget.post.userId);
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MainNavigationScreen(
-                      initialIndex: 4,
-                      userId: widget.post.userId,
-                    ),
-                  ),
-                );
-              }
-            },
+            onTap: () => _navigateToUserProfile(context, widget.post.userId),
             child: RichText(
               text: TextSpan(
                 style: DefaultTextStyle.of(context).style,
@@ -581,5 +716,217 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
         ),
       ],
     );
+  }
+
+  void _navigateToUserProfile(BuildContext context, String userId) {
+    final mainNavigationState = context.findAncestorStateOfType<MainNavigationScreenState>();
+    
+    if (mainNavigationState != null) {
+      mainNavigationState.navigateToUserProfile(userId);
+    } else {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => ProfileScreen(
+            userId: userId,
+            showBackButton: false,
+          ),
+        ),
+        (route) => false,  // This removes all previous routes
+      );
+    }
+  }
+
+  Future<void> _sendComment() async {
+    if (_commentController.text.trim().isEmpty) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .collection('comments')
+          .add({
+        'text': _commentController.text.trim(),
+        'userId': currentUser.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update comment count
+      await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .update({
+        'comments': FieldValue.increment(1),
+      });
+
+      if (mounted) {
+        _commentController.clear();
+      }
+    } catch (e) {
+      debugPrint('Error sending comment: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error sending comment')),
+        );
+      }
+    }
+  }
+
+  void _showExpandedView() {
+    _expandController.forward();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AnimatedBuilder(
+        animation: _expandAnimation,
+        builder: (context, child) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Image Section
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.4,
+                  width: double.infinity,
+                  child: Hero(
+                    tag: 'post_image_${widget.post.id}',
+                    child: CustomCacheManager.buildCachedImage(
+                      url: widget.post.photoUrls.first,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                  ),
+                ),
+                // Comments Section
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _getCommentsStream(widget.post.id),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final comments = snapshot.data!.docs;
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: comments.length,
+                        itemBuilder: (context, index) {
+                          final comment = comments[index].data() as Map<String, dynamic>;
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(comment['userId'])
+                                .get(),
+                            builder: (context, userSnapshot) {
+                              if (!userSnapshot.hasData) {
+                                return const SizedBox();
+                              }
+
+                              final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundImage: userData['avatarUrl'] != null
+                                          ? CachedNetworkImageProvider(userData['avatarUrl'])
+                                          : null,
+                                      child: userData['avatarUrl'] == null
+                                          ? const Icon(Icons.person, size: 16)
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            userData['displayName'] ?? 'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            comment['text'] ?? '',
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                // Comment Input
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                    top: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _commentController,
+                          decoration: InputDecoration(
+                            hintText: 'Add a comment...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          onSubmitted: (_) => _sendComment(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        color: Theme.of(context).primaryColor,
+                        onPressed: _sendComment,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ).whenComplete(() => _expandController.reverse());
   }
 } 

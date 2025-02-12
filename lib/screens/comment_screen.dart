@@ -175,21 +175,19 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top pinned post section
-            _buildPinnedPost(),
-            
-            // Comments section
-            Expanded(
-              child: _buildCommentsList(),
-            ),
-            
-            // Comment input section at bottom
-            _buildCommentInput(),
-          ],
-        ),
+      body: Column(
+        children: [
+          // Top pinned post section
+          _buildPinnedPost(),
+          
+          // Comments section
+          Expanded(
+            child: _buildCommentsList(),
+          ),
+          
+          // Comment input section at bottom
+          _buildCommentInput(),
+        ],
       ),
     );
   }
@@ -197,13 +195,13 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   Widget _buildPinnedPost() {
     return Container(
       color: Colors.white,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with back button
-            Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header with back button
+          SafeArea(
+            bottom: false,
+            child: Row(
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back),
@@ -218,10 +216,10 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                 ),
               ],
             ),
-            // Compact post preview
-            _buildCompactPost(),
-          ],
-        ),
+          ),
+          // Compact post preview
+          _buildCompactPost(),
+        ],
       ),
     );
   }
@@ -237,7 +235,7 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         final totalLikes = postData?['likes'] ?? widget.post.likes;
 
         return Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -256,8 +254,8 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
-                    width: 70,  // Reduced size
-                    height: 70, // Reduced size
+                    width: 60,  // Slightly reduced size
+                    height: 60, // Slightly reduced size
                     child: CachedNetworkImage(
                       imageUrl: widget.post.photoUrls.first,
                       fit: BoxFit.cover,
@@ -280,13 +278,15 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (widget.post.description != null)
-                      Text(
-                        widget.post.description!,
-                        style: const TextStyle(fontSize: 13),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          widget.post.description!,
+                          style: const TextStyle(fontSize: 13),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.start,
                       children: [
@@ -297,136 +297,144 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                         ),
                         const SizedBox(width: 8),
                         // Likes avatars and count
-                        StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection('meal_posts')
-                              .doc(widget.post.id)
-                              .collection('likes')
-                              .limit(3)  // Keep limit for avatar display
-                              .snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                              return const SizedBox();  // Return empty widget if no likes
-                            }
-                            
-                            final likes = snapshot.data!.docs;
-
-                            return Row(
-                              children: [
-                                SizedBox(
-                                  width: likes.length * 20.0 - (likes.length - 1) * 12.0,
-                                  height: 24,
-                                  child: Stack(
-                                    children: likes.asMap().entries.map((entry) {
-                                      final index = entry.key;
-                                      final like = entry.value;
-                                      return Positioned(
-                                        left: index * 12.0,
-                                        child: StreamBuilder<DocumentSnapshot>(
-                                          stream: FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(like.id)
-                                              .snapshots(),
-                                          builder: (context, userSnapshot) {
-                                            final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                                            return Container(
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: Colors.white,
-                                                  width: 1.5,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              StreamBuilder<QuerySnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collection('meal_posts')
+                                    .doc(widget.post.id)
+                                    .collection('likes')
+                                    .limit(3)
+                                    .snapshots(),
+                                builder: (context, likesSnapshot) {
+                                  if (!likesSnapshot.hasData || likesSnapshot.data!.docs.isEmpty) {
+                                    return const SizedBox(width: 0, height: 24);
+                                  }
+                                  
+                                  final likes = likesSnapshot.data!.docs;
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Overlapping avatars
+                                      SizedBox(
+                                        width: likes.length * 16.0,
+                                        height: 24,
+                                        child: Stack(
+                                          children: likes.asMap().entries.map((entry) {
+                                            final index = entry.key;
+                                            final like = entry.value;
+                                            return Positioned(
+                                              left: index * 12.0,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                child: StreamBuilder<DocumentSnapshot>(
+                                                  stream: FirebaseFirestore.instance
+                                                      .collection('users')
+                                                      .doc(like.id)
+                                                      .snapshots(),
+                                                  builder: (context, userSnapshot) {
+                                                    final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                                                    return CircleAvatar(
+                                                      radius: 9,
+                                                      backgroundImage: userData?['avatarUrl'] != null
+                                                          ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                                          : null,
+                                                      child: userData?['avatarUrl'] == null
+                                                          ? const Icon(Icons.person, size: 11)
+                                                          : null,
+                                                    );
+                                                  },
                                                 ),
                                               ),
-                                              child: CircleAvatar(
-                                                radius: 9,
-                                                backgroundImage: userData?['avatarUrl'] != null
-                                                    ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                                    : null,
-                                                child: userData?['avatarUrl'] == null
-                                                    ? const Icon(Icons.person, size: 11)
-                                                    : null,
-                                              ),
                                             );
-                                          },
+                                          }).toList(),
                                         ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                if (totalLikes <= 2)
-                                  FutureBuilder<List<String>>(
-                                    future: Future.wait(
-                                      likes.map((like) async {
-                                        final userDoc = await FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(like.id)
-                                            .get();
-                                        return userDoc.data()?['firstName'] ?? 'Unknown';
-                                      }),
-                                    ),
-                                    builder: (context, snapshot) {
-                                      if (!snapshot.hasData) {
-                                        return Text(
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Like count text
+                                      if (totalLikes <= 2)
+                                        FutureBuilder<List<String>>(
+                                          future: Future.wait(
+                                            likes.map((like) async {
+                                              final userDoc = await FirebaseFirestore.instance
+                                                  .collection('users')
+                                                  .doc(like.id)
+                                                  .get();
+                                              return userDoc.data()?['firstName'] ?? 'Unknown';
+                                            }),
+                                          ),
+                                          builder: (context, namesSnapshot) {
+                                            if (!namesSnapshot.hasData) {
+                                              return Text(
+                                                '$totalLikes gave props',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              );
+                                            }
+
+                                            final names = namesSnapshot.data!;
+                                            if (names.length == 1) {
+                                              return Text(
+                                                '${names[0]} gave props',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              );
+                                            } else {
+                                              return Text(
+                                                '${names[0]} and ${names[1]} gave props',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              );
+                                            }
+                                          },
+                                        )
+                                      else
+                                        Text(
                                           '$totalLikes gave props',
                                           style: TextStyle(
                                             fontSize: 9,
                                             color: Colors.grey[600],
                                           ),
                                           overflow: TextOverflow.ellipsis,
-                                        );
-                                      }
-
-                                      final names = snapshot.data!;
-                                      if (names.length == 1) {
-                                        return Text(
-                                          '${names[0]} gave props',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.grey[600],
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        );
-                                      } else {
-                                        return Text(
-                                          '${names[0]} and ${names[1]} gave props',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.grey[600],
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        );
-                                      }
-                                    },
-                                  )
-                                else
-                                  Text(
-                                    '$totalLikes gave props',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: Colors.grey[600],
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: Icon(
-                            Icons.share_outlined,
-                            color: Colors.grey[600],
-                            size: 18,
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.share_outlined,
+                                  color: Colors.grey[600],
+                                  size: 18,
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  Share.share(
+                                    'Check out this meal post: ${widget.post.description}',
+                                    subject: 'Check out this meal post!',
+                                  );
+                                },
+                              ),
+                            ],
                           ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () {
-                            Share.share(
-                              'Check out this meal post: ${widget.post.description}',
-                              subject: 'Check out this meal post!',
-                            );
-                          },
                         ),
                       ],
                     ),
@@ -477,32 +485,101 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.only(top: 16, bottom: 16),
+          padding: EdgeInsets.zero,
           itemCount: comments.length,
           itemBuilder: (context, index) {
             final comment = comments[index].data() as Map<String, dynamic>;
             final commentId = comments[index].id;
             final isPinned = comment['isPinned'] ?? false;
             
-            // Handle null timestamp by using current time as fallback
             final timestamp = comment['createdAt'] as Timestamp?;
             final dateTime = timestamp?.toDate() ?? DateTime.now();
             
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _CommentItem(
-                key: ValueKey(commentId),
-                commentId: commentId,
-                postId: widget.post.id,
-                userId: comment['userId'] as String,
-                text: comment['text'] as String,
-                imageUrl: comment['imageUrl'] as String?,
-                timestamp: dateTime,
-                isPinned: isPinned,
-                isPostOwner: widget.post.userId == FirebaseAuth.instance.currentUser?.uid,
-                onPin: () => _togglePinComment(commentId, isPinned),
-                onDelete: () => _deleteComment(commentId),
-                animationController: _animationController,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // User info column - anchored to the left
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: SizedBox(
+                      width: 56,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(comment['userId'] as String)
+                                .snapshots(),
+                            builder: (context, userSnapshot) {
+                              final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProfileScreen(userId: comment['userId'] as String),
+                                    ),
+                                  );
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 12,
+                                      backgroundImage: userData?['avatarUrl'] != null
+                                          ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                          : null,
+                                      child: userData?['avatarUrl'] == null
+                                          ? const Icon(Icons.person, size: 12)
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      userData?['firstName'] != null && userData?['lastName'] != null
+                                          ? '${userData!['firstName']} ${userData['lastName'][0]}.'
+                                          : userData?['displayName'] ?? 'Unknown',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Comment bubble - expanded to fill remaining space
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: _CommentItem(
+                        key: ValueKey(commentId),
+                        commentId: commentId,
+                        postId: widget.post.id,
+                        userId: comment['userId'] as String,
+                        text: comment['text'] as String,
+                        imageUrl: comment['imageUrl'] as String?,
+                        timestamp: dateTime,
+                        isPinned: isPinned,
+                        isPostOwner: widget.post.userId == FirebaseAuth.instance.currentUser?.uid,
+                        onPin: () => _togglePinComment(commentId, isPinned),
+                        onDelete: () => _deleteComment(commentId),
+                        animationController: _animationController,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -550,112 +627,122 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
   Widget _buildCommentInput() {
     return Container(
       color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Quick comments
-          Container(
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey[300]!),
-              ),
-            ),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              itemCount: _quickComments.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: TextButton(
-                    onPressed: () {
-                      _commentController.text = _quickComments[index];
-                    },
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.grey[100],
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      _quickComments[index],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+      child: SafeArea(
+        top: false,
+        maintainBottomViewPadding: true,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom > 0 ? 0 : 4,
           ),
-          // Input field
-          Container(
-            color: Colors.white,
-            padding: EdgeInsets.only(
-              left: 8,
-              right: 8,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Icon(Icons.image_outlined, color: Colors.grey[600]),
-                  onPressed: () {
-                    // Handle image picking
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Quick comments
+              Container(
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Colors.grey[300]!),
+                  ),
+                ),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: _quickComments.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: TextButton(
+                        onPressed: () {
+                          _commentController.text = _quickComments[index];
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.grey[100],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          _quickComments[index],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ),
+                    );
                   },
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    maxLines: 1,
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle: TextStyle(color: Colors.grey[600]),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                    ),
-                  ),
+              ),
+              // Input field
+              Container(
+                color: Colors.white,
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                  top: 4,
                 ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _commentController.text.trim().isEmpty ? null : _postComment,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    minimumSize: const Size(0, 32),
-                  ),
-                  child: Text(
-                    'Post',
-                    style: TextStyle(
-                      color: _commentController.text.trim().isEmpty 
-                          ? Colors.grey[400] 
-                          : Theme.of(context).primaryColor,
-                      fontWeight: FontWeight.bold,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(Icons.image_outlined, color: Colors.grey[600]),
+                      onPressed: () {
+                        // Handle image picking
+                      },
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _commentController,
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _commentController.text.trim().isEmpty ? null : _postComment,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        minimumSize: const Size(0, 32),
+                      ),
+                      child: Text(
+                        'Post',
+                        style: TextStyle(
+                          color: _commentController.text.trim().isEmpty 
+                              ? Colors.grey[400] 
+                              : Theme.of(context).primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -721,174 +808,108 @@ class _CommentItemState extends State<_CommentItem> {
       child: SlideTransition(
         position: _slideAnimation,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          child: StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.userId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final userData = snapshot.data?.data() as Map<String, dynamic>?;
-              final isCurrentUser = widget.userId == FirebaseAuth.instance.currentUser?.uid;
-
-              return Row(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.isPinned)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.push_pin,
+                        size: 12,
+                        color: Color(0xFFD32F2F),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Pinned by author',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar and Username Column - Give it a fixed width
-                  SizedBox(
-                    width: 50, // Fixed width for the user info column
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ProfileScreen(userId: widget.userId),
-                              ),
-                            );
-                          },
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundImage: userData?['avatarUrl'] != null
-                                ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                : null,
-                            child: userData?['avatarUrl'] == null
-                                ? const Icon(Icons.person, size: 12)
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          userData?['firstName'] != null && userData?['lastName'] != null
-                              ? '${userData!['firstName']} ${userData['lastName'][0]}.'
-                              : userData?['displayName'] ?? 'Unknown',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          overflow: TextOverflow.ellipsis, // Add this to handle long names
-                          textAlign: TextAlign.center, // Center the text
-                        ),
-                      ],
+                  Expanded(
+                    child: Text(
+                      widget.text,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  
-                  // Comment Bubble
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.isPinned)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.push_pin,
-                                    size: 12,
-                                    color: Color(0xFFD32F2F), // Firetruck red color
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Pinned by author',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey[600],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          // Top row with comment and more options
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  widget.text,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    height: 1.5,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8), // Add some spacing between comment and timestamp
-                              Text(
-                                getTimeAgo(widget.timestamp),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              if (isCurrentUser || widget.isPostOwner)
-                                PopupMenuButton<String>(
-                                  padding: EdgeInsets.zero,
-                                  iconSize: 16,
-                                  icon: Icon(
-                                    Icons.more_vert,
-                                    color: Colors.grey[600],
-                                  ),
-                                  itemBuilder: (context) => [
-                                    if (widget.isPostOwner)
-                                      PopupMenuItem(
-                                        value: 'pin',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              widget.isPinned
-                                                  ? Icons.push_pin_outlined
-                                                  : Icons.push_pin,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(widget.isPinned ? 'Unpin' : 'Pin'),
-                                          ],
-                                        ),
-                                      ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Row(
-                                        children: const [
-                                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                                          SizedBox(width: 8),
-                                          Text('Delete', style: TextStyle(color: Colors.red)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                  onSelected: (value) {
-                                    if (value == 'pin') widget.onPin();
-                                    if (value == 'delete') widget.onDelete();
-                                  },
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
+                  Text(
+                    getTimeAgo(widget.timestamp),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[600],
                     ),
                   ),
+                  if (widget.isPostOwner || widget.userId == FirebaseAuth.instance.currentUser?.uid)
+                    PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      iconSize: 16,
+                      icon: Icon(
+                        Icons.more_vert,
+                        color: Colors.grey[600],
+                      ),
+                      itemBuilder: (context) => [
+                        if (widget.isPostOwner)
+                          PopupMenuItem(
+                            value: 'pin',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  widget.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(widget.isPinned ? 'Unpin' : 'Pin'),
+                              ],
+                            ),
+                          ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: const [
+                              Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Delete', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'pin') widget.onPin();
+                        if (value == 'delete') widget.onDelete();
+                      },
+                    ),
                 ],
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),

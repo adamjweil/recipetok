@@ -36,7 +36,10 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
     const VideoScreen(),     // index 1
     Container(),            // index 2 (placeholder for center button)
     const UsersScreen(),     // index 3
-    ProfileScreen(userId: _currentUserId),   // index 4 - Pass the userId
+    ProfileScreen(
+      userId: _currentUserId,
+      showBackButton: false,  // Set showBackButton to false
+    ),   // index 4
   ];
 
   void _onItemTapped(int index) {
