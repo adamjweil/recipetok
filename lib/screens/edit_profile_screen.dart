@@ -113,13 +113,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+          const SnackBar(
+            content: Text('Profile updated successfully'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating profile: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error updating profile: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
         );
       }
     } finally {
@@ -167,14 +183,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         setState(() => _isUploadingImage = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile photo updated successfully')),
+          const SnackBar(
+            content: Text('Profile photo updated successfully'),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
         );
       }
     } catch (e) {
       setState(() => _isUploadingImage = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating profile photo: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error updating profile photo: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
         );
       }
     }

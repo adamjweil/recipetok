@@ -36,9 +36,23 @@ class CustomCacheManager {
     try {
       final cacheDir = await getTemporaryDirectory();
       final cachePath = p.join(cacheDir.path, key);
-      await Directory(cachePath).create(recursive: true);
       
-      // Initialize the cache manager instance
+      // Create directory if it doesn't exist and ensure proper permissions
+      final directory = Directory(cachePath);
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      
+      // Ensure directory has write permissions
+      await directory.setPermissions(0x1FF); // This is equivalent to 0777
+      
+      // Check if database file exists and set permissions
+      final dbFile = File(p.join(cachePath, '$key.db'));
+      if (await dbFile.exists()) {
+        await dbFile.setPermissions(0x1FF);
+      }
+      
+      // Initialize the cache manager instance with error handling
       _instance = CacheManager(
         Config(
           key,
@@ -49,9 +63,25 @@ class CustomCacheManager {
           fileService: HttpFileService(),
         ),
       );
+
+      // Test write access by performing a dummy operation
+      await safeWrite(() async {
+        await _instance?.emptyCache();
+      });
     } catch (e) {
-      // Handle or log initialization error
-      print('Cache initialization error: $e');
+      debugPrint('Cache initialization error: $e');
+      // If initialization fails, try to recover by clearing the cache directory
+      try {
+        final cacheDir = await getTemporaryDirectory();
+        final cachePath = p.join(cacheDir.path, key);
+        final directory = Directory(cachePath);
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+        await initialize(); // Retry initialization
+      } catch (retryError) {
+        debugPrint('Cache recovery failed: $retryError');
+      }
     }
   }
 

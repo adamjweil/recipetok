@@ -31,6 +31,7 @@ import '../widgets/profile_tabs/bookmarked_videos_grid.dart';
 import '../widgets/profile_tabs/try_later_grid.dart';
 import '../utils/time_formatter.dart';
 import '../screens/meal_post_create_screen.dart';
+import '../screens/video_upload_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -54,7 +55,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   bool _isLikeAnimating = false;
   AnimationController? _likeAnimationController;
   final _tabKey = PageStorageKey('profile_tab');
-  late Stream<List<Story>> _storiesStream;
 
   void _initializeAnimationController() {
     _likeAnimationController?.dispose();
@@ -102,7 +102,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       initialIndex: 0,
     );
     _initializeAnimationController();
-    _storiesStream = StoryService().getUserActiveStories(profileUserId);
   }
 
   @override
@@ -653,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       children: [
                         Row(
                           children: [
-                            _buildAvatarWithStory(userData),
+                            _buildProfileAvatar(userData),
                             const SizedBox(width: 24),
                             Expanded(
                               child: _buildProfileStats(userData),
@@ -797,7 +796,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildAvatarWithStory(Map<String, dynamic> userData) {
+  Widget _buildProfileAvatar(Map<String, dynamic> userData) {
     final avatarUrl = userData['avatarUrl'] as String?;
     debugPrint('👤 Building avatar with URL: "$avatarUrl"');
     
@@ -821,201 +820,52 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       );
     }
 
-    return StreamBuilder<List<Story>>(
-      stream: _storiesStream,
-      builder: (context, snapshot) {
-        final hasActiveStory = snapshot.hasData && snapshot.data!.isNotEmpty;
-        final timeRemaining = hasActiveStory 
-            ? _formatTimeRemaining(snapshot.data!.first.expiresAt)
-            : '';
-        
-        return Column(
-          children: [
-            if (hasActiveStory)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  timeRemaining,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+    return Stack(
+      children: [
+        buildAvatarWidget(),
+        if (isCurrentUserProfile)
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(userData: userData),
                   ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.edit,
+                  size: 14,
+                  color: Colors.white,
                 ),
               ),
-            Stack(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    if (hasActiveStory) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => StoryViewer(
-                            story: snapshot.data!.first,
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: hasActiveStory ? BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [Colors.purple, Colors.pink, Colors.orange],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ) : null,
-                    child: buildAvatarWidget(),
-                  ),
-                ),
-                if (!hasActiveStory && isCurrentUserProfile)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _addStory,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
             ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 
-  Future<void> _addStory() async {
-    final ImagePicker picker = ImagePicker();
-    
-    try {
-      final XFile? media = await showDialog<XFile>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Add Story'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_camera),
-                title: const Text('Take Photo'),
-                onTap: () async {
-                  Navigator.pop(
-                    context,
-                    await picker.pickImage(source: ImageSource.camera),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.video_camera_back),
-                title: const Text('Record Video'),
-                onTap: () async {
-                  Navigator.pop(
-                    context,
-                    await picker.pickVideo(
-                      source: ImageSource.camera,
-                      maxDuration: const Duration(seconds: 10),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Choose from Gallery'),
-                onTap: () async {
-                  Navigator.pop(
-                    context,
-                    await picker.pickImage(source: ImageSource.gallery),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-
-      if (media == null) return;
-
-      setState(() => _isUploading = true);
-      
-      final mediaType = media.name.endsWith('.mp4') ? 'video' : 'image';
-      debugPrint('Selected media type: $mediaType');
-      debugPrint('File path: ${media.path}');
-      
-      await StoryService().uploadStory(File(media.path), mediaType);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Story uploaded successfully'),
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              top: 20,
-              right: 20,
-              left: 20,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error in _addStory: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading story: $e'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(
-              top: 20,
-              right: 20,
-              left: 20,
-            ),
-          ),
-        );
-      }
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
-    }
-  }
-
-  void _showStoryModal(BuildContext context, Story story) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.black,
-      builder: (context) => StoryViewer(story: story),
-    );
-  }
-
-  // Add this helper method to format the remaining time
-  String _formatTimeRemaining(DateTime expiresAt) {
-    final now = DateTime.now();
-    final difference = expiresAt.difference(now);
-    
-    if (difference.inMinutes < 1) {
-      return '(<1m)';
-    } else {
-      return '(${difference.inMinutes}m)';
-    }
-  }
-
-  // Update the profile section where the name is displayed
   Widget _buildProfileInfo(Map<String, dynamic> userData) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,11 +1041,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     return Center(
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 800),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
         builder: (context, value, child) {
           return Transform.scale(
-            scale: value,
+            scale: 0.8 + (0.2 * value),
             child: Opacity(
               opacity: value,
               child: SingleChildScrollView(
@@ -1204,46 +1054,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Header Row with Icon and Text
+                      const SizedBox(height: 24),  // Add padding at the top
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            duration: const Duration(milliseconds: 1200),
-                            curve: Curves.elasticOut,
-                            builder: (context, value, child) {
-                              return Transform.scale(
-                                scale: value,
-                                child: Stack(
-                                  children: [
-                                    Icon(
-                                      Icons.restaurant_menu,
-                                      size: 64,
-                                      color: Colors.grey[300],
-                                    ),
-                                    Positioned(
-                                      right: -4,
-                                      bottom: -4,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).primaryColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.add_photo_alternate,
-                                          color: Colors.white,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 16),
                           Expanded(
                             child: Text(
                               'Share Your First Recipe!',
@@ -1252,8 +1066,78 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                                 fontWeight: FontWeight.bold,
                                 color: Colors.grey[800],
                               ),
-                              textAlign: TextAlign.center,
+                              textAlign: TextAlign.left,
                             ),
+                          ),
+                          const SizedBox(width: 16),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 1200),
+                            curve: Curves.elasticOut,
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: value,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),  // Adjust padding here
+                                      child: Icon(
+                                        Icons.restaurant_menu,
+                                        size: 64,
+                                        color: Colors.grey[300],
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: -8,
+                                      bottom: -8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.1),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.add_a_photo,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      left: -8,
+                                      top: -8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.1),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.local_fire_department,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -1346,11 +1230,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       
       return TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
-        duration: Duration(milliseconds: 800 + (index * 200)),
-        curve: Curves.easeOutCubic,
+        duration: Duration(milliseconds: 400 + (index * 100)),
+        curve: Curves.easeOut,
         builder: (context, value, child) {
           return Transform.translate(
-            offset: Offset(0, 20 * (1 - value)),
+            offset: Offset(0, 10 * (1 - value)),
             child: Opacity(
               opacity: value,
               child: Padding(
@@ -1474,6 +1358,238 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
+  Widget _buildEmptyVideosState() {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: 0.8 + (0.2 * value),
+            child: Opacity(
+              opacity: value,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 24),  // Add padding at the top
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Share Your Recipe Videos!',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.easeOut,
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: 0.8 + (0.2 * value),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Icon(
+                                        Icons.video_camera_front,
+                                        size: 64,
+                                        color: Colors.grey[300],
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: -8,
+                                      bottom: -8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.1),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.restaurant_menu,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      left: -8,
+                                      top: -8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.1),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.timer,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Description
+                      Text(
+                        'Inspire others by sharing your cooking process - it\'s easier than making the recipe itself!',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      // Steps with slide-in animation
+                      ..._buildAnimatedVideoSteps(),
+                      
+                      const SizedBox(height: 32),
+                      
+                      // Create Video Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const VideoUploadScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.videocam),
+                              SizedBox(width: 8),
+                              Text(
+                                'Share Your First Video',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _buildAnimatedVideoSteps() {
+    final steps = [
+      {
+        'icon': Icons.videocam_outlined,
+        'text': 'Record your cooking process',
+      },
+      {
+        'icon': Icons.upload_outlined,
+        'text': 'Upload your video - we\'ll handle the rest!',
+      },
+    ];
+
+    return steps.asMap().entries.map((entry) {
+      final index = entry.key;
+      final step = entry.value;
+      
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: Duration(milliseconds: 400 + (index * 100)),
+        curve: Curves.easeOut,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, 10 * (1 - value)),
+            child: Opacity(
+              opacity: value,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        step['icon'] as IconData,
+                        color: Theme.of(context).primaryColor,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        step['text'] as String,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }).toList();
+  }
+
   Widget _buildVideosGrid() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -1494,7 +1610,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         final videos = snapshot.data?.docs ?? [];
         debugPrint('📊 Loaded ${videos.length} videos');
 
-        if (videos.isEmpty) {
+        if (videos.isEmpty && isCurrentUserProfile) {
+          return _buildEmptyVideosState();
+        } else if (videos.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
