@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../utils/custom_cache_manager.dart';
+import '../../screens/profile_screen.dart';
 import '../../models/meal_post.dart';
 import 'expandable_meal_post.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../screens/comment_screen.dart';
 import 'like_button.dart';
@@ -12,8 +14,7 @@ import '../../utils/time_formatter.dart';
 import '../../models/story.dart';
 import '../../services/story_service.dart';
 import '../../widgets/story_viewer.dart';
-import '../../screens/profile_screen.dart';
-import '../../utils/custom_cache_manager.dart';
+import '../../screens/main_navigation_screen.dart';
 
 class MealPostWrapper extends StatefulWidget {
   final MealPost post;
@@ -126,11 +127,29 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.post.title,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                      GestureDetector(
+                        onTap: () {
+                          if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
+                            context.findAncestorStateOfType<MainNavigationScreenState>()!
+                              .navigateToUserProfile(widget.post.userId);
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MainNavigationScreen(
+                                  initialIndex: 4,
+                                  userId: widget.post.userId,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          widget.post.title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -453,12 +472,20 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
       children: [
         GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProfileScreen(userId: widget.post.userId),
-              ),
-            );
+            if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
+              context.findAncestorStateOfType<MainNavigationScreenState>()!
+                .navigateToUserProfile(widget.post.userId);
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MainNavigationScreen(
+                    initialIndex: 4,
+                    userId: widget.post.userId,
+                  ),
+                ),
+              );
+            }
           },
           child: CircleAvatar(
             radius: 18,
@@ -485,59 +512,71 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: DefaultTextStyle.of(context).style,
-                    children: [
-                      TextSpan(
-                        text: formattedName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const TextSpan(
-                        text: ' made ',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontSize: 11,
-                        ),
-                      ),
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(
-                            _getMealTypeIcon(widget.post.mealType),
-                            size: 13,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ),
-                      ),
-                      TextSpan(
-                        text: _getMealTypeString(widget.post.mealType),
-                        style: TextStyle(
-                          color: Theme.of(context).primaryColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+          child: GestureDetector(
+            onTap: () {
+              if (context.findAncestorStateOfType<MainNavigationScreenState>() != null) {
+                context.findAncestorStateOfType<MainNavigationScreenState>()!
+                  .navigateToUserProfile(widget.post.userId);
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MainNavigationScreen(
+                      initialIndex: 4,
+                      userId: widget.post.userId,
+                    ),
                   ),
-                ),
+                );
+              }
+            },
+            child: RichText(
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                children: [
+                  TextSpan(
+                    text: formattedName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const TextSpan(
+                    text: ' made ',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 11,
+                    ),
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        _getMealTypeIcon(widget.post.mealType),
+                        size: 13,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                    ),
+                  ),
+                  TextSpan(
+                    text: _getMealTypeString(widget.post.mealType),
+                    style: TextStyle(
+                      color: Theme.of(context).primaryColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                getTimeAgo(widget.post.createdAt),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          getTimeAgo(widget.post.createdAt),
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
           ),
         ),
       ],

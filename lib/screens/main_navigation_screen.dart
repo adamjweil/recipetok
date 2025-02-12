@@ -8,32 +8,35 @@ import 'package:recipetok/screens/meal_post_create_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
+  final String? userId;
   
   const MainNavigationScreen({
     super.key,
     this.initialIndex = 0,
+    this.userId,
   });
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  State<MainNavigationScreen> createState() => MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _selectedIndex;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _currentUserId = widget.userId;
   }
 
-  // Placeholder screens - adjust order to match navigation items
-  final List<Widget> _screens = [
+  List<Widget> get _screens => [
     const HomeScreen(),      // index 0
     const VideoScreen(),     // index 1
     Container(),            // index 2 (placeholder for center button)
     const UsersScreen(),     // index 3
-    const ProfileScreen(),   // index 4
+    ProfileScreen(userId: _currentUserId),   // index 4 - Pass the userId
   ];
 
   void _onItemTapped(int index) {
@@ -42,6 +45,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     } else {
       setState(() {
         _selectedIndex = index;
+        if (index == 4) {
+          _currentUserId = null; // Reset to current user's profile when profile tab is tapped
+        }
       });
     }
   }
@@ -126,92 +132,104 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
+  void navigateToUserProfile(String userId) {
+    setState(() {
+      _selectedIndex = 4;  // Switch to profile tab
+      _currentUserId = userId;  // Set the user ID
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
-      bottomNavigationBar: SizedBox(
-        height: 120,
-        child: BottomNavigationBar(
-          items: <BottomNavigationBarItem>[
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.play_circle_outline),
-              label: 'Videos',
-            ),
-            BottomNavigationBarItem(
-              icon: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).primaryColor,
-                      Theme.of(context).primaryColor.withOpacity(0.8),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).primaryColor.withOpacity(0.3),
-                      spreadRadius: 2,
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                    BoxShadow(
-                      color: Theme.of(context).primaryColor.withOpacity(0.2),
-                      spreadRadius: 1,
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 3,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                  size: 26,
-                ),
-              ),
-              label: '',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.people),
-              label: 'Users',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profile',
+      bottomNavigationBar: Container(
+        height: 70,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, -1),
             ),
           ],
-          currentIndex: _selectedIndex,
-          selectedItemColor: Theme.of(context).primaryColor,
-          unselectedItemColor: Colors.grey,
-          type: BottomNavigationBarType.fixed,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          iconSize: 24,
-          selectedIconTheme: const IconThemeData(size: 24),
-          unselectedIconTheme: const IconThemeData(size: 24),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          landscapeLayout: BottomNavigationBarLandscapeLayout.centered,
-          onTap: (index) {
-            if (index == 2) {
-              _showCreateOptions();
-            } else {
-              _onItemTapped(index);
-            }
-          },
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, Icons.home, 'Home'),
+              _buildNavItem(1, Icons.play_circle_outline, 'Videos'),
+              _buildAddButton(),
+              _buildNavItem(3, Icons.people, 'Users'),
+              _buildNavItem(4, Icons.person, 'Profile'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return InkWell(
+      onTap: () => _onItemTapped(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+            size: 24, // Increased from 20
+          ),
+          const SizedBox(height: 2), // Increased from 1
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              fontSize: 11, // Increased from 9
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddButton() {
+    return InkWell(
+      onTap: _showCreateOptions,
+      child: Container(
+        padding: const EdgeInsets.all(8), // Increased from 6
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).primaryColor,
+              Theme.of(context).primaryColor.withOpacity(0.8),
+            ],
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).primaryColor.withOpacity(0.3),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(
+            color: Colors.white,
+            width: 1.5,
+          ),
+        ),
+        child: const Icon(
+          Icons.add,
+          color: Colors.white,
+          size: 26, // Increased from 22
         ),
       ),
     );
