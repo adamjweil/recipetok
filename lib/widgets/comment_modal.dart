@@ -28,11 +28,19 @@ class _CommentModalState extends State<CommentModal> {
     if (_commentController.text.trim().isEmpty) return;
 
     try {
+      // Get current user data
+      final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+      final userData = userDoc.data() as Map<String, dynamic>;
+
       await _firestore.collection('meal_posts').doc(widget.postId)
           .collection('comments').add({
         'userId': currentUserId,
         'text': _commentController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
+        'firstName': userData['firstName'],
+        'lastName': userData['lastName'],
+        'displayName': userData['displayName'],
+        'avatarUrl': userData['avatarUrl'],
       });
 
       // Update comment count
@@ -142,11 +150,11 @@ class _CommentModalState extends State<CommentModal> {
                   itemCount: comments.length,
                   itemBuilder: (context, index) {
                     final comment = comments[index].data() as Map<String, dynamic>;
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: _firestore
+                    return StreamBuilder<DocumentSnapshot>(
+                      stream: _firestore
                           .collection('users')
                           .doc(comment['userId'])
-                          .get(),
+                          .snapshots(),
                       builder: (context, userSnapshot) {
                         if (!userSnapshot.hasData) {
                           return const SizedBox();
@@ -180,7 +188,13 @@ class _CommentModalState extends State<CommentModal> {
                                     Row(
                                       children: [
                                         Text(
-                                          userData['displayName'] ?? 'User',
+                                          // First try to use the comment's stored name data
+                                          comment['firstName'] != null && comment['lastName'] != null
+                                              ? '${comment['firstName']} ${comment['lastName'][0]}.'
+                                              // Fall back to user document data
+                                              : userData['firstName'] != null && userData['lastName'] != null
+                                                  ? '${userData['firstName']} ${userData['lastName'][0]}.'
+                                                  : userData['displayName'] ?? 'User',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                           ),

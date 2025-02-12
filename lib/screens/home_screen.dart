@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import '../widgets/meal_post/meal_post_wrapper.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/rendering.dart';
+import 'dart:math';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +45,17 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   // Add these new declarations
   final ScrollController _scrollController = ScrollController();
   List<String> followingUsers = [];
+
+  // Add this near the top of the _HomeScreenState class
+  final Map<String, bool> _followedUsers = {};
+  final Map<String, double> _countdownValues = {};
+  final Map<String, DateTime> _countdownStartTimes = {};
+
+  // Add this field at the top of the class with other declarations
+  final Set<String> _usersToFollow = {};
+
+  // Add this field at the top of the class with other declarations
+  DateTime? _firstCountdownStartTime;
 
   @override
   void initState() {
@@ -447,7 +459,108 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       future: _getRecommendedUsers(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40),
+              // Welcome text with fade-in animation
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'Welcome to RecipeTok! 👋',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 40),
+              // Cooking pot animation
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1000),
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.soup_kitchen,
+                            size: 60,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 140,
+                          height: 140,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 4,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).primaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 40),
+              // Animated loading text
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 800),
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Column(
+                      children: [
+                        Text(
+                          'Cooking up your personalized recommendations',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[800],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Based on your food preferences and interests',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              // Loading steps with staggered animation
+              ..._buildLoadingSteps(context),
+            ],
+          );
         }
 
         final recommendedUsers = snapshot.data!;
@@ -517,21 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                 ),
                               ),
                             ),
-                            ElevatedButton(
-                              onPressed: () => _followUser(userData['uid']),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).primaryColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              ),
-                              child: const Text(
-                                'Follow',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ),
+                            _buildFollowButton(userData['uid']),
                           ],
                         ),
                         subtitle: Column(
@@ -650,31 +749,152 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
   }
 
-  // Add this method to follow a user
+  // Update the _followUser method
   Future<void> _followUser(String userId) async {
     try {
-      final batch = FirebaseFirestore.instance.batch();
-      
-      // Update current user's following array
-      batch.update(
-        FirebaseFirestore.instance.collection('users').doc(currentUserId),
-        {
-          'following': FieldValue.arrayUnion([userId])
+      setState(() {
+        _followedUsers[userId] = true;
+        _usersToFollow.add(userId);
+        if (_firstCountdownStartTime == null) {
+          _firstCountdownStartTime = DateTime.now();
         }
-      );
-
-      // Update target user's followers array
-      batch.update(
-        FirebaseFirestore.instance.collection('users').doc(userId),
-        {
-          'followers': FieldValue.arrayUnion([currentUserId])
-        }
-      );
-
-      await batch.commit();
+        _countdownStartTimes[userId] = _firstCountdownStartTime!;
+      });
     } catch (e) {
+      setState(() {
+        _followedUsers[userId] = false;
+        _usersToFollow.remove(userId);
+        _countdownStartTimes.remove(userId);
+      });
       debugPrint('Error following user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error following user: $e')),
+        );
+      }
     }
+  }
+
+  // Update the button section in the recommendation card
+  Widget _buildFollowButton(String userId) {
+    if (_followedUsers[userId] == true) {
+      final startTime = _countdownStartTimes[userId] ?? DateTime.now();
+      final elapsed = DateTime.now().difference(startTime).inSeconds;
+      final initialValue = max(10.0 - elapsed, 0.0);
+
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: initialValue, end: 0.0),
+        duration: Duration(seconds: initialValue.toInt()),
+        onEnd: () async {
+          try {
+            // Only execute the batch follow operation if this is the first timer to complete
+            if (_countdownStartTimes[userId] == _firstCountdownStartTime) {
+              final batch = FirebaseFirestore.instance.batch();
+
+              // Add all users to follow in a single batch
+              for (final userToFollow in _usersToFollow) {
+                // Update current user's following array
+                batch.update(
+                  FirebaseFirestore.instance.collection('users').doc(currentUserId),
+                  {
+                    'following': FieldValue.arrayUnion([userToFollow])
+                  }
+                );
+
+                // Update each target user's followers array
+                batch.update(
+                  FirebaseFirestore.instance.collection('users').doc(userToFollow),
+                  {
+                    'followers': FieldValue.arrayUnion([currentUserId])
+                  }
+                );
+              }
+
+              await batch.commit();
+              
+              if (mounted) {
+                setState(() {
+                  // Clear all follow states
+                  for (final userToFollow in _usersToFollow) {
+                    _followedUsers[userToFollow] = false;
+                    _countdownValues.remove(userToFollow);
+                    _countdownStartTimes.remove(userToFollow);
+                  }
+                  _usersToFollow.clear();
+                  _firstCountdownStartTime = null;
+                });
+
+                // Refresh the following list
+                await _initializeFollowingUsers();
+              }
+            } else {
+              // For other timers, just update the UI state
+              if (mounted) {
+                setState(() {
+                  _followedUsers[userId] = false;
+                  _countdownValues.remove(userId);
+                  _countdownStartTimes.remove(userId);
+                });
+              }
+            }
+          } catch (e) {
+            debugPrint('Error following users after countdown: $e');
+            if (mounted) {
+              setState(() {
+                _followedUsers[userId] = false;
+                _countdownValues.remove(userId);
+                _countdownStartTimes.remove(userId);
+                _usersToFollow.remove(userId);
+                
+                if (_countdownStartTimes.isEmpty) {
+                  _firstCountdownStartTime = null;
+                }
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error following users: $e')),
+              );
+            }
+          }
+        },
+        builder: (context, value, child) {
+          _countdownValues[userId] = value;
+          return Container(
+            height: 36,
+            width: 80,
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: Text(
+                '${value.ceil()}s',
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: () => _followUser(userId),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
+      child: const Text(
+        'Follow',
+        style: TextStyle(fontSize: 12),
+      ),
+    );
   }
 
   // Add method to load more posts
@@ -707,6 +927,75 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         setState(() => _isLoadingMore = false);
       }
     }
+  }
+
+  // Add this helper method for loading steps
+  List<Widget> _buildLoadingSteps(BuildContext context) {
+    final steps = [
+      {'icon': Icons.restaurant_menu, 'text': 'Analyzing food preferences'},
+      {'icon': Icons.people_outline, 'text': 'Finding top chefs'},
+      {'icon': Icons.thumb_up_outlined, 'text': 'Calculating engagement scores'},
+    ];
+
+    return steps.asMap().entries.map((entry) {
+      final index = entry.key;
+      final step = entry.value;
+      
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: Duration(milliseconds: 800 + (index * 200)),
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, 20 * (1 - value)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        step['icon'] as IconData,
+                        size: 20,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            step['text'] as String,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(
+                            value: value,
+                            backgroundColor: Colors.grey[200],
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }).toList();
   }
 }
 
