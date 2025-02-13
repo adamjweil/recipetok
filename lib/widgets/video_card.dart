@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
 import './save_options_modal.dart';
 import 'package:rxdart/rxdart.dart';
+import '../screens/profile_screen.dart';
 
 class VideoCard extends StatefulWidget {
   final Map<String, dynamic> videoData;
@@ -45,9 +46,14 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   bool _isInstructionsExpanded = false;
   bool _isFollowing = false;
   bool _isTryLater = false;
+  bool _isUserInfoVisible = true;
+  Timer? _userInfoTimer;
   StreamSubscription<DocumentSnapshot>? _likeSubscription;
   StreamSubscription<DocumentSnapshot>? _followSubscription;
   StreamSubscription<DocumentSnapshot>? _tryLaterSubscription;
+  String? _posterDisplayName;
+  String? _posterImage;
+  StreamSubscription<DocumentSnapshot>? _userDataSubscription;
 
   // Colors
   static const Color backgroundColor = Color(0xFFF5F5F5);
@@ -77,6 +83,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       _updateLikesFormat();
     }
 
+    _initializeUserDataStream();
     _initializeVideo();
     _initializeLikeStream();
     _initializeFollowStream();
@@ -86,6 +93,9 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+
+    // Start the user info timer
+    _startUserInfoTimer();
   }
 
   @override
@@ -95,6 +105,8 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     _likeSubscription?.cancel();
     _followSubscription?.cancel();
     _tryLaterSubscription?.cancel();
+    _userInfoTimer?.cancel();
+    _userDataSubscription?.cancel();
     super.dispose();
   }
 
@@ -167,153 +179,287 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       );
     }
 
-    return Container(
-      color: backgroundColor,
-      child: Column(
-        children: [
-          // Video Section with Overlay
-          Stack(
-            children: [
-              Container(
-                height: MediaQuery.of(context).size.height * 0.5,
-                width: double.infinity,
-                child: GestureDetector(
-                  onTap: () {
-                    if (_videoController!.value.isPlaying) {
-                      pauseVideo();
-                    } else {
-                      playVideo();
-                    }
-                  },
-                  child: VideoPlayer(_videoController!),
-                ),
-              ),
-            ],
+    return Stack(
+      children: [
+        // Full screen video
+        SizedBox(
+          height: MediaQuery.of(context).size.height,
+          width: MediaQuery.of(context).size.width,
+          child: GestureDetector(
+            onTap: () {
+              if (_videoController!.value.isPlaying) {
+                pauseVideo();
+              } else {
+                playVideo();
+              }
+            },
+            child: VideoPlayer(_videoController!),
           ),
-          
-          // Action Buttons
-          _buildActionButtons(),
-          
-          // Content Sections
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Title and Description
-                  _buildTitleSection(),
-                  
-                  // Ingredients and Instructions
-                  _buildContentSections(),
+        ),
+
+        // Top gradient for better visibility of top buttons
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 100,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.7),
+                  Colors.transparent,
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+
+        // Top buttons for ingredients and instructions
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 16,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildOverlayButton(
+                icon: Icons.restaurant_menu,
+                label: 'Ingredients',
+                onTap: () => setState(() => _isIngredientsExpanded = !_isIngredientsExpanded),
+                isActive: _isIngredientsExpanded,
+              ),
+              const SizedBox(width: 12),
+              _buildOverlayButton(
+                icon: Icons.format_list_numbered,
+                label: 'Instructions',
+                onTap: () => setState(() => _isInstructionsExpanded = !_isInstructionsExpanded),
+                isActive: _isInstructionsExpanded,
+              ),
+            ],
+          ),
+        ),
+
+        // Right side interaction buttons
+        Positioned(
+          right: 16,
+          bottom: MediaQuery.of(context).size.height * 0.15,
+          child: _buildInteractionButtons(),
+        ),
+
+        // Bottom user info with fade
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _buildUserInfoSection(),
+        ),
+
+        // Sliding overlays for ingredients and instructions
+        if (_isIngredientsExpanded)
+          _buildSlidingOverlay(
+            child: _buildIngredientsList(),
+            onClose: () => setState(() => _isIngredientsExpanded = false),
+          ),
+        
+        if (_isInstructionsExpanded)
+          _buildSlidingOverlay(
+            child: _buildInstructionsList(),
+            onClose: () => setState(() => _isInstructionsExpanded = false),
+          ),
+      ],
     );
   }
 
-  Widget _buildActionButtons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.grey[200]!,
-            width: 1,
+  Widget _buildInteractionButtons() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildInteractionButton(
+          icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
+          label: 'Like',
+          count: _localLikeCount,
+          onTap: _handleLike,
+          isActive: _localIsLiked,
+        ),
+        const SizedBox(height: 20),
+        _buildInteractionButton(
+          icon: Icons.comment_outlined,
+          label: 'Comment',
+          count: widget.videoData['commentCount'] ?? 0,
+          onTap: () => _showComments(context),
+        ),
+        const SizedBox(height: 20),
+        _buildInteractionButton(
+          icon: _isTryLater ? Icons.bookmark : Icons.bookmark_border,
+          label: 'Save',
+          count: widget.videoData['saveCount'] ?? 0,
+          onTap: () => _toggleBookmark(context),
+          isActive: _isTryLater,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInteractionButton({
+    required IconData icon,
+    required String label,
+    required int count,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: isActive ? primaryColor : Colors.white,
+              size: 26,
+            ),
           ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+        const SizedBox(height: 4),
+        Text(
+          count.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
           ),
-        ],
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserInfoSection() {
+    final String displayName = _posterDisplayName ?? 'Anonymous';
+    final String userId = widget.videoData['userId'] ?? '';
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.7),
+          ],
+        ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User Info Section
-          CircleAvatar(
-            radius: 15,
-            backgroundImage: widget.videoData['userImage'] != null
-                ? NetworkImage(widget.videoData['userImage'])
-                : null,
-            child: widget.videoData['userImage'] == null
-                ? const Icon(Icons.person, color: Colors.white, size: 15)
-                : null,
+          Text(
+            widget.videoData['title'] ?? 'Untitled Recipe',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(width: 8),
-          // Username and Follow Button
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.videoData['username'] ?? 'Anonymous',
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                if (widget.videoData['userId'] != widget.currentUserId)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: ElevatedButton(
-                      onPressed: _toggleFollow,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isFollowing ? Colors.transparent : primaryColor,
-                        foregroundColor: _isFollowing ? Colors.black87 : Colors.white,
-                        elevation: _isFollowing ? 0 : 1,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: _isFollowing 
-                              ? const BorderSide(color: Colors.black26)
-                              : BorderSide.none,
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (userId.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProfileScreen(
+                          userId: userId,
+                          showBackButton: true,
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 3,
-                        ),
-                        minimumSize: const Size(60, 0),
-                        maximumSize: const Size(80, 22),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Text(
-                        _isFollowing ? 'Following' : 'Follow',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
+                    );
+                  }
+                },
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundImage: _posterImage != null
+                      ? NetworkImage(_posterImage!)
+                      : null,
+                  child: _posterImage == null
+                      ? const Icon(Icons.person, color: Colors.white)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (userId.isNotEmpty) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ProfileScreen(
+                                  userId: userId,
+                                  showBackButton: true,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          // Action Buttons
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildAnimatedLikeButton(),
-              _buildActionButton(
-                icon: Icons.comment_outlined,
-                label: 'Comment',
-                onTap: () => _showComments(context),
-              ),
-              _buildActionButton(
-                icon: _isTryLater ? Icons.bookmark : Icons.bookmark_border,
-                label: 'Save',
-                color: _isTryLater ? Theme.of(context).primaryColor : secondaryColor,
-                onTap: () => _toggleBookmark(context),
-              ),
-              _buildActionButton(
-                icon: Icons.remove_red_eye_outlined,
-                label: '$_localViewCount',
-                onTap: () {},
+                    if (widget.videoData['userId'] != widget.currentUserId) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _toggleFollow,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _isFollowing ? Colors.white24 : primaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          minimumSize: const Size(60, 24),
+                        ),
+                        child: Text(
+                          _isFollowing ? 'Following' : 'Follow',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -322,68 +468,39 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     );
   }
 
-  Widget _buildAnimatedLikeButton() {
-    return GestureDetector(
-      onTap: () {
-        _handleLike();
-        _animationController
-          ..reset()
-          ..forward();
-      },
-      child: ScaleTransition(
-        scale: Tween<double>(begin: 1.0, end: 0.9).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeInOut,
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                _localIsLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                color: _localIsLiked ? Theme.of(context).primaryColor : secondaryColor,
-                size: 20,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$_localLikeCount',
-                style: TextStyle(
-                  color: _localIsLiked ? Theme.of(context).primaryColor : secondaryColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
+  Widget _buildOverlayButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    Color color = secondaryColor,
+    bool isActive = false,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isActive
+              ? Colors.black.withOpacity(0.7)
+              : Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 2),
+            Icon(
+              icon,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
               ),
             ),
           ],
@@ -392,230 +509,48 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     );
   }
 
-  Widget _buildTitleSection() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title with subtle accent line
-          Container(
-            padding: const EdgeInsets.only(bottom: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: Theme.of(context).primaryColor.withOpacity(0.6),
-                  width: 3,
-                ),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                widget.videoData['title'] ?? 'Untitled Recipe',
-                style: const TextStyle(
-                  fontSize: 23,
-                  fontWeight: FontWeight.w600,
-                  color: secondaryColor,
-                  height: 1.3,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Description with matching style but smaller
-          if (widget.videoData['description'] != null && widget.videoData['description'].toString().isNotEmpty)
-            Container(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                widget.videoData['description'] ?? '',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                  height: 1.5,
-                  letterSpacing: 0.1,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContentSections() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        children: [
-          _buildExpandableSection(
-            title: 'Ingredients',
-            icon: Icons.restaurant_menu,
-            isExpanded: _isIngredientsExpanded,
-            onTap: () => setState(() => _isIngredientsExpanded = !_isIngredientsExpanded),
-            child: _buildIngredientsList(),
-          ),
-          const SizedBox(height: 10),
-          _buildExpandableSection(
-            title: 'Instructions',
-            icon: Icons.format_list_numbered,
-            isExpanded: _isInstructionsExpanded,
-            onTap: () => setState(() => _isInstructionsExpanded = !_isInstructionsExpanded),
-            child: _buildInstructionsList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpandableSection({
-    required String title,
-    required IconData icon,
-    required bool isExpanded,
-    required VoidCallback onTap,
+  Widget _buildSlidingOverlay({
     required Widget child,
+    required VoidCallback onClose,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: GestureDetector(
+        onVerticalDragEnd: (details) {
+          if (details.primaryVelocity! > 0) {
+            onClose();
+          }
+        },
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.85),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Icon(icon, color: primaryColor, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: secondaryColor,
-                    ),
-                  ),
-                  const Spacer(),
-                  AnimatedRotation(
-                    turns: isExpanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: secondaryColor,
-                      size: 16,
-                    ),
-                  ),
-                ],
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: child,
+                ),
+              ),
+            ],
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(height: 0),
-            secondChild: child,
-            crossFadeState: isExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 300),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIngredientsList() {
-    final ingredients = (widget.videoData['ingredients'] as List<dynamic>?) ?? [];
-    
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Column(
-        children: ingredients.map<Widget>((ingredient) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    ingredient.toString(),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildInstructionsList() {
-    final instructions = (widget.videoData['instructions'] as List<dynamic>?) ?? [];
-    
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Column(
-        children: instructions.asMap().entries.map<Widget>((entry) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  decoration: const BoxDecoration(
-                    color: primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${entry.key + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    entry.value.toString(),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black87,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+        ),
       ),
     );
   }
@@ -792,6 +727,160 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     } catch (e) {
       debugPrint('Error updating likes format: $e');
     }
+  }
+
+  void _startUserInfoTimer() {
+    _userInfoTimer?.cancel();
+    _userInfoTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _isUserInfoVisible = false;
+        });
+      }
+    });
+  }
+
+  void _initializeUserDataStream() {
+    final String userId = widget.videoData['userId'];
+    if (userId != null && userId.isNotEmpty) {
+      _userDataSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots()
+          .listen((snapshot) {
+        if (mounted && snapshot.exists) {
+          final userData = snapshot.data() as Map<String, dynamic>;
+          setState(() {
+            // First try to construct full name from firstName and lastName
+            final String? firstName = userData['firstName'];
+            final String? lastName = userData['lastName'];
+            if (firstName != null && firstName.isNotEmpty) {
+              _posterDisplayName = lastName != null && lastName.isNotEmpty
+                  ? '$firstName $lastName'
+                  : firstName;
+            } else {
+              // If no full name, fall back to username or email
+              _posterDisplayName = userData['username'] ?? 
+                                 userData['email'] ?? 
+                                 widget.videoData['username'] ?? 
+                                 widget.videoData['email'] ?? 
+                                 'Anonymous';
+            }
+            // Get the current user image
+            _posterImage = userData['avatar'] ?? widget.videoData['userImage'];
+          });
+        }
+      });
+    }
+  }
+
+  Widget _buildIngredientsList() {
+    final ingredients = (widget.videoData['ingredients'] as List<dynamic>?) ?? [];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 16),
+          child: Text(
+            'Ingredients',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        ...ingredients.map<Widget>((ingredient) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    ingredient.toString(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildInstructionsList() {
+    final instructions = (widget.videoData['instructions'] as List<dynamic>?) ?? [];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 16),
+          child: Text(
+            'Instructions',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        ...instructions.asMap().entries.map<Widget>((entry) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${entry.key + 1}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    entry.value.toString(),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
   }
 }
 
