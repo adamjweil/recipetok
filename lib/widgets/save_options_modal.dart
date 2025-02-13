@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
+import '../widgets/create_group_modal.dart';
 
 class SaveOptionsModal extends StatelessWidget {
   final String videoId;
@@ -216,15 +217,32 @@ class SaveOptionsModal extends StatelessWidget {
             child: Divider(),
           ),
           // Collections header
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(16),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'Collections',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => const CreateGroupModal(),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Create'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).primaryColor,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                 ),
               ],

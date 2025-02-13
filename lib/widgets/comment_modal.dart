@@ -32,6 +32,18 @@ class _CommentModalState extends State<CommentModal> {
       final userDoc = await _firestore.collection('users').doc(currentUserId).get();
       final userData = userDoc.data() as Map<String, dynamic>;
 
+      // Construct display name from firstName and lastName if available
+      String displayName;
+      if (userData['firstName'] != null && userData['lastName'] != null) {
+        displayName = '${userData['firstName']} ${userData['lastName']}';
+      } else if (userData['firstName'] != null) {
+        displayName = userData['firstName'];
+      } else if (userData['displayName'] != null) {
+        displayName = userData['displayName'];
+      } else {
+        displayName = 'User';
+      }
+
       await _firestore.collection('meal_posts').doc(widget.postId)
           .collection('comments').add({
         'userId': currentUserId,
@@ -39,8 +51,8 @@ class _CommentModalState extends State<CommentModal> {
         'createdAt': FieldValue.serverTimestamp(),
         'firstName': userData['firstName'],
         'lastName': userData['lastName'],
-        'displayName': userData['displayName'],
-        'avatarUrl': userData['avatarUrl'],
+        'displayName': displayName,
+        'avatarUrl': userData['avatarUrl'] ?? userData['avatar'],
       });
 
       // Update comment count
