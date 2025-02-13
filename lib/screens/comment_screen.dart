@@ -343,11 +343,19 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                                     final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
                                                     return CircleAvatar(
                                                       radius: 9,
-                                                      backgroundImage: userData?['avatarUrl'] != null
-                                                          ? CachedNetworkImageProvider(userData!['avatarUrl'])
+                                                      backgroundColor: Colors.grey[200],
+                                                      backgroundImage: (userData?['avatarUrl'] != null && 
+                                                          userData!['avatarUrl'].toString().isNotEmpty &&
+                                                          CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                                          ? CachedNetworkImageProvider(
+                                                              userData['avatarUrl'],
+                                                              cacheManager: CustomCacheManager.instance,
+                                                            )
                                                           : null,
-                                                      child: userData?['avatarUrl'] == null
-                                                          ? const Icon(Icons.person, size: 11)
+                                                      child: (userData?['avatarUrl'] == null || 
+                                                          userData!['avatarUrl'].toString().isEmpty ||
+                                                          !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                                          ? Icon(Icons.person, size: 11, color: Colors.grey[400])
                                                           : null,
                                                     );
                                                   },
@@ -524,32 +532,22 @@ class _CommentScreenState extends State<CommentScreen> with SingleTickerProvider
                                     ),
                                   );
                                 },
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 12,
-                                      backgroundImage: userData?['avatarUrl'] != null
-                                          ? CachedNetworkImageProvider(userData!['avatarUrl'])
-                                          : null,
-                                      child: userData?['avatarUrl'] == null
-                                          ? const Icon(Icons.person, size: 12)
-                                          : null,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      userData?['firstName'] != null && userData?['lastName'] != null
-                                          ? '${userData!['firstName']} ${userData['lastName'][0]}.'
-                                          : userData?['displayName'] ?? 'Unknown',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
+                                child: CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: Colors.grey[200],
+                                  backgroundImage: (userData?['avatarUrl'] != null && 
+                                      userData!['avatarUrl'].toString().isNotEmpty &&
+                                      CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                      ? CachedNetworkImageProvider(
+                                          userData['avatarUrl'],
+                                          cacheManager: CustomCacheManager.instance,
+                                        )
+                                      : null,
+                                  child: (userData?['avatarUrl'] == null || 
+                                      userData!['avatarUrl'].toString().isEmpty ||
+                                      !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                      ? Icon(Icons.person, size: 16, color: Colors.grey[400])
+                                      : null,
                                 ),
                               );
                             },
