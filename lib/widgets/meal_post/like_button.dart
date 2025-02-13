@@ -84,7 +84,7 @@ class _LikeButtonState extends State<LikeButton> with SingleTickerProviderStateM
                 child: Icon(
                   isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
                   color: isLiked ? Theme.of(context).primaryColor : Colors.grey[600],
-                  size: 18,
+                  size: 20,
                 ),
               ),
             ),

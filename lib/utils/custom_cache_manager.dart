@@ -37,22 +37,13 @@ class CustomCacheManager {
       final cacheDir = await getTemporaryDirectory();
       final cachePath = p.join(cacheDir.path, key);
       
-      // Create directory if it doesn't exist and ensure proper permissions
+      // Create directory if it doesn't exist
       final directory = Directory(cachePath);
       if (!await directory.exists()) {
         await directory.create(recursive: true);
       }
       
-      // Ensure directory has write permissions
-      await directory.setPermissions(0x1FF); // This is equivalent to 0777
-      
-      // Check if database file exists and set permissions
-      final dbFile = File(p.join(cachePath, '$key.db'));
-      if (await dbFile.exists()) {
-        await dbFile.setPermissions(0x1FF);
-      }
-      
-      // Initialize the cache manager instance with error handling
+      // Initialize the cache manager instance
       _instance = CacheManager(
         Config(
           key,
