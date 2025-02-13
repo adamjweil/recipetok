@@ -33,7 +33,7 @@ class VideoCard extends StatefulWidget {
 }
 
 class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixin {
-  late VideoPlayerController _videoController;
+  VideoPlayerController? _videoController;
   late AnimationController _animationController;
   bool _isInitialized = false;
   bool _hasRecordedView = false;
@@ -59,8 +59,24 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   void initState() {
     super.initState();
     _localViewCount = widget.videoData['views'] ?? 0;
-    _localLikeCount = widget.videoData['likes'] ?? 0;
-    _localIsLiked = false;
+    
+    // Handle both integer and list cases for likes
+    final likesData = widget.videoData['likes'];
+    if (likesData is List) {
+      _localLikeCount = likesData.length;
+      _localIsLiked = likesData.contains(widget.currentUserId);
+    } else if (likesData is int) {
+      _localLikeCount = likesData;
+      _localIsLiked = false;
+      // Convert to list format in Firestore
+      _updateLikesFormat();
+    } else {
+      _localLikeCount = 0;
+      _localIsLiked = false;
+      // Initialize with empty list in Firestore
+      _updateLikesFormat();
+    }
+
     _initializeVideo();
     _initializeLikeStream();
     _initializeFollowStream();
@@ -74,34 +90,61 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
 
   @override
   void dispose() {
+    _videoController?.dispose();
+    _animationController.dispose();
     _likeSubscription?.cancel();
     _followSubscription?.cancel();
     _tryLaterSubscription?.cancel();
-    _videoController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeVideo() async {
-    _videoController = VideoPlayerController.network(widget.videoData['videoUrl']);
-    try {
-      await _videoController.initialize();
-      setState(() {
-        _isInitialized = true;
-      });
-      
-      if (widget.autoPlay && mounted) {
+  @override
+  void didUpdateWidget(VideoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.autoPlay != oldWidget.autoPlay) {
+      if (widget.autoPlay) {
         playVideo();
+      } else {
+        pauseVideo();
+      }
+    }
+  }
+
+  Future<void> _initializeVideo() async {
+    if (_videoController != null) {
+      await _videoController!.dispose();
+    }
+
+    _videoController = VideoPlayerController.network(
+      widget.videoData['videoUrl'],
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
+    
+    try {
+      await _videoController!.initialize();
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+        
+        if (widget.autoPlay) {
+          playVideo();
+        }
       }
     } catch (e) {
-      print('Error initializing video: $e');
+      debugPrint('Error initializing video: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialized = false;
+        });
+      }
     }
   }
 
   void playVideo() {
-    if (_isInitialized && mounted) {
-      _videoController.play();
-      _videoController.setLooping(true);
+    if (_isInitialized && mounted && _videoController != null) {
+      _videoController!.play();
+      _videoController!.setLooping(true);
       if (!_hasRecordedView) {
         _recordView();
       }
@@ -109,22 +152,14 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   }
 
   void pauseVideo() {
-    if (_isInitialized && mounted) {
-      _videoController.pause();
-    }
-  }
-
-  @override
-  void didUpdateWidget(VideoCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.autoPlay && !oldWidget.autoPlay && _isInitialized && mounted) {
-      playVideo();
+    if (_isInitialized && mounted && _videoController != null) {
+      _videoController!.pause();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
+    if (!_isInitialized || _videoController == null) {
       return const Center(
         child: CircularProgressIndicator(
           color: primaryColor,
@@ -137,7 +172,24 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       child: Column(
         children: [
           // Video Section with Overlay
-          _buildVideoSection(),
+          Stack(
+            children: [
+              Container(
+                height: MediaQuery.of(context).size.height * 0.5,
+                width: double.infinity,
+                child: GestureDetector(
+                  onTap: () {
+                    if (_videoController!.value.isPlaying) {
+                      pauseVideo();
+                    } else {
+                      playVideo();
+                    }
+                  },
+                  child: VideoPlayer(_videoController!),
+                ),
+              ),
+            ],
+          ),
           
           // Action Buttons
           _buildActionButtons(),
@@ -158,28 +210,6 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildVideoSection() {
-    return Stack(
-      children: [
-        // Video Player
-        Container(
-          height: MediaQuery.of(context).size.height * 0.5,
-          width: double.infinity,
-          child: GestureDetector(
-            onTap: () {
-              if (_videoController.value.isPlaying) {
-                _videoController.pause();
-              } else {
-                _videoController.play();
-              }
-            },
-            child: VideoPlayer(_videoController),
-          ),
-        ),
-      ],
     );
   }
 
@@ -592,15 +622,16 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
 
   void _initializeLikeStream() {
     _likeSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.currentUserId)
-        .collection('videoLikes')
+        .collection('videos')
         .doc(widget.videoId)
         .snapshots()
         .listen((snapshot) {
-      if (mounted && _localIsLiked != snapshot.exists) {
+      if (mounted && snapshot.exists) {
+        final videoData = snapshot.data() as Map<String, dynamic>;
+        final likes = videoData['likes'] as List<dynamic>? ?? [];
         setState(() {
-          _localIsLiked = snapshot.exists;
+          _localLikeCount = likes.length;
+          _localIsLiked = likes.contains(widget.currentUserId);
         });
       }
     });
@@ -684,7 +715,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   Future<void> _handleLike() async {
     setState(() {
       _localIsLiked = !_localIsLiked;
-      _localLikeCount += _localIsLiked ? 1 : -1;
+      _localLikeCount = _localIsLiked ? _localLikeCount + 1 : _localLikeCount - 1;
     });
 
     widget.onLike.call();
@@ -747,6 +778,19 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       }
     } catch (e) {
       print('Error toggling follow: $e');
+    }
+  }
+
+  Future<void> _updateLikesFormat() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(widget.videoId)
+          .update({
+        'likes': [],
+      });
+    } catch (e) {
+      debugPrint('Error updating likes format: $e');
     }
   }
 }
