@@ -19,38 +19,54 @@ class _VideoScreenState extends State<VideoScreen> {
   final PageController _pageController = PageController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  VideoCardState? _currentlyPlayingVideo;
+  int _currentVideoIndex = 0;
   List<QueryDocumentSnapshot>? _cachedVideos;
-  final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
 
   @override
   void initState() {
     super.initState();
+    _pageController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _playInitialVideo();
     });
   }
 
+  void _onScroll() {
+    final pageIndex = (_pageController.page ?? 0).round();
+    if (pageIndex != _currentVideoIndex && _cachedVideos != null) {
+      setState(() {
+        _currentVideoIndex = pageIndex;
+      });
+    }
+  }
+
   void _playInitialVideo() {
     if (_cachedVideos != null && _cachedVideos!.isNotEmpty) {
-      final firstVideoKey = _videoKeys[_cachedVideos!.first.id];
-      if (firstVideoKey?.currentState != null) {
-        firstVideoKey!.currentState!.playVideo();
-        setState(() {
-          _currentlyPlayingVideo = firstVideoKey.currentState;
-        });
-      }
+      setState(() {
+        _currentVideoIndex = 0;
+      });
     }
   }
 
   Stream<List<QueryDocumentSnapshot>> _getVideosStream() {
+    debugPrint('🎥 Fetching videos stream...');
     return _firestore
         .collection('videos')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
+          debugPrint('📊 Received ${snapshot.docs.length} videos from Firestore');
           final docs = snapshot.docs;
           if (docs.isEmpty) return docs;
+          
+          // Debug log each video's basic info
+          for (var doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            debugPrint('📹 Video: ${doc.id}');
+            debugPrint('👤 Creator: ${data['userId']}');
+            debugPrint('📝 Title: ${data['title']}');
+            debugPrint('-------------------');
+          }
           
           // Create a new list to store the reordered videos
           List<QueryDocumentSnapshot> reordered = [];
@@ -77,6 +93,7 @@ class _VideoScreenState extends State<VideoScreen> {
             lastUserId = (reordered.last.data() as Map<String, dynamic>)['userId'] ?? '';
           }
           
+          debugPrint('🔄 Reordered videos count: ${reordered.length}');
           return reordered;
         });
   }
@@ -84,38 +101,22 @@ class _VideoScreenState extends State<VideoScreen> {
   Future<void> _toggleVideoLike(String videoId) async {
     try {
       final videoRef = _firestore.collection('videos').doc(videoId);
-      final userLikeRef = _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('videoLikes')
-          .doc(videoId);
-
-      final likeDoc = await userLikeRef.get();
-      final isLiked = likeDoc.exists;
-
-      final batch = _firestore.batch();
+      final videoDoc = await videoRef.get();
+      
+      if (!videoDoc.exists) return;
+      
+      final likes = List<String>.from(videoDoc.data()?['likes'] ?? []);
+      final isLiked = likes.contains(currentUserId);
 
       if (isLiked) {
-        batch.update(videoRef, {
-          'likes': FieldValue.increment(-1),
+        await videoRef.update({
+          'likes': FieldValue.arrayRemove([currentUserId]),
         });
-        batch.delete(userLikeRef);
       } else {
-        batch.update(videoRef, {
-          'likes': FieldValue.increment(1),
-        });
-        batch.set(userLikeRef, {
-          'timestamp': FieldValue.serverTimestamp(),
+        await videoRef.update({
+          'likes': FieldValue.arrayUnion([currentUserId]),
         });
       }
-
-      unawaited(batch.commit().catchError((e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${e.toString()}')),
-          );
-        }
-      }));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -175,11 +176,7 @@ class _VideoScreenState extends State<VideoScreen> {
 
   @override
   void dispose() {
-    _currentlyPlayingVideo?.pauseVideo();
-    _videoKeys.values.forEach((key) {
-      key.currentState?.pauseVideo();
-    });
-    _videoKeys.clear();
+    _pageController.removeListener(_onScroll);
     _pageController.dispose();
     super.dispose();
   }
@@ -203,10 +200,8 @@ class _VideoScreenState extends State<VideoScreen> {
           
           if (snapshot.hasData) {
             _cachedVideos = snapshot.data;
-            if (_currentlyPlayingVideo == null) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _playInitialVideo();
-              });
+            if (_currentVideoIndex >= videos.length) {
+              _currentVideoIndex = videos.length - 1;
             }
           }
 
@@ -231,36 +226,23 @@ class _VideoScreenState extends State<VideoScreen> {
             scrollDirection: Axis.vertical,
             itemCount: videos.length,
             onPageChanged: (index) {
-              if (_currentlyPlayingVideo != null) {
-                _currentlyPlayingVideo!.pauseVideo();
-              }
-
-              final videoKey = _videoKeys[videos[index].id];
-              if (videoKey?.currentState != null) {
-                videoKey!.currentState!.playVideo();
-                setState(() {
-                  _currentlyPlayingVideo = videoKey.currentState;
-                });
-              }
+              setState(() {
+                _currentVideoIndex = index;
+              });
             },
             itemBuilder: (context, index) {
               final videoData = videos[index].data() as Map<String, dynamic>;
               final videoId = videos[index].id;
               
-              _videoKeys[videoId] ??= GlobalKey<VideoCardState>();
-              
-              return KeyedSubtree(
-                key: ValueKey(videoId),
-                child: VideoCard(
-                  key: _videoKeys[videoId],
-                  videoData: videoData,
-                  videoId: videoId,
-                  onUserTap: () {},
-                  onLike: () => _toggleVideoLike(videoId),
-                  onBookmark: () => _toggleBookmark(videoId, videoData),
-                  currentUserId: currentUserId,
-                  autoPlay: _currentlyPlayingVideo == null && index == 0,
-                ),
+              return VideoCard(
+                key: ValueKey('video_$videoId'),
+                videoData: videoData,
+                videoId: videoId,
+                onUserTap: () {},
+                onLike: () => _toggleVideoLike(videoId),
+                onBookmark: () => _toggleBookmark(videoId, videoData),
+                currentUserId: currentUserId,
+                autoPlay: _currentVideoIndex == index,
               );
             },
           );

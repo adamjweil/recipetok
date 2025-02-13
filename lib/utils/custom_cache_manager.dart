@@ -29,11 +29,13 @@ class CustomCacheManager {
   // Clear the cache
   static Future<void> clearCache() async {
     await _instance?.emptyCache();
+    _instance = null;  // Reset the instance after clearing
   }
 
-  // Rename init to initialize to match the call in main.dart
+  // Initialize the cache manager with proper permissions
   static Future<void> initialize() async {
     try {
+      // Get the temporary directory
       final cacheDir = await getTemporaryDirectory();
       final cachePath = p.join(cacheDir.path, key);
       
@@ -41,6 +43,25 @@ class CustomCacheManager {
       final directory = Directory(cachePath);
       if (!await directory.exists()) {
         await directory.create(recursive: true);
+      }
+
+      // Ensure proper permissions on iOS
+      if (Platform.isIOS) {
+        try {
+          await Process.run('chmod', ['777', cachePath]);
+        } catch (e) {
+          debugPrint('Failed to set permissions: $e');
+        }
+      }
+
+      // Delete existing database file if it exists
+      final dbFile = File(p.join(cachePath, '$key.db'));
+      if (await dbFile.exists()) {
+        try {
+          await dbFile.delete();
+        } catch (e) {
+          debugPrint('Failed to delete existing database: $e');
+        }
       }
       
       // Initialize the cache manager instance
@@ -55,23 +76,38 @@ class CustomCacheManager {
         ),
       );
 
-      // Test write access by performing a dummy operation
+      // Test write access
       await safeWrite(() async {
         await _instance?.emptyCache();
       });
     } catch (e) {
       debugPrint('Cache initialization error: $e');
-      // If initialization fails, try to recover by clearing the cache directory
+      // If initialization fails, try to recover
       try {
         final cacheDir = await getTemporaryDirectory();
         final cachePath = p.join(cacheDir.path, key);
+        
+        // Delete the entire cache directory
         final directory = Directory(cachePath);
         if (await directory.exists()) {
           await directory.delete(recursive: true);
         }
-        await initialize(); // Retry initialization
+        
+        // Retry initialization after cleanup
+        await initialize();
       } catch (retryError) {
         debugPrint('Cache recovery failed: $retryError');
+        // If recovery fails, create a new instance with in-memory cache
+        _instance = CacheManager(
+          Config(
+            key,
+            stalePeriod: const Duration(days: 1),
+            maxNrOfCacheObjects: 50,
+            repo: JsonCacheInfoRepository(databaseName: key),
+            fileSystem: IOFileSystem(key),
+            fileService: HttpFileService(),
+          ),
+        );
       }
     }
   }
@@ -86,13 +122,11 @@ class CustomCacheManager {
         await clearCache();
         try {
           await operation();
-        } catch (e) {
-          // If it still fails, just log it
-          print('Cache operation failed after retry: $e');
+        } catch (retryError) {
+          debugPrint('Cache operation failed after retry: $retryError');
         }
       } else {
-        // For other errors, just log them
-        print('Cache operation failed: $e');
+        debugPrint('Cache operation failed: $e');
       }
     }
   }

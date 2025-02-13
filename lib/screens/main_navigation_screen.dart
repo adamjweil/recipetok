@@ -159,7 +159,7 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+          padding: const EdgeInsets.only(top: 2, bottom: 17, left: 16, right: 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
