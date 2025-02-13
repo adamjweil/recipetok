@@ -54,6 +54,8 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   String? _posterDisplayName;
   String? _posterImage;
   StreamSubscription<DocumentSnapshot>? _userDataSubscription;
+  bool _isDescriptionExpanded = false;
+  late TextEditingController _commentController;
 
   // Colors
   static const Color backgroundColor = Color(0xFFF5F5F5);
@@ -74,12 +76,10 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     } else if (likesData is int) {
       _localLikeCount = likesData;
       _localIsLiked = false;
-      // Convert to list format in Firestore
       _updateLikesFormat();
     } else {
       _localLikeCount = 0;
       _localIsLiked = false;
-      // Initialize with empty list in Firestore
       _updateLikesFormat();
     }
 
@@ -94,12 +94,21 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       vsync: this,
     );
 
-    // Start the user info timer
     _startUserInfoTimer();
+    _commentController = TextEditingController();
+    _initializeCommentCount();
+
+    // Add video position listener
+    if (_videoController != null) {
+      _videoController!.addListener(_onVideoProgressChanged);
+    }
   }
 
   @override
   void dispose() {
+    if (_videoController != null) {
+      _videoController!.removeListener(_onVideoProgressChanged);
+    }
     _videoController?.dispose();
     _animationController.dispose();
     _likeSubscription?.cancel();
@@ -107,6 +116,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     _tryLaterSubscription?.cancel();
     _userInfoTimer?.cancel();
     _userDataSubscription?.cancel();
+    _commentController.dispose();
     super.dispose();
   }
 
@@ -169,6 +179,52 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     }
   }
 
+  void _onVideoProgressChanged() {
+    if (mounted) {
+      setState(() {});  // Trigger rebuild to update progress bar
+    }
+  }
+
+  Widget _buildProgressBar() {
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return const SizedBox.shrink();
+    }
+
+    final Duration position = _videoController!.value.position;
+    final Duration duration = _videoController!.value.duration;
+    final double progress = position.inMilliseconds / duration.inMilliseconds;
+
+    return Container(
+      height: 4.5,
+      width: MediaQuery.of(context).size.width,
+      color: Colors.white.withOpacity(0.3), // Slightly more visible background
+      child: Stack(
+        children: [
+          // Bright white progress bar
+          FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: progress.clamp(0.0, 1.0),
+            child: Container(
+              color: Colors.white, // Pure white color to match the text
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.white,
+                      blurRadius: 3.0,
+                      spreadRadius: 0.5,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized || _videoController == null) {
@@ -197,6 +253,14 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           ),
         ),
 
+        // Progress bar at the bottom (moved up in the stack order)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: MediaQuery.of(context).padding.bottom, // Adjusted position to be at the very bottom
+          child: _buildProgressBar(),
+        ),
+
         // Top gradient for better visibility of top buttons
         Positioned(
           top: 0,
@@ -220,31 +284,34 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         // Top buttons for ingredients and instructions
         Positioned(
           top: MediaQuery.of(context).padding.top + 16,
-          left: 16,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildOverlayButton(
-                icon: Icons.restaurant_menu,
-                label: 'Ingredients',
-                onTap: () => setState(() => _isIngredientsExpanded = !_isIngredientsExpanded),
-                isActive: _isIngredientsExpanded,
-              ),
-              const SizedBox(width: 12),
-              _buildOverlayButton(
-                icon: Icons.format_list_numbered,
-                label: 'Instructions',
-                onTap: () => setState(() => _isInstructionsExpanded = !_isInstructionsExpanded),
-                isActive: _isInstructionsExpanded,
-              ),
-            ],
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildOverlayButton(
+                  icon: Icons.restaurant_menu,
+                  label: 'Ingredients',
+                  onTap: () => _toggleSection('ingredients'),
+                  isActive: _isIngredientsExpanded,
+                ),
+                const SizedBox(width: 12),
+                _buildOverlayButton(
+                  icon: Icons.format_list_numbered,
+                  label: 'Instructions',
+                  onTap: () => _toggleSection('instructions'),
+                  isActive: _isInstructionsExpanded,
+                ),
+              ],
+            ),
           ),
         ),
 
         // Right side interaction buttons
         Positioned(
-          right: 16,
-          bottom: MediaQuery.of(context).size.height * 0.15,
+          right: 6,
+          bottom: MediaQuery.of(context).size.height * 0.05,
           child: _buildInteractionButtons(),
         ),
 
@@ -252,7 +319,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         Positioned(
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: 0, // Adjusted to be right above the progress bar
           child: _buildUserInfoSection(),
         ),
 
@@ -277,7 +344,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildInteractionButton(
-          icon: _localIsLiked ? Icons.favorite : Icons.favorite_border,
+          icon: _localIsLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
           label: 'Like',
           count: _localLikeCount,
           onTap: _handleLike,
@@ -285,14 +352,14 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         ),
         const SizedBox(height: 20),
         _buildInteractionButton(
-          icon: Icons.comment_outlined,
+          icon: Icons.chat_bubble_outline_rounded,
           label: 'Comment',
           count: widget.videoData['commentCount'] ?? 0,
           onTap: () => _showComments(context),
         ),
         const SizedBox(height: 20),
         _buildInteractionButton(
-          icon: _isTryLater ? Icons.bookmark : Icons.bookmark_border,
+          icon: _isTryLater ? Icons.bookmark : Icons.bookmark_outline_rounded,
           label: 'Save',
           count: widget.videoData['saveCount'] ?? 0,
           onTap: () => _toggleBookmark(context),
@@ -309,38 +376,50 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     required VoidCallback onTap,
     bool isActive = false,
   }) {
+    final Color iconColor = isActive 
+        ? const Color(0xFF2196F3) // Primary blue when active
+        : const Color(0xFFFFFFFF); // Pure white when inactive
+    
     return Column(
       children: [
         InkWell(
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              shape: BoxShape.circle,
-            ),
             child: Icon(
               icon,
-              color: isActive ? primaryColor : Colors.white,
+              color: iconColor,
               size: 26,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          count.toString(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-          ),
+        SizedBox(
+          height: 17, // Height of the text + some padding
+          child: count > 0
+              ? Text(
+                  count.toString(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                )
+              : null,
         ),
       ],
     );
@@ -351,7 +430,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     final String userId = widget.videoData['userId'] ?? '';
     
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -366,21 +445,92 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.videoData['title'] ?? 'Untitled Recipe',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isDescriptionExpanded = !_isDescriptionExpanded;
+              });
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.videoData['title'] ?? 'Untitled Recipe',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                height: 1.1,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            _isDescriptionExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (_isDescriptionExpanded && widget.videoData['description'] != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    margin: EdgeInsets.only(right: MediaQuery.of(context).size.width * 0.2),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      widget.videoData['description'],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+                if (_isDescriptionExpanded && widget.videoData['description'] == null)
+                  Container(
+                    margin: EdgeInsets.only(right: MediaQuery.of(context).size.width * 0.2),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'No description available',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               GestureDetector(
                 onTap: () {
                   if (userId.isNotEmpty) {
+                    pauseVideo();
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -393,16 +543,16 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                   }
                 },
                 child: CircleAvatar(
-                  radius: 20,
-                  backgroundImage: _posterImage != null
+                  radius: 9,
+                  backgroundImage: (_posterImage != null && _posterImage!.isNotEmpty)
                       ? NetworkImage(_posterImage!)
                       : null,
-                  child: _posterImage == null
-                      ? const Icon(Icons.person, color: Colors.white)
+                  child: (_posterImage == null || _posterImage!.isEmpty)
+                      ? const Icon(Icons.person, color: Colors.white, size: 9)
                       : null,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Row(
                   children: [
@@ -410,6 +560,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                       child: GestureDetector(
                         onTap: () {
                           if (userId.isNotEmpty) {
+                            pauseVideo();
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -425,35 +576,37 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                           displayName,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
                     if (widget.videoData['userId'] != widget.currentUserId) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       ElevatedButton(
                         onPressed: _toggleFollow,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _isFollowing ? Colors.white24 : primaryColor,
+                          backgroundColor: Colors.transparent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(4),
+                            side: BorderSide(color: Colors.white.withOpacity(0.6), width: 0.8),
                           ),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
+                            horizontal: 8,
+                            vertical: 3,
                           ),
-                          minimumSize: const Size(60, 24),
+                          minimumSize: const Size(35, 14),
                         ),
                         child: Text(
                           _isFollowing ? 'Following' : 'Follow',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -766,8 +919,10 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                                  widget.videoData['email'] ?? 
                                  'Anonymous';
             }
-            // Get the current user image
-            _posterImage = userData['avatar'] ?? widget.videoData['userImage'];
+            // Get the current user image, checking multiple possible fields
+            _posterImage = userData['avatar'] ?? 
+                         userData['avatarUrl'] ?? 
+                         widget.videoData['userImage'];
           });
         }
       });
@@ -882,6 +1037,50 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
       ],
     );
   }
+
+  void _toggleSection(String section) {
+    setState(() {
+      if (section == 'ingredients') {
+        _isIngredientsExpanded = !_isIngredientsExpanded;
+        _isInstructionsExpanded = false;
+      } else {
+        _isInstructionsExpanded = !_isInstructionsExpanded;
+        _isIngredientsExpanded = false;
+      }
+    });
+  }
+
+  Future<void> _initializeCommentCount() async {
+    try {
+      final commentsSnapshot = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(widget.videoId)
+          .collection('comments')
+          .count()
+          .get();
+
+      final actualCount = commentsSnapshot.count;
+      
+      // Update the video document with the actual count if it differs
+      final videoDoc = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(widget.videoId)
+          .get();
+      
+      final currentCount = videoDoc.data()?['commentCount'] ?? 0;
+      
+      if (currentCount != actualCount) {
+        await FirebaseFirestore.instance
+            .collection('videos')
+            .doc(widget.videoId)
+            .update({
+          'commentCount': actualCount,
+        });
+      }
+    } catch (e) {
+      print('Error initializing comment count: $e');
+    }
+  }
 }
 
 class CommentsSheet extends StatefulWidget {
@@ -943,11 +1142,17 @@ class _CommentsSheetState extends State<CommentsSheet> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      await _firestore
+      // Start a batch write
+      final batch = _firestore.batch();
+      
+      // Add the comment
+      final commentRef = _firestore
           .collection('videos')
           .doc(widget.videoId)
           .collection('comments')
-          .add({
+          .doc();
+
+      batch.set(commentRef, {
         'text': _commentController.text.trim(),
         'userId': user.uid,
         'username': user.displayName ?? 'User',
@@ -955,6 +1160,15 @@ class _CommentsSheetState extends State<CommentsSheet> {
         'createdAt': FieldValue.serverTimestamp(),
         'likes': 0,
       });
+
+      // Update the comment count on the video document
+      final videoRef = _firestore.collection('videos').doc(widget.videoId);
+      batch.update(videoRef, {
+        'commentCount': FieldValue.increment(1),
+      });
+
+      // Commit the batch
+      await batch.commit();
 
       _commentController.clear();
       if (mounted) {
@@ -1013,7 +1227,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline,
+                        Icon(Icons.chat_bubble_outline_rounded,
                             size: 48, color: Colors.grey[400]),
                         const SizedBox(height: 16),
                         Text(
