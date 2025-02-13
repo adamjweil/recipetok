@@ -3,8 +3,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:camera/camera.dart';
+import 'package:video_editor/video_editor.dart';
 import 'dart:io';
 import 'dart:async' show unawaited;
+import 'package:recipetok/screens/video_gallery_screen.dart';
+import 'package:recipetok/screens/video_processing_screen.dart';
 
 class VideoUploadScreen extends StatefulWidget {
   const VideoUploadScreen({super.key});
@@ -20,193 +24,283 @@ class _VideoUploadScreenState extends State<VideoUploadScreen> {
   bool _isUploading = false;
   double _uploadProgress = 0.0;
   bool _isPickingVideo = false;
+  CameraController? _cameraController;
+  bool _isRecording = false;
 
-  Future<void> _pickVideo() async {
-    if (_isPickingVideo) return;
-    
-    setState(() => _isPickingVideo = true);
-    
-    try {
-      final picker = ImagePicker();
-      final video = await picker.pickVideo(source: ImageSource.gallery);
-      
-      if (video != null) {
-        setState(() {
-          _videoFile = File(video.path);
-        });
-      }
-    } finally {
-      setState(() => _isPickingVideo = false);
-    }
-  }
-
-  Future<void> _uploadVideo() async {
-    if (_videoFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a video first')),
-      );
-      return;
-    }
-
-    if (_titleController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a title')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isUploading = true;
-      _uploadProgress = 0.0;
-    });
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not logged in');
-
-      // Upload video to Firebase Storage
-      final videoFileName = '${DateTime.now().millisecondsSinceEpoch}.mp4';
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('videos')
-          .child(user.uid)
-          .child(videoFileName);
-
-      final uploadTask = storageRef.putFile(_videoFile!);
-
-      // Track upload progress
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        setState(() {
-          _uploadProgress = snapshot.bytesTransferred / snapshot.totalBytes;
-        });
-      });
-
-      await uploadTask;
-      final videoUrl = await storageRef.getDownloadURL();
-
-      // Save video metadata to Firestore
-      await FirebaseFirestore.instance.collection('videos').add({
-        'userId': user.uid,
-        'title': _titleController.text,
-        'description': _descriptionController.text,
-        'videoUrl': videoUrl,
-        'timestamp': FieldValue.serverTimestamp(),
-        'likes': 0,
-        'views': 0,
-      });
-
-      // Update user's video count
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'videoCount': FieldValue.increment(1),
-      });
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video uploaded successfully!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading video: $e')),
-        );
-      }
-    } finally {
-      setState(() {
-        _isUploading = false;
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _initializeCamera();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _cameraController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _initializeCamera() async {
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) return;
+
+    _cameraController = CameraController(
+      cameras.first,
+      ResolutionPreset.high,
+      enableAudio: true,
+    );
+
+    try {
+      await _cameraController!.initialize();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error initializing camera: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _browseVideos() async {
+    if (_isPickingVideo) return;
+    
+    setState(() => _isPickingVideo = true);
+    
+    try {
+      final video = await Navigator.push<File>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const VideoGalleryScreen(),
+        ),
+      );
+      
+      if (video != null) {
+        setState(() {
+          _videoFile = video;
+        });
+        _processVideo();
+      }
+    } finally {
+      setState(() => _isPickingVideo = false);
+    }
+  }
+
+  Future<void> _recordVideo() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
+    if (_isRecording) {
+      final file = await _cameraController!.stopVideoRecording();
+      setState(() {
+        _isRecording = false;
+        _videoFile = File(file.path);
+      });
+      _processVideo();
+    } else {
+      try {
+        await _cameraController!.startVideoRecording();
+        setState(() {
+          _isRecording = true;
+        });
+
+        // Auto-stop after 60 seconds
+        Future.delayed(const Duration(seconds: 60), () {
+          if (_isRecording) {
+            _cameraController!.stopVideoRecording().then((file) {
+              setState(() {
+                _isRecording = false;
+                _videoFile = File(file.path);
+              });
+              _processVideo();
+            });
+          }
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error recording video: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  void _processVideo() {
+    if (_videoFile == null) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to upload videos')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoProcessingScreen(
+          videoPath: _videoFile!.path,
+          userId: user.uid,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upload Video'),
+        title: const Text('Create Video'),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            GestureDetector(
-              onTap: _isUploading ? null : _pickVideo,
-              child: Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _videoFile != null
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          const Icon(Icons.video_file, size: 64),
-                          Text(
-                            'Video Selected',
-                            style: Theme.of(context).textTheme.titleMedium,
+      body: Column(
+        children: [
+          Expanded(
+            child: _cameraController != null &&
+                    _cameraController!.value.isInitialized
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CameraPreview(_cameraController!),
+                      if (_isRecording)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.cloud_upload, size: 64),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap to select video',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Recording',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 24),
-            if (_isUploading) ...[
-              LinearProgressIndicator(value: _uploadProgress),
-              const SizedBox(height: 16),
-              Text(
-                'Uploading... ${(_uploadProgress * 100).toStringAsFixed(1)}%',
-                textAlign: TextAlign.center,
-              ),
-            ] else
-              ElevatedButton(
-                onPressed: _uploadVideo,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                        ),
+                    ],
+                  )
+                : const Center(
+                    child: Text('Initializing camera...'),
                   ),
-                ),
-                child: const Text('Upload Video'),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildOptionButton(
+                    icon: Icons.photo_library,
+                    label: 'Gallery',
+                    onTap: _browseVideos,
+                  ),
+                  _buildRecordButton(),
+                  _buildOptionButton(
+                    icon: Icons.switch_camera,
+                    label: 'Flip',
+                    onTap: () async {
+                      if (_cameraController == null) return;
+                      final cameras = await availableCameras();
+                      final newCamera = cameras.firstWhere(
+                        (camera) =>
+                            camera.lensDirection !=
+                            _cameraController!.description.lensDirection,
+                        orElse: () => cameras.first,
+                      );
+                      await _cameraController!.dispose();
+                      _cameraController = CameraController(
+                        newCamera,
+                        ResolutionPreset.high,
+                        enableAudio: true,
+                      );
+                      await _cameraController!.initialize();
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ],
               ),
-          ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordButton() {
+    return GestureDetector(
+      onTap: _recordVideo,
+      child: Container(
+        width: 72,
+        height: 72,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: 4,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: _isRecording ? BoxShape.rectangle : BoxShape.circle,
+            borderRadius: _isRecording ? BorderRadius.circular(8) : null,
+            color: Colors.red,
+          ),
         ),
       ),
     );

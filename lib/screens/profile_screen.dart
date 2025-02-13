@@ -36,11 +36,13 @@ import '../screens/video_upload_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final String? userId;
   final bool showBackButton;
+  final int initialTabIndex;
 
   const ProfileScreen({
     super.key,
     this.userId,
     this.showBackButton = true,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -99,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     _tabController = TabController(
       length: isCurrentUserProfile ? 4 : 2,
       vsync: this,
-      initialIndex: 0,
+      initialIndex: widget.initialTabIndex,
     );
     _initializeAnimationController();
   }

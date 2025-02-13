@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Recipetok</string>
+	<string>Munchster</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,11 +47,11 @@
 	<key>NSCachesDirectory</key>
 	<string>Allows the app to cache images for better performance</string>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to your camera to take profile pictures.</string>
+	<string>We need access to your camera to record recipe videos</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Application needs access to write to photo library for caching images</string>
+	<string>We need permission to save processed videos to your photo library</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to photo library for caching images</string>
+	<string>We need access to your photo library to select videos for recipe creation</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -69,5 +69,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record audio for your recipe videos</string>
 </dict>
 </plist>
