@@ -217,7 +217,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                 IgnorePointer(
                   ignoring: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
                     child: Row(
                       mainAxisSize: MainAxisSize.max,
                       children: [
@@ -226,7 +226,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
                               child: LikeButton(
                                 postId: widget.post.id,
                                 userId: FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -1051,7 +1051,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
         Text(
           getTimeAgo(widget.post.createdAt),
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: Colors.grey[600],
           ),
         ),

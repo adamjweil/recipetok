@@ -20,6 +20,16 @@ class _VideoGalleryScreenState extends State<VideoGalleryScreen> {
   Map<String, Duration> _videoDurations = {};
   Map<String, String> _thumbnails = {};
 
+  // Add supported formats based on OpenAI Whisper API requirements
+  final Set<String> _supportedFormats = {
+    'mp4', 'mpeg', 'mpga', 'webm', 'm4a', 'wav'
+  };
+
+  bool _isFormatSupported(String filePath) {
+    final extension = filePath.toLowerCase().split('.').last;
+    return _supportedFormats.contains(extension);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -31,11 +41,23 @@ class _VideoGalleryScreenState extends State<VideoGalleryScreen> {
       final videos = await _picker.pickMultipleMedia();
       if (!mounted) return;
 
+      // Filter videos by supported formats
+      final filteredVideos = videos.where((video) => _isFormatSupported(video.name)).toList();
+      
+      // Show warning if some videos were filtered out
+      if (filteredVideos.length < videos.length && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Some videos were filtered out. Supported formats: ${_supportedFormats.join(", ")}'
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+
       setState(() {
-        _videos = videos.where((element) => 
-          element.name.toLowerCase().endsWith('.mp4') || 
-          element.name.toLowerCase().endsWith('.mov')
-        ).toList();
+        _videos = filteredVideos;
         _isLoading = false;
       });
 
@@ -52,7 +74,10 @@ class _VideoGalleryScreenState extends State<VideoGalleryScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading videos: $e')),
+          SnackBar(
+            content: Text('Error loading videos: $e'),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
       setState(() {

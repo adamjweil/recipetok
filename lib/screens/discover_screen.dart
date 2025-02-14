@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -370,15 +371,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       );
     }
 
-    return GridView.builder(
+    return MasonryGridView.count(
       controller: _scrollController,
-      padding: const EdgeInsets.all(1),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
-      ),
+      padding: EdgeInsets.zero,
+      crossAxisCount: 3,
+      mainAxisSpacing: 1,
+      crossAxisSpacing: 1,
       itemCount: _videos.length + (_isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= _videos.length) {
@@ -386,20 +384,24 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         }
 
         final video = _videos[index];
-        // Calculate row number (0-based) and position in row
-        final int row = index ~/ 3;  // Integer division by 3
-        final int positionInRow = index % 3;  // 0 = left, 1 = middle, 2 = right
+        // Only the first three double-height videos
+        final bool isDoubleHeight = index == 2 || // Rows 1-2 right
+                                   index == 6 || // Rows 3-4 left
+                                   index == 11 || // Rows 4-5 right
+                                   index == 16 || // Rows 6-7 middle
+                                   index == 21;  // Rows 7-8 right
         
-        // Alternate between right (even rows) and left (odd rows) videos
-        final bool shouldAutoplay = row % 2 == 0 
-            ? positionInRow == 2  // Right video for even rows (0, 2, 4...)
-            : positionInRow == 0; // Left video for odd rows (1, 3, 5...)
+        // Only autoplay double-height videos
+        final bool shouldAutoplay = isDoubleHeight;
         
-        return ClipRRect(
-          child: _VideoPreviewCard(
-            video: video,
-            shouldAutoplay: shouldAutoplay,
-            index: index,
+        return Container(
+          height: isDoubleHeight ? 240 : 120, // Double height for specific items
+          child: ClipRRect(
+            child: _VideoPreviewCard(
+              video: video,
+              shouldAutoplay: shouldAutoplay,
+              index: index,
+            ),
           ),
         );
       },
@@ -510,64 +512,24 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
                   videoData['thumbnailUrl'],
                   fit: BoxFit.cover,
                 ),
-              if (!widget.shouldAutoplay || _controller?.value.isInitialized != true)
-                const Center(
+              // Add video icon for regular-sized videos only
+              if (!widget.shouldAutoplay)
+                Positioned(
+                  top: 6,
+                  right: 6,
                   child: Icon(
-                    Icons.play_circle_outline,
-                    color: Colors.white,
-                    size: 32,
+                    Icons.video_collection_rounded,
+                    color: Colors.white.withOpacity(0.85),
+                    size: 14,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.6),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
-              Positioned(
-                bottom: 8,
-                left: 8,
-                right: 8,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      videoData['title'] ?? '',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,  // Smaller font size
-                        shadows: [
-                          Shadow(
-                            blurRadius: 4,
-                            color: Colors.black54,
-                          ),
-                        ],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.favorite,
-                          color: Colors.white,
-                          size: 14,  // Smaller icon
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${videoData['likeCount'] ?? 0}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,  // Smaller font size
-                            shadows: [
-                              Shadow(
-                                blurRadius: 4,
-                                color: Colors.black54,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

@@ -253,12 +253,33 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           ),
         ),
 
-        // Progress bar at the bottom (moved up in the stack order)
+        // Progress bar at the bottom
         Positioned(
           left: 0,
           right: 0,
-          bottom: MediaQuery.of(context).padding.bottom, // Adjusted position to be at the very bottom
+          bottom: MediaQuery.of(context).padding.bottom,
           child: _buildProgressBar(),
+        ),
+
+        // Right side interaction buttons - moved up in stack order
+        Positioned(
+          right: 0,
+          bottom: MediaQuery.of(context).padding.bottom + 48, // Adjusted position
+          child: _buildInteractionButtons(),
+        ),
+
+        // User info section - moved down in stack order
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildUserInfoSection(),
+              SizedBox(height: MediaQuery.of(context).padding.bottom),
+            ],
+          ),
         ),
 
         // Top gradient for better visibility of top buttons
@@ -308,21 +329,6 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           ),
         ),
 
-        // Right side interaction buttons
-        Positioned(
-          right: 6,
-          bottom: MediaQuery.of(context).size.height * 0.05,
-          child: _buildInteractionButtons(),
-        ),
-
-        // Bottom user info with fade
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0, // Adjusted to be right above the progress bar
-          child: _buildUserInfoSection(),
-        ),
-
         // Sliding overlays for ingredients and instructions
         if (_isIngredientsExpanded)
           _buildSlidingOverlay(
@@ -339,36 +345,6 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     );
   }
 
-  Widget _buildInteractionButtons() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildInteractionButton(
-          icon: _localIsLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-          label: 'Like',
-          count: _localLikeCount,
-          onTap: _handleLike,
-          isActive: _localIsLiked,
-        ),
-        const SizedBox(height: 20),
-        _buildInteractionButton(
-          icon: Icons.chat_bubble_outline_rounded,
-          label: 'Comment',
-          count: widget.videoData['commentCount'] ?? 0,
-          onTap: () => _showComments(context),
-        ),
-        const SizedBox(height: 20),
-        _buildInteractionButton(
-          icon: _isTryLater ? Icons.bookmark : Icons.bookmark_outline_rounded,
-          label: 'Save',
-          count: widget.videoData['saveCount'] ?? 0,
-          onTap: () => _toggleBookmark(context),
-          isActive: _isTryLater,
-        ),
-      ],
-    );
-  }
-
   Widget _buildInteractionButton({
     required IconData icon,
     required String label,
@@ -377,51 +353,91 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     bool isActive = false,
   }) {
     final Color iconColor = isActive 
-        ? const Color(0xFF2196F3) // Primary blue when active
-        : const Color(0xFFFFFFFF); // Pure white when inactive
+        ? const Color(0xFF2196F3)
+        : const Color(0xFFFFFFFF);
     
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 26,
-              shadows: [
-                Shadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: 17, // Height of the text + some padding
-          child: count > 0
-              ? Text(
-                  count.toString(),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), // Reduced horizontal padding
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                icon,
+                color: iconColor,
+                size: 26,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                )
-              : null,
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 17,
+              child: count > 0
+                  ? Text(
+                      count.toString(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    )
+                  : null,
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildInteractionButtons() {
+    return Container(
+      margin: EdgeInsets.only(
+        right: 4, // Reduced right margin
+        bottom: MediaQuery.of(context).size.height * 0.1,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildInteractionButton(
+            icon: _localIsLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+            label: 'Like',
+            count: _localLikeCount,
+            onTap: _handleLike,
+            isActive: _localIsLiked,
+          ),
+          const SizedBox(height: 8),
+          _buildInteractionButton(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: 'Comment',
+            count: widget.videoData['commentCount'] ?? 0,
+            onTap: () => _showComments(context),
+          ),
+          const SizedBox(height: 8),
+          _buildInteractionButton(
+            icon: _isTryLater ? Icons.bookmark : Icons.bookmark_outline_rounded,
+            label: 'Save',
+            count: widget.videoData['saveCount'] ?? 0,
+            onTap: () => _toggleBookmark(context),
+            isActive: _isTryLater,
+          ),
+        ],
+      ),
     );
   }
 
