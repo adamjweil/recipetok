@@ -18,9 +18,6 @@ import '../services/story_service.dart';
 import 'package:video_compress/video_compress.dart';
 import '../widgets/story_viewer.dart';
 import 'package:share_plus/share_plus.dart';
-import '../screens/messages_screen.dart';
-import '../services/message_service.dart';
-import '../screens/chat_screen.dart';
 import '../models/meal_post.dart';
 import '../widgets/meal_post_card.dart';
 import '../widgets/profile/user_list_modal.dart';
@@ -32,6 +29,8 @@ import '../widgets/profile_tabs/try_later_grid.dart';
 import '../utils/time_formatter.dart';
 import '../screens/meal_post_create_screen.dart';
 import '../screens/video_upload_screen.dart';
+import '../widgets/poke_button.dart';
+import '../widgets/notification_dropdown.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -551,7 +550,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               backgroundColor: Colors.transparent,
               elevation: 0,
               actions: [
-                if (isCurrentUserProfile) _buildMessagesButton(),
+                if (isCurrentUserProfile) NotificationDropdown(),
               ],
             );
           },
@@ -748,56 +747,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildMessagesButton() {
-    return Stack(
-      children: [
-        Transform.rotate(
-          angle: -35 * (3.14159 / 180),
-          child: IconButton(
-            icon: const Icon(Icons.send_outlined, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MessagesScreen()),
-              );
-            },
-          ),
-        ),
-        StreamBuilder<int>(
-          stream: MessageService().getTotalUnreadCount(),
-          builder: (context, snapshot) {
-            final unreadCount = snapshot.data ?? 0;
-            if (unreadCount == 0) return const SizedBox.shrink();
-            
-            return Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 14,
-                  minHeight: 14,
-                ),
-                child: Text(
-                  unreadCount > 99 ? '99+' : unreadCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildProfileAvatar(Map<String, dynamic> userData) {
     final avatarUrl = userData['avatarUrl'] as String?;
     debugPrint('👤 Building avatar with URL: "$avatarUrl"');
@@ -896,7 +845,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: ElevatedButton(
                 onPressed: () {
-                  _toggleFollow(userData['uid']);
+                  _toggleFollow(profileUserId);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
@@ -921,31 +870,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               ),
             ),
           ),
-          // Message Button
+          // Poke Button
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: ElevatedButton(
-                onPressed: () => _openChat(userData),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[100],
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  minimumSize: const Size(0, 36),
-                ),
-                child: const Text(
-                  'Message',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              child: PokeButton(userId: profileUserId),
             ),
           ),
         ],
@@ -982,60 +911,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       await targetUserRef.update({
         'followers': FieldValue.arrayUnion([currentUserId])
       });
-    }
-  }
-
-  Future<void> _openChat(Map<String, dynamic> otherUserData) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      // Create conversation ID by sorting user IDs and joining them
-      final userIds = [currentUser.uid, otherUserData['uid']];
-      userIds.sort(); // Sort the IDs
-      final conversationId = userIds.join('_'); // Join them with underscore
-
-      // Check if conversation exists
-      final conversationDoc = await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
-
-      // If conversation doesn't exist, create it
-      if (!conversationDoc.exists) {
-        await FirebaseFirestore.instance
-            .collection('conversations')
-            .doc(conversationId)
-            .set({
-          'participants': [currentUser.uid, otherUserData['uid']],
-          'lastMessage': '',
-          'lastMessageTimestamp': FieldValue.serverTimestamp(),
-          'lastMessageSenderId': '',
-        });
-      }
-
-      if (!mounted) return;
-
-      // Navigate to chat screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(
-            conversationId: conversationId,
-            otherUser: {
-              'userId': otherUserData['uid'],
-              'displayName': otherUserData['displayName'],
-              'username': otherUserData['username'],
-              'avatarUrl': otherUserData['avatarUrl'],
-            },
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error opening chat: $e')),
-      );
     }
   }
 

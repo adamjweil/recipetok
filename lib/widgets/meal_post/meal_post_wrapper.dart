@@ -903,6 +903,10 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
     try {
       final postRef = FirebaseFirestore.instance.collection('meal_posts').doc(postId);
       final likeRef = postRef.collection('likes').doc(userId);
+      final postDoc = await postRef.get();
+      final postData = postDoc.data();
+      
+      if (postData == null) return;
 
       final likeDoc = await likeRef.get();
       final batch = FirebaseFirestore.instance.batch();
@@ -924,6 +928,22 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
           'likes': FieldValue.increment(1),
           'likedBy': FieldValue.arrayUnion([userId])
         });
+
+        // Create notification for the post owner
+        if (postData['userId'] != userId) {  // Don't notify if user likes their own post
+          final notificationsRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(postData['userId'])
+              .collection('notifications');
+
+          batch.set(notificationsRef.doc(), {
+            'userId': userId,
+            'type': 'NotificationType.like',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+            'postId': postId,
+          });
+        }
       }
 
       await batch.commit();

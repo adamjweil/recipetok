@@ -55,27 +55,61 @@ class _MealPostCardState extends State<MealPostCard> with SingleTickerProviderSt
       final postRef = FirebaseFirestore.instance
           .collection('meal_posts')
           .doc(widget.post.id);
+      
+      final postDoc = await postRef.get();
+      final postData = postDoc.data();
+      
+      if (postData == null) return;
 
       // Start the animation
       _likeController.forward().then((_) => _likeController.reverse());
 
-      if (widget.post.likedBy.contains(currentUserId)) {
+      final batch = FirebaseFirestore.instance.batch();
+      final likeRef = postRef.collection('likes').doc(currentUserId);
+      final likeDoc = await likeRef.get();
+
+      if (likeDoc.exists) {
         // Unlike
-        await postRef.update({
+        batch.delete(likeRef);
+        batch.update(postRef, {
           'likedBy': FieldValue.arrayRemove([currentUserId]),
           'likesCount': FieldValue.increment(-1),
         });
       } else {
         // Like
-        await postRef.update({
+        batch.set(likeRef, {
+          'timestamp': FieldValue.serverTimestamp(),
+          'userId': currentUserId,
+        });
+        batch.update(postRef, {
           'likedBy': FieldValue.arrayUnion([currentUserId]),
           'likesCount': FieldValue.increment(1),
         });
+
+        // Create notification for the post owner
+        if (postData['userId'] != currentUserId) {  // Don't notify if user likes their own post
+          final notificationsRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(postData['userId'])
+              .collection('notifications');
+
+          batch.set(notificationsRef.doc(), {
+            'userId': currentUserId,
+            'type': 'NotificationType.like',
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+            'postId': widget.post.id,
+          });
+        }
       }
+
+      await batch.commit();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating like: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating like: ${e.toString()}')),
+        );
+      }
     }
   }
 

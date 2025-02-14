@@ -10,19 +10,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isParticipant(conversationId) {
-      let conversation = getAfter(/databases/$(database)/documents/conversations/$(conversationId));
-      return isSignedIn() && 
-             conversation != null && 
-             request.auth.uid in conversation.data.participants;
-    }
-
-    // Only allow updates to specific fields
-    function onlyUpdatingAllowedFields() {
-      let allowedFields = ['views', 'likes', 'likesCount', 'commentCount'];
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
-    }
-
     // Default rule - deny all
     match /{document=**} {
       allow read, write: if false;
@@ -39,14 +26,30 @@ service cloud.firestore {
             .hasOnly(['followers', 'following'])
         )
       );
+      allow delete: if isSignedIn() && isOwner(userId);
       
-      // Allow access to all subcollections under user document
-      match /{subcollection}/{docId} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == userId;
+      // Notifications subcollection
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn() && isOwner(userId);
+        allow write: if isSignedIn();  // Allow any signed-in user to create notifications
+        allow delete: if isSignedIn() && isOwner(userId);
       }
 
-      // Explicitly allow following and followers subcollections
+      // Pokes subcollection
+      match /pokes/{pokeId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && (
+          // Allow users to create pokes if:
+          // 1. They are authenticated
+          // 2. They are setting themselves as the fromUserId
+          // 3. They are following the target user
+          request.auth.uid == request.resource.data.fromUserId &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(userId))
+        );
+        allow delete: if false;  // Pokes can't be deleted (they expire naturally)
+      }
+
+      // Following and followers subcollections
       match /following/{followedUserId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn() && request.auth.uid == userId;
@@ -57,13 +60,19 @@ service cloud.firestore {
         allow write: if isSignedIn();  // Allow any signed-in user to follow
       }
 
-      // Explicitly allow videoLikes and bookmarks subcollections
+      // Video likes and bookmarks subcollections
       match /videoLikes/{videoId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn() && request.auth.uid == userId;
       }
       
       match /bookmarks/{videoId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Comment likes subcollection
+      match /commentLikes/{commentId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn() && request.auth.uid == userId;
       }
@@ -79,14 +88,14 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
 
-      // Allow access to video subcollections (comments, etc)
-      match /{subcollection}/{docId} {
+      // Comments subcollection
+      match /comments/{commentId} {
         allow read: if isSignedIn();
         allow write: if isSignedIn();
       }
     }
 
-    // Meal Posts collection rules (at root level)
+    // Meal posts collection rules
     match /meal_posts/{postId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (
@@ -117,52 +126,10 @@ service cloud.firestore {
       }
     }
 
-    // Add rules for groups subcollection
-    match /users/{userId}/groups/{groupId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
-    }
-
-    // Add rules for stories collection
-    match /stories/{storyId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      match /views/{viewId} {
-        allow read: if true;
-        allow write: if request.auth != null;
-      }
-    }
-
-    // Conversation rules
-    match /conversations/{conversationId} {
-      // Allow reading conversations where user is a participant
-      allow read: if isSignedIn() && 
-                 (resource == null || 
-                  request.auth.uid in resource.data.participants);
-      
-      // Allow creating new conversations
-      allow create: if isSignedIn() && 
-                   request.auth.uid in request.resource.data.participants;
-      
-      // Allow updates and deletes only for participants
-      allow update, delete: if isSignedIn() && 
-                           request.auth.uid in resource.data.participants;
-      
-      // Messages subcollection
-      match /messages/{messageId} {
-        allow read, write, delete: if isSignedIn() && 
-                                   request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
-      }
-    }
-
-    // User's unread messages counter
-    match /users/{userId}/unreadMessages/{conversationId} {
-      allow read: if isOwner(userId);
-      allow write, delete: if isSignedIn() && 
-                          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    // Helper functions at the top
+    function onlyUpdatingAllowedFields() {
+      let allowedFields = ['views', 'likes', 'likesCount', 'commentCount'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
     }
   }
 }

@@ -212,6 +212,168 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _deleteProfile() async {
+    // Show confirmation dialog
+    final bool? confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Profile'),
+          content: const Text(
+            'Are you sure you want to delete your profile? This action cannot be undone.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmDelete != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Re-authenticate user
+      try {
+        // Show re-authentication dialog
+        final credentials = await showDialog<AuthCredential>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            final passwordController = TextEditingController();
+            return AlertDialog(
+              title: const Text('Confirm Your Password'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'For security, please enter your password to continue.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    onSubmitted: (value) {
+                      Navigator.of(context).pop(
+                        EmailAuthProvider.credential(
+                          email: user.email!,
+                          password: value,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                TextButton(
+                  child: const Text('Confirm'),
+                  onPressed: () {
+                    Navigator.of(context).pop(
+                      EmailAuthProvider.credential(
+                        email: user.email!,
+                        password: passwordController.text,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        );
+
+        if (credentials == null) {
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        // Re-authenticate
+        await user.reauthenticateWithCredential(credentials);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Incorrect password. Please try again.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
+      // Delete user's profile photo from storage if it exists
+      if (user.photoURL != null) {
+        try {
+          final storageRef = FirebaseStorage.instance
+              .ref()
+              .child('user_avatars')
+              .child('${user.uid}.jpg');
+          await storageRef.delete();
+        } catch (e) {
+          // Ignore storage deletion errors
+          print('Error deleting profile photo: $e');
+        }
+      }
+
+      // Delete user document from Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
+
+      // Delete Firebase Auth user
+      await user.delete();
+
+      // Sign out the user
+      await FirebaseAuth.instance.signOut();
+
+      if (mounted) {
+        // Navigate to login or home screen
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login', // Replace with your login route name
+          (Route<dynamic> route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting profile: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(
+              top: 20,
+              right: 20,
+              left: 20,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -377,6 +539,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               border: OutlineInputBorder(),
             ),
             maxLines: 3,
+          ),
+          const SizedBox(height: 32),
+          // Delete Profile Button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextButton(
+              onPressed: _isLoading ? null : _deleteProfile,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Colors.red),
+                ),
+              ),
+              child: const Text(
+                'Delete Profile',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
           ),
           if (_isLoading)
             const Padding(
