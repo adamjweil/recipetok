@@ -80,13 +80,17 @@ class UserListModal extends StatelessWidget {
                             .doc(userIds[index])
                             .get(),
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
+                          if (!snapshot.hasData || !snapshot.data!.exists) {
                             return const UserListItemSkeleton();
                           }
 
-                          final userData = snapshot.data!.data() as Map<String, dynamic>;
+                          final userData = snapshot.data!.data();
+                          if (userData == null) {
+                            return const SizedBox.shrink(); // Or some error state widget
+                          }
+
                           return UserListItem(
-                            userData: userData,
+                            userData: userData as Map<String, dynamic>,
                             userId: userIds[index],
                             isFollowers: isFollowers,
                           );

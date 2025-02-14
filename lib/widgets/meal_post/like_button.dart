@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../models/chat_message.dart';
 import '../../utils/custom_cache_manager.dart';
 
 class LikeButton extends StatefulWidget {

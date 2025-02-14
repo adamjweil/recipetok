@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -123,8 +124,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   void _setupScrollListener() {
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= 
-          _scrollController.position.maxScrollExtent - 500 &&
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.position.pixels;
+      final loadThreshold = maxScroll * 0.8; // Start loading when 80% scrolled
+      
+      if (currentScroll >= loadThreshold &&
           !_isLoadingMore &&
           _lastDocument != null) {
         _loadMoreVideos();
@@ -143,15 +147,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     });
 
     try {
-      print('Loading more videos...');
+      // Increase page size for smoother infinite scroll
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('videos')
-          .orderBy('createdAt', descending: true)  // Match the initial query
+          .orderBy('createdAt', descending: true)
           .startAfterDocument(_lastDocument!)
-          .limit(_pageSize)
+          .limit(_pageSize + 5) // Load a few extra items
           .get();
-
-      print('Fetched ${snapshot.docs.length} more videos');
 
       if (!mounted) return;
 
@@ -160,10 +162,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         _lastDocument = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
         _isLoadingMore = false;
       });
-    } catch (e, stackTrace) {
-      print('Error loading more videos: $e');
-      print('Stack trace: $stackTrace');
-      
+    } catch (e) {
       if (!mounted) return;
       
       setState(() {
@@ -172,8 +171,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to load more videos: ${e.toString()}'),
-          duration: const Duration(seconds: 5),
+          content: Text('Failed to load more videos'),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -378,29 +377,45 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       mainAxisSpacing: 1,
       crossAxisSpacing: 1,
       itemCount: _videos.length + (_isLoadingMore ? 1 : 0),
+      cacheExtent: 2000, // Cache more items for smoother scrolling
+      addAutomaticKeepAlives: true,
+      addRepaintBoundaries: true,
       itemBuilder: (context, index) {
         if (index >= _videos.length) {
-          return const Center(child: CircularProgressIndicator());
+          return Container(
+            height: 120,
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                ),
+              ),
+            ),
+          );
         }
 
         final video = _videos[index];
-        // Only the first three double-height videos
         final bool isDoubleHeight = index == 2 || // Rows 1-2 right
                                    index == 6 || // Rows 3-4 left
                                    index == 11 || // Rows 4-5 right
                                    index == 16 || // Rows 6-7 middle
                                    index == 21;  // Rows 7-8 right
         
-        // Only autoplay double-height videos
         final bool shouldAutoplay = isDoubleHeight;
         
-        return Container(
-          height: isDoubleHeight ? 240 : 120, // Double height for specific items
-          child: ClipRRect(
-            child: _VideoPreviewCard(
-              video: video,
-              shouldAutoplay: shouldAutoplay,
-              index: index,
+        return RepaintBoundary(
+          child: Container(
+            height: isDoubleHeight ? 240 : 120,
+            child: ClipRRect(
+              child: _VideoPreviewCard(
+                key: ValueKey('video-${video.id}'),
+                video: video,
+                shouldAutoplay: shouldAutoplay,
+                index: index,
+              ),
             ),
           ),
         );
@@ -415,6 +430,7 @@ class _VideoPreviewCard extends StatefulWidget {
   final int index;
 
   const _VideoPreviewCard({
+    super.key,
     required this.video,
     required this.shouldAutoplay,
     required this.index,
@@ -442,17 +458,26 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
     final videoData = widget.video.data() as Map<String, dynamic>;
     _controller = VideoPlayerController.network(
       videoData['videoUrl'],
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     )..initialize().then((_) {
       if (!mounted || _isDisposed) {
         _controller?.dispose();
         return;
       }
-      setState(() {});
-      if (_controller == null || _isDisposed) return;
-      _controller?.setLooping(true);
-      _controller?.setVolume(0.0);
-      if (_isVisible && widget.shouldAutoplay && !_isDisposed) {
-        _controller?.play();
+      
+      if (_controller != null) {
+        _controller!
+          ..setLooping(true)
+          ..setVolume(0.0)
+          ..setPlaybackSpeed(1.0);
+        
+        if (_isVisible && widget.shouldAutoplay && !_isDisposed) {
+          _controller!.play();
+        }
+      }
+      
+      if (mounted) {
+        setState(() {});
       }
     });
   }
@@ -460,8 +485,15 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
   void _cleanupController() {
     if (!_isDisposed) {
       _controller?.pause();
-      _controller?.dispose();
-      _controller = null;
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!_isDisposed) {
+          _controller?.dispose();
+          _controller = null;
+          if (mounted) {
+            setState(() {});
+          }
+        }
+      });
     }
   }
 
@@ -508,9 +540,16 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
                   child: VideoPlayer(_controller!),
                 )
               else
-                Image.network(
-                  videoData['thumbnailUrl'],
+                CachedNetworkImage(
+                  imageUrl: videoData['thumbnailUrl'],
                   fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.error, color: Colors.grey[400]),
+                  ),
                 ),
               // Add video icon for regular-sized videos only
               if (!widget.shouldAutoplay)
