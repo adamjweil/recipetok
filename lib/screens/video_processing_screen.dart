@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:math';
+import 'package:path/path.dart' as path;
 import 'package:recipetok/models/video_draft.dart';
 import 'package:recipetok/services/ai_service.dart';
 import 'package:recipetok/screens/video_processing_wizard.dart';
@@ -26,6 +27,15 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
   String _currentStep = 'Preparing video...';
   double _progress = 0.0;
 
+  final Set<String> _supportedFormats = {
+    'flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'
+  };
+
+  bool _isFormatSupported(String filePath) {
+    final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
+    return _supportedFormats.contains(extension);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +60,13 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
 
   Future<void> _processVideo() async {
     try {
+      // Check video format first
+      if (!_isFormatSupported(widget.videoPath)) {
+        throw FormatException(
+          'Unsupported video format. Please use one of the following formats: ${_supportedFormats.join(", ")}'
+        );
+      }
+
       final aiService = AIService();
 
       // Step 1: Transcribe video
@@ -100,9 +117,27 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing video: $e')),
+          SnackBar(
+            content: Text(
+              e is FormatException 
+                ? e.message 
+                : 'Error processing video: $e'
+            ),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
         );
-        Navigator.pop(context);
+        // Add a slight delay before popping to ensure the user sees the message
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        });
       }
     }
   }

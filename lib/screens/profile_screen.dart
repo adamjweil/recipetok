@@ -1056,7 +1056,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 24),  // Add padding at the top
+                      const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1083,7 +1083,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                                   clipBehavior: Clip.none,
                                   children: [
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),  // Adjust padding here
+                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                                       child: Icon(
                                         Icons.restaurant_menu,
                                         size: 64,
@@ -1143,7 +1143,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       
                       // Description
                       Text(
@@ -1154,12 +1154,12 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
                       
                       // Steps
                       ..._buildAnimatedSteps(),
                       
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
                       
                       // Create Post Button
                       SizedBox(
