@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/video_screen.dart';
 import 'package:recipetok/screens/home_screen.dart';
-import 'package:recipetok/screens/users_screen.dart';
+import 'package:recipetok/screens/discover_screen.dart';
 import 'package:recipetok/screens/video_upload_screen.dart';
 import 'package:recipetok/screens/meal_post_create_screen.dart';
 
@@ -35,7 +35,7 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
     const HomeScreen(),      // index 0
     const VideoScreen(),     // index 1
     Container(),            // index 2 (placeholder for center button)
-    const UsersScreen(),     // index 3
+    const DiscoverScreen(),  // index 3 - replaced UsersScreen
     ProfileScreen(
       userId: _currentUserId,
       showBackButton: false,  // Set showBackButton to false
@@ -166,7 +166,7 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
               _buildNavItem(0, Icons.home, 'Home'),
               _buildNavItem(1, Icons.play_circle_outline, 'Videos'),
               _buildAddButton(),
-              _buildNavItem(3, Icons.people, 'Users'),
+              _buildNavItem(3, Icons.search, 'Discover'),
               _buildNavItem(4, Icons.person, 'Profile'),
             ],
           ),

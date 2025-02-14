@@ -47,7 +47,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_sign_in: ^6.2.2
   firebase_database: ^10.5.7
-  video_player: ^2.8.1
+  video_player: ^2.8.2
   path_provider: ^2.1.2
   sqflite: ^2.3.2
   rxdart: ^0.27.7
@@ -63,6 +63,7 @@ dependencies:
   video_editor: ^3.0.0
   camera: ^0.10.5+9
   lottie: ^3.0.0
+  visibility_detector: ^0.4.0+2
 
 dev_dependencies:
   flutter_test:
