@@ -401,8 +401,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
         final video = _videos[index];
         final bool isDoubleHeight = index == 2 || // Rows 1-2 right
-                                   index == 6 || // Rows 3-4 left
-                                   index == 11 || // Rows 4-5 right
+                                   index == 5 || // Rows 3-4 left
+                                   index == 12 || // Rows 4-5 right
                                    index == 16 || // Rows 6-7 middle
                                    index == 21;  // Rows 7-8 right
         
@@ -410,7 +410,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         
         return RepaintBoundary(
           child: Container(
-            height: isDoubleHeight ? 240 : 120,
+            height: isDoubleHeight ? 241.5 : 120,
             child: ClipRRect(
               child: _VideoPreviewCard(
                 key: ValueKey('video-${video.id}'),
