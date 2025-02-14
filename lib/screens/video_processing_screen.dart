@@ -28,11 +28,12 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
   double _progress = 0.0;
 
   final Set<String> _supportedFormats = {
-    'flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'
+    'mp4', 'mpeg', 'mpga', 'webm', 'm4a', 'wav'
   };
 
   bool _isFormatSupported(String filePath) {
     final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
+    debugPrint('Checking file extension: $extension'); // Debug line
     return _supportedFormats.contains(extension);
   }
 

@@ -18,6 +18,97 @@ class MainNavigationScreen extends StatefulWidget {
 
   @override
   State<MainNavigationScreen> createState() => MainNavigationScreenState();
+
+  static Widget buildNavigationBar(BuildContext context, int selectedIndex, Function(int) onTap) {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 17, left: 16, right: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(context, 0, Icons.home, 'Home', selectedIndex == 0, onTap),
+            _buildNavItem(context, 1, Icons.play_circle_outline, 'Videos', selectedIndex == 1, onTap),
+            _buildAddButton(context, onTap),
+            _buildNavItem(context, 3, Icons.search, 'Discover', selectedIndex == 3, onTap),
+            _buildNavItem(context, 4, Icons.person, 'Profile', selectedIndex == 4, onTap),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _buildNavItem(BuildContext context, int index, IconData icon, String label, bool isSelected, Function(int) onTap) {
+    return InkWell(
+      onTap: () => onTap(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+            size: 24,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildAddButton(BuildContext context, Function(int) onTap) {
+    return InkWell(
+      onTap: () => onTap(2),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).primaryColor,
+              Theme.of(context).primaryColor.withOpacity(0.8),
+            ],
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).primaryColor.withOpacity(0.3),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(
+            color: Colors.white,
+            width: 1.5,
+          ),
+        ),
+        child: const Icon(
+          Icons.add,
+          color: Colors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
 }
 
 class MainNavigationScreenState extends State<MainNavigationScreen> {
@@ -146,95 +237,7 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
-      bottomNavigationBar: Container(
-        height: 70,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 4,
-              offset: const Offset(0, -1),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 17, left: 16, right: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(0, Icons.home, 'Home'),
-              _buildNavItem(1, Icons.play_circle_outline, 'Videos'),
-              _buildAddButton(),
-              _buildNavItem(3, Icons.search, 'Discover'),
-              _buildNavItem(4, Icons.person, 'Profile'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _selectedIndex == index;
-    return InkWell(
-      onTap: () => _onItemTapped(index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
-            size: 24, // Increased from 20
-          ),
-          const SizedBox(height: 2), // Increased from 1
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
-              fontSize: 11, // Increased from 9
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddButton() {
-    return InkWell(
-      onTap: _showCreateOptions,
-      child: Container(
-        padding: const EdgeInsets.all(8), // Increased from 6
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).primaryColor,
-              Theme.of(context).primaryColor.withOpacity(0.8),
-            ],
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).primaryColor.withOpacity(0.3),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-          border: Border.all(
-            color: Colors.white,
-            width: 1.5,
-          ),
-        ),
-        child: const Icon(
-          Icons.add,
-          color: Colors.white,
-          size: 26, // Increased from 22
-        ),
-      ),
+      bottomNavigationBar: MainNavigationScreen.buildNavigationBar(context, _selectedIndex, _onItemTapped),
     );
   }
 } 

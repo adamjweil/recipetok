@@ -27,6 +27,7 @@ class _VideoGalleryScreenState extends State<VideoGalleryScreen> {
 
   bool _isFormatSupported(String filePath) {
     final extension = filePath.toLowerCase().split('.').last;
+    debugPrint('Checking file extension: $extension'); // Debug line
     return _supportedFormats.contains(extension);
   }
 
