@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/video_card.dart';  // We'll need to create this too
+import '../widgets/video_card.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/video.dart';
 
 class VideoPlayerScreen extends StatelessWidget {
-  final Map<String, dynamic> videoData;
-  final String videoId;
+  final Video video;
 
   const VideoPlayerScreen({
     super.key,
-    required this.videoData,
-    required this.videoId,
+    required this.video,
   });
 
   Future<void> _incrementViewCount() async {
     try {
       await FirebaseFirestore.instance
           .collection('videos')
-          .doc(videoId)
+          .doc(video.id)
           .update({
         'views': FieldValue.increment(1),
       });
@@ -39,13 +38,8 @@ class VideoPlayerScreen extends StatelessWidget {
         ),
       ),
       body: VideoCard(
-        videoData: videoData,
-        videoId: videoId,
-        onUserTap: () {},
-        onLike: _incrementViewCount,
-        onBookmark: () {},
-        currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-        autoPlay: true,
+        video: video,
+        autoplay: true,
       ),
     );
   }

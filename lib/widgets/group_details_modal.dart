@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/custom_cache_manager.dart';
 import '../screens/video_player_screen.dart';
 import '../widgets/edit_group_modal.dart';
+import '../models/video.dart';
 
 class GroupDetailsModal extends StatelessWidget {
   final Map<String, dynamic> group;
@@ -235,8 +236,10 @@ class GroupDetailsModal extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => VideoPlayerScreen(
-                                  videoData: videoData,
-                                  videoId: videoList[index].id,
+                                  video: Video.fromMap(
+                                    videoList[index].id,
+                                    videoData,
+                                  ),
                                 ),
                               ),
                             );

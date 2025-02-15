@@ -7,6 +7,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/video_card.dart';
 import '../screens/main_navigation_screen.dart';
+import '../models/video.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -530,48 +531,25 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
       },
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
+          Navigator.push(
+            context,
             MaterialPageRoute(
               builder: (context) => Scaffold(
                 backgroundColor: Colors.black,
-                extendBody: true,  // Add this to allow content to go behind navigation bar
-                body: Stack(
-                  children: [
-                    VideoCard(
-                      videoData: widget.video.data() as Map<String, dynamic>,
-                      videoId: widget.video.id,
-                      currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                      onUserTap: () {},
-                      onLike: () {},
-                      onBookmark: () {},
-                      autoPlay: true,
-                    ),
-                    // Back button overlay
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8, left: 8),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ),
-                  ],
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ),
-                bottomNavigationBar: MainNavigationScreen.buildNavigationBar(
-                  context,
-                  3, // Discover tab index
-                  (index) {
-                    if (index == 3) {
-                      Navigator.of(context).pop();
-                    } else {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (context) => MainNavigationScreen(initialIndex: index),
-                        ),
-                      );
-                    }
-                  },
+                body: VideoCard(
+                  video: Video.fromMap(
+                    widget.video.id,
+                    widget.video.data() as Map<String, dynamic>
+                  ),
+                  autoplay: true,
                 ),
               ),
             ),
