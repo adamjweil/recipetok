@@ -21,39 +21,39 @@ const storage = admin.storage();
 
 const sampleVideos = [
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Cookies.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/BakingVideo.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1611270629569-8b357cb88da9',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Cookie2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Chicken.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Chicken2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Tomato.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Eggs2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Eggs.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Tomato2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947',
   }
 ];
@@ -951,7 +951,7 @@ const adamVideos = [
   {
     title: 'Perfect Homemade Pizza',
     description: 'Learn how to make restaurant-quality pizza at home',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Cookies.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591',
     ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
     instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
@@ -959,7 +959,7 @@ const adamVideos = [
   {
     title: 'Classic Pasta Carbonara',
     description: 'Authentic Italian carbonara recipe',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/BakingVideo.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1612874742237-6526221588e3',
     ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
     instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
@@ -967,7 +967,7 @@ const adamVideos = [
   {
     title: 'Ultimate Burger Guide',
     description: 'How to make the perfect burger',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Cookie2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
     ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
     instructions: ['Form patties', 'Season well', 'Grill to perfection'],
@@ -975,7 +975,7 @@ const adamVideos = [
   {
     title: 'Creamy Mac and Cheese',
     description: 'The ultimate comfort food recipe',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Chicken.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9',
     ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
     instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
@@ -983,7 +983,7 @@ const adamVideos = [
   {
     title: 'Chocolate Chip Cookies',
     description: 'Soft and chewy chocolate chip cookies',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Chicken2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e',
     ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
     instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
@@ -991,7 +991,7 @@ const adamVideos = [
   {
     title: 'Spicy Thai Curry',
     description: 'Authentic Thai red curry recipe',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Tomato.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd',
     ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
     instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
@@ -999,7 +999,7 @@ const adamVideos = [
   {
     title: 'Fresh Sushi Rolls',
     description: 'Learn to make sushi at home',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Eggs2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c',
     ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
     instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
@@ -1007,7 +1007,7 @@ const adamVideos = [
   {
     title: 'Homemade Bread',
     description: 'Simple no-knead bread recipe',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Eggs.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73',
     ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
     instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
@@ -1015,7 +1015,7 @@ const adamVideos = [
   {
     title: 'Grilled Steak',
     description: 'Perfect steak every time',
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    videoUrl: 'https://recipetok-support.s3.us-west-1.amazonaws.com/Tomato2.mp4',
     thumbnailUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947',
     ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
     instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],

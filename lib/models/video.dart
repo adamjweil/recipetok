@@ -38,10 +38,20 @@ class Video {
   });
 
   factory Video.fromMap(String id, Map<String, dynamic> data) {
+    // Helper function to safely convert to int
+    int safeInt(dynamic value) {
+      if (value == null) return 0;
+      if (value is int) return value;
+      if (value is double) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? 0;
+      if (value is List) return value.length;  // Handle case where value is a list
+      return 0;
+    }
+
     return Video(
       id: id,
       userId: data['userId'] ?? '',
-      username: data['username'] ?? 'Anonymous',
+      username: data['username'] ?? '',
       userImage: data['userImage'] ?? '',
       videoUrl: data['videoUrl'] ?? '',
       thumbnailUrl: data['thumbnailUrl'] ?? '',
@@ -49,10 +59,10 @@ class Video {
       description: data['description'] ?? '',
       ingredients: List<String>.from(data['ingredients'] ?? []),
       instructions: List<String>.from(data['instructions'] ?? []),
-      likes: data['likes'] ?? 0,
+      likes: safeInt(data['likes']),
       likedBy: List<String>.from(data['likedBy'] ?? []),
-      views: data['views'] ?? 0,
-      commentCount: data['commentCount'] ?? 0,
+      views: safeInt(data['views']),
+      commentCount: safeInt(data['commentCount']),
       isPinned: data['isPinned'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );

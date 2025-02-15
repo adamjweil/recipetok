@@ -7,6 +7,7 @@ import 'package:recipetok/services/ai_service.dart';
 import 'package:recipetok/screens/video_processing_wizard.dart';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VideoProcessingScreen extends StatefulWidget {
   final String videoPath;
@@ -72,6 +73,13 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
 
       final aiService = AIService();
       final videoId = const Uuid().v4();
+      final videoFile = File(widget.videoPath);
+
+      // Check video duration
+      final videoInfo = await aiService.getVideoInfo(videoFile);
+      if (videoInfo.duration > const Duration(minutes: 2)) {
+        throw Exception('Video duration cannot exceed 2 minutes');
+      }
 
       // Step 1: Upload video to Firebase Storage
       setState(() {
@@ -79,9 +87,21 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         _progress = 0.2;
       });
 
-      final videoFile = File(widget.videoPath);
-      final storageRef = FirebaseStorage.instance.ref().child('videos/$videoId.mp4');
-      await storageRef.putFile(videoFile);
+      // Update storage path to include userId
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('videos/${widget.userId}/$videoId.mp4');
+          
+      await storageRef.putFile(
+        videoFile,
+        SettableMetadata(
+          contentType: 'video/mp4',
+          customMetadata: {
+            'userId': widget.userId,
+            'uploadedAt': DateTime.now().toIso8601String(),
+          },
+        ),
+      );
       final videoUrl = await storageRef.getDownloadURL();
 
       // Step 2: Transcribe video
@@ -119,6 +139,28 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         createdAt: DateTime.now(),
         lastModified: DateTime.now(),
       );
+
+      // Create the video document with proper data types
+      await FirebaseFirestore.instance.collection('videos').add({
+        'userId': widget.userId,
+        'videoPath': widget.videoPath,
+        'videoUrl': videoUrl,
+        'title': recipeData['title'],
+        'description': recipeData['description'],
+        'ingredients': List<String>.from(recipeData['ingredients']),
+        'instructions': List<String>.from(recipeData['instructions']),
+        'calories': recipeData['calories'],
+        'cookTimeMinutes': recipeData['cookTimeMinutes'],
+        'likes': 0,  // Ensure this is an integer
+        'likedBy': [],  // Initialize as empty array
+        'views': 0,  // Ensure this is an integer
+        'commentCount': 0,  // Ensure this is an integer
+        'isPinned': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'thumbnailUrl': '',  // Add default thumbnail URL
+        'username': '',  // Will be updated with user's name
+        'userImage': '',  // Will be updated with user's image
+      });
 
       if (mounted) {
         Navigator.pushReplacement(

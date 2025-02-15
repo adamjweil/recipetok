@@ -5,10 +5,38 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+class VideoInfo {
+  final Duration duration;
+  final String format;
+  final int width;
+  final int height;
+
+  VideoInfo({
+    required this.duration,
+    required this.format,
+    required this.width,
+    required this.height,
+  });
+}
+
 class AIService {
   static final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
   static const String _baseUrl = 'https://api.openai.com/v1';
   static const int _maxFileSizeBytes = 25 * 1024 * 1024; // 25MB
+
+  Future<VideoInfo> getVideoInfo(File videoFile) async {
+    final MediaInfo? mediaInfo = await VideoCompress.getMediaInfo(videoFile.path);
+    if (mediaInfo == null) {
+      throw Exception('Failed to get video information');
+    }
+
+    return VideoInfo(
+      duration: Duration(milliseconds: mediaInfo.duration?.toInt() ?? 0),
+      format: mediaInfo.path?.split('.').last ?? 'unknown',
+      width: mediaInfo.width ?? 0,
+      height: mediaInfo.height ?? 0,
+    );
+  }
 
   Future<String> transcribeVideo(File videoFile) async {
     // Check original file size

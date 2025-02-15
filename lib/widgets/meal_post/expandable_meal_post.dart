@@ -145,6 +145,15 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
                               ),
                             ),
                           ),
+                          if (FirebaseAuth.instance.currentUser?.uid == widget.post.userId)
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: const Icon(Icons.more_vert, size: 20),
+                              color: Colors.grey[700],
+                              onPressed: () => _showOptionsMenu(context),
+                            ),
+                          const SizedBox(width: 8),
                           Text(
                             getTimeAgo(widget.post.createdAt),
                             style: TextStyle(
@@ -324,6 +333,126 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
             // Comments list and input field implementation...
             // Add your existing comments section code here
           ],
+        ],
+      ),
+    );
+  }
+
+  void _showOptionsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              height: 4,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text(
+                'Delete Post',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close the menu
+                _showDeleteConfirmation(context);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deletePost(BuildContext context) async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    
+    try {
+      // Close the confirmation dialog
+      rootNavigator.pop();
+
+      // Delete the post document
+      await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .delete();
+
+      if (!mounted) return;
+
+      // Pop all the way back to the main screen
+      rootNavigator.popUntil((route) => route.isFirst);
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Post deleted successfully'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting post: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Post?'),
+        content: const Text(
+          'This action cannot be undone. Are you sure you want to delete this post?',
+          style: TextStyle(fontSize: 14),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _deletePost(context),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -10,6 +10,7 @@ class MealPostWrapper extends StatefulWidget {
 }
 
 class _MealPostWrapperState extends State<MealPostWrapper> {
+  bool _isDeleting = false;
   // ... (existing code)
 
   static final Map<String, Map<String, dynamic>> _globalUserCache = {};
@@ -109,8 +110,62 @@ class _MealPostWrapperState extends State<MealPostWrapper> {
     );
   }
 
+  Future<void> _deletePost(BuildContext context) async {
+    try {
+      // Close the confirmation dialog
+      Navigator.pop(context);
+
+      // Delete the post document
+      await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .delete();
+
+      if (!mounted) return;
+
+      // Return to previous screen
+      Navigator.of(context).pop();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Post deleted successfully'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting post: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ... (rest of the existing code)
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Your existing content
+          // ... existing build code ...
+          
+          // Loading overlay
+          if (_isDeleting)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 } 
