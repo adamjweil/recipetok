@@ -10,7 +10,14 @@ import '../models/video.dart';
 import 'dart:async' show unawaited;
 
 class VideoScreen extends StatefulWidget {
-  const VideoScreen({super.key});
+  final Video? initialVideo;
+  final bool showBackButton;
+  
+  const VideoScreen({
+    super.key,
+    this.initialVideo,
+    this.showBackButton = false,
+  });
 
   @override
   State<VideoScreen> createState() => _VideoScreenState();
@@ -31,7 +38,11 @@ class _VideoScreenState extends State<VideoScreen> {
   void initState() {
     super.initState();
     _pageController.addListener(_onScroll);
-    _loadFirstVideoImmediately();
+    if (widget.initialVideo != null) {
+      _loadSpecificVideo();
+    } else {
+      _loadFirstVideoImmediately();
+    }
   }
 
   void _onScroll() {
@@ -141,6 +152,59 @@ class _VideoScreenState extends State<VideoScreen> {
       }
     } catch (e) {
       debugPrint('Error loading first video: $e');
+      setState(() => _isLoadingFirstVideo = false);
+    }
+  }
+
+  Future<void> _loadSpecificVideo() async {
+    try {
+      setState(() => _isLoadingFirstVideo = true);
+      
+      // Get all videos to find the index of our target video
+      final snapshot = await _firestore
+          .collection('videos')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        setState(() => _isLoadingFirstVideo = false);
+        return;
+      }
+
+      // Find the index of our target video
+      final targetIndex = snapshot.docs.indexWhere((doc) => doc.id == widget.initialVideo!.id);
+      if (targetIndex != -1) {
+        _cachedVideos = snapshot.docs;
+        _currentVideoIndex = targetIndex;
+        
+        // Initialize the video controller
+        _preloadedController = VideoPlayerController.network(
+          widget.initialVideo!.videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        );
+
+        await _preloadedController!.initialize();
+        
+        if (mounted) {
+          setState(() {
+            _isPreloadedVideoReady = true;
+            _isLoadingFirstVideo = false;
+          });
+          
+          // Start playing immediately
+          _preloadedController!
+            ..setLooping(true)
+            ..setVolume(0.0)
+            ..play();
+            
+          // Jump to the correct page
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _pageController.jumpToPage(targetIndex);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading specific video: $e');
       setState(() => _isLoadingFirstVideo = false);
     }
   }
@@ -261,91 +325,116 @@ class _VideoScreenState extends State<VideoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: StreamBuilder<List<QueryDocumentSnapshot>>(
-        stream: _getVideosStream(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
+      body: Stack(
+        children: [
+          StreamBuilder<List<QueryDocumentSnapshot>>(
+            stream: _getVideosStream(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
 
-          // Show loading state with preloaded video
-          if (_isLoadingFirstVideo) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            );
-          }
+              // Show loading state with preloaded video
+              if (_isLoadingFirstVideo) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              }
 
-          // Show preloaded video while waiting for stream
-          if (snapshot.connectionState == ConnectionState.waiting && 
-              _cachedVideos == null && 
-              _isPreloadedVideoReady &&
-              _preloadedController != null) {
-            return Stack(
-              children: [
-                Center(
-                  child: AspectRatio(
-                    aspectRatio: _preloadedController!.value.aspectRatio,
-                    child: VideoPlayer(_preloadedController!),
-                  ),
-                ),
-              ],
-            );
-          }
+              // Show preloaded video while waiting for stream
+              if (snapshot.connectionState == ConnectionState.waiting && 
+                  _cachedVideos == null && 
+                  _isPreloadedVideoReady &&
+                  _preloadedController != null) {
+                return Stack(
+                  children: [
+                    Center(
+                      child: AspectRatio(
+                        aspectRatio: _preloadedController!.value.aspectRatio,
+                        child: VideoPlayer(_preloadedController!),
+                      ),
+                    ),
+                  ],
+                );
+              }
 
-          final videos = snapshot.data ?? _cachedVideos ?? [];
-          
-          if (snapshot.hasData) {
-            _cachedVideos = snapshot.data;
-            if (_currentVideoIndex >= videos.length) {
-              _currentVideoIndex = videos.length - 1;
-            }
-          }
-
-          if (videos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No videos yet',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: videos.length,
-            onPageChanged: (index) {
-              setState(() {
-                _currentVideoIndex = index;
-              });
-              _preloadNextVideo(index);
-            },
-            itemBuilder: (context, index) {
-              final videoData = videos[index].data() as Map<String, dynamic>;
-              final videoId = videos[index].id;
+              final videos = snapshot.data ?? _cachedVideos ?? [];
               
-              // Use preloaded controller for first video
-              final usePreloadedController = index == 0 && _preloadedController != null;
-              
-              return VideoCard(
-                key: ValueKey('video_$videoId'),
-                video: Video.fromMap(
-                  videoId,
-                  videoData,
-                ),
-                autoplay: _currentVideoIndex == index,
-                preloadedController: usePreloadedController ? _preloadedController : null,
+              if (snapshot.hasData) {
+                _cachedVideos = snapshot.data;
+                if (_currentVideoIndex >= videos.length) {
+                  _currentVideoIndex = videos.length - 1;
+                }
+              }
+
+              if (videos.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.video_library, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No videos yet',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: videos.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentVideoIndex = index;
+                  });
+                  _preloadNextVideo(index);
+                },
+                itemBuilder: (context, index) {
+                  final videoData = videos[index].data() as Map<String, dynamic>;
+                  final videoId = videos[index].id;
+                  
+                  // Use preloaded controller for first video
+                  final usePreloadedController = index == 0 && _preloadedController != null;
+                  
+                  return VideoCard(
+                    key: ValueKey('video_$videoId'),
+                    video: Video.fromMap(
+                      videoId,
+                      videoData,
+                    ),
+                    autoplay: _currentVideoIndex == index,
+                    preloadedController: usePreloadedController ? _preloadedController : null,
+                  );
+                },
               );
             },
-          );
-        },
+          ),
+          // Add back button if showBackButton is true
+          if (widget.showBackButton)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
