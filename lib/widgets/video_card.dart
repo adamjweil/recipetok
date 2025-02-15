@@ -16,64 +16,102 @@ import './comment_modal.dart';
 class VideoCard extends StatefulWidget {
   final Video video;
   final bool autoplay;
+  final VideoPlayerController? preloadedController;
 
   const VideoCard({
     Key? key,
     required this.video,
-    this.autoplay = false,
+    required this.autoplay,
+    this.preloadedController,
   }) : super(key: key);
 
   @override
   VideoCardState createState() => VideoCardState();
 }
 
-// Public interface for the state
-class VideoCardState extends State<VideoCard> {
+// Public interface for video control
+class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixin {
   late VideoPlayerController _controller;
+  bool _isInitialized = false;
   bool _isPlaying = false;
+  bool _isMuted = true;
   bool _isDescriptionExpanded = false;
   bool _isFollowing = false;
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
+  // Public methods for external control
   void playVideo() {
-    _controller.play();
-    setState(() {
-      _isPlaying = true;
-    });
+    if (_isInitialized && !_isPlaying) {
+      _controller.play();
+      if (mounted) {
+        setState(() {
+          _isPlaying = true;
+        });
+      }
+    }
   }
 
   void pauseVideo() {
-    _controller.pause();
-    if (mounted) {
-      setState(() {
-        _isPlaying = false;
-      });
+    if (_isInitialized && _isPlaying) {
+      _controller.pause();
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+        });
+      }
     }
   }
+
+  bool get isPlaying => _isPlaying;
+  bool get isInitialized => _isInitialized;
 
   @override
   void initState() {
     super.initState();
-    initializePlayer();
+    _initializeVideo();
     _checkFollowStatus();
   }
 
-  Future<void> initializePlayer() async {
-    _controller = VideoPlayerController.network(widget.video.videoUrl);
-    
+  Future<void> _initializeVideo() async {
     try {
-      await _controller.initialize();
-      _controller.setLooping(true);
-      if (widget.autoplay) {
-        _controller.play();
-        _isPlaying = true;
+      if (widget.preloadedController != null) {
+        _controller = widget.preloadedController!;
+        _isInitialized = _controller.value.isInitialized;
+      } else {
+        _controller = VideoPlayerController.network(
+          widget.video.videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        );
+        await _controller.initialize();
+        _controller.setLooping(true);
+        _controller.setVolume(_isMuted ? 0.0 : 1.0);
       }
-      
+
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isInitialized = true;
+          if (widget.autoplay) {
+            _controller.play();
+            _isPlaying = true;
+          }
+        });
       }
     } catch (e) {
-      print('Error initializing video player: $e');
+      debugPrint('Error initializing video: $e');
+    }
+  }
+
+  @override
+  void didUpdateWidget(VideoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.autoplay != oldWidget.autoplay) {
+      if (widget.autoplay) {
+        _controller.play();
+        setState(() => _isPlaying = true);
+      } else {
+        _controller.pause();
+        setState(() => _isPlaying = false);
+      }
     }
   }
 
@@ -141,26 +179,30 @@ class VideoCardState extends State<VideoCard> {
 
     try {
       final videoRef = FirebaseFirestore.instance.collection('videos').doc(widget.video.id);
-      final userLikeRef = videoRef.collection('likes').doc(currentUserId);
       
-      final likeDoc = await userLikeRef.get();
-      final isLiked = likeDoc.exists;
+      // First, get the current video data
+      final videoDoc = await videoRef.get();
+      if (!videoDoc.exists) {
+        print('Video document not found');
+        return;
+      }
 
       final batch = FirebaseFirestore.instance.batch();
+      final videoData = videoDoc.data() as Map<String, dynamic>;
+      final likedBy = List<String>.from(videoData['likedBy'] ?? []);
+      final isLiked = likedBy.contains(currentUserId);
 
       if (isLiked) {
+        // Unlike
         batch.update(videoRef, {
           'likes': FieldValue.increment(-1),
           'likedBy': FieldValue.arrayRemove([currentUserId]),
         });
-        batch.delete(userLikeRef);
       } else {
+        // Like
         batch.update(videoRef, {
           'likes': FieldValue.increment(1),
           'likedBy': FieldValue.arrayUnion([currentUserId]),
-        });
-        batch.set(userLikeRef, {
-          'timestamp': FieldValue.serverTimestamp(),
         });
       }
 
@@ -202,8 +244,12 @@ class VideoCardState extends State<VideoCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+    if (!_isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Colors.white,
+        ),
+      );
     }
 
     return VisibilityDetector(
@@ -243,18 +289,24 @@ class VideoCardState extends State<VideoCard> {
           color: Colors.black,
           child: Stack(
             children: [
-              // Video
-              Center(
-                child: AspectRatio(
-                  aspectRatio: _controller.value.aspectRatio,
-                  child: VideoPlayer(_controller),
+              // Video player with fade transition and full screen sizing
+              Positioned.fill(
+                child: AnimatedOpacity(
+                  opacity: _isInitialized ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 500),
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: VideoPlayer(_controller),
+                    ),
+                  ),
                 ),
               ),
 
               // Right side buttons
               Positioned(
                 right: 8,
-                bottom: 100,
+                bottom: (MediaQuery.of(context).size.height * 0.15) - 25,
                 child: Column(
                   children: [
                     // Like button
@@ -275,19 +327,11 @@ class VideoCardState extends State<VideoCard> {
                       label: widget.video.commentCount.toString(),
                       onTap: _showComments,
                     ),
-                    const SizedBox(height: 16),
-                    // Bookmark button
-                    _buildSideButton(
-                      icon: Icons.bookmark_border,
-                      label: 'Save',
-                      onTap: _showSaveOptions,
-                      color: Colors.white,
-                    ),
                   ],
                 ),
               ),
 
-              // Bottom overlay
+              // Bottom overlay with gradient
               Positioned(
                 left: 0,
                 right: 0,
@@ -299,19 +343,27 @@ class VideoCardState extends State<VideoCard> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      bottom: 8 + MediaQuery.of(context).padding.bottom,
+                      top: 32,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
                         colors: [
                           Colors.black.withOpacity(0.8),
+                          Colors.black.withOpacity(0.6),
                           Colors.transparent,
                         ],
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // Title and description section
                         Row(
@@ -325,7 +377,7 @@ class VideoCardState extends State<VideoCard> {
                                       widget.video.title,
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 16,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -343,7 +395,7 @@ class VideoCardState extends State<VideoCard> {
                                             ? Icons.keyboard_arrow_up 
                                             : Icons.keyboard_arrow_down,
                                         color: Colors.white,
-                                        size: 20,
+                                        size: 24,
                                       ),
                                     ),
                                   ),
@@ -356,68 +408,128 @@ class VideoCardState extends State<VideoCard> {
                           const SizedBox(height: 8),
                           Text(
                             widget.video.description,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
                           ),
                         ],
-                        const SizedBox(height: 8),
                         // User info with follow button
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ProfileScreen(userId: widget.video.userId),
-                                  ),
-                                );
-                              },
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 15,
-                                    backgroundImage: CachedNetworkImageProvider(
-                                      widget.video.userImage,
-                                      cacheManager: CustomCacheManager.instance,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    widget.video.username,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (currentUserId != null && currentUserId != widget.video.userId)
-                              GestureDetector(
-                                onTap: _toggleFollow,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _isFollowing 
-                                        ? Colors.white.withOpacity(0.2)
-                                        : Theme.of(context).primaryColor,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    _isFollowing ? 'Following' : 'Follow',
-                                    style: TextStyle(
-                                      color: _isFollowing ? Colors.white : Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ProfileScreen(userId: widget.video.userId),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 13.5,
+                                        backgroundColor: Colors.grey[300],
+                                        backgroundImage: widget.video.userImage.isNotEmpty && widget.video.userImage != 'null'
+                                            ? CachedNetworkImageProvider(
+                                                widget.video.userImage,
+                                                cacheManager: CustomCacheManager.instance,
+                                              )
+                                            : null,
+                                        child: widget.video.userImage.isEmpty || widget.video.userImage == 'null'
+                                            ? const Icon(Icons.person, color: Colors.white, size: 18)
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.video.username,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                if (currentUserId != null && currentUserId != widget.video.userId)
+                                  GestureDetector(
+                                    onTap: _toggleFollow,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4.5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _isFollowing 
+                                            ? Colors.white.withOpacity(0.2)
+                                            : Theme.of(context).primaryColor,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        _isFollowing ? 'Following' : 'Follow',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9.75,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(currentUserId)
+                                  .collection('groups')
+                                  .snapshots()
+                                  .distinct(),
+                              builder: (context, groupsSnapshot) {
+                                return StreamBuilder<DocumentSnapshot>(
+                                  stream: FirebaseFirestore.instance
+                                      .collection('videos')
+                                      .doc(widget.video.id)
+                                      .snapshots()
+                                      .distinct(),
+                                  builder: (context, videoSnapshot) {
+                                    bool isSaved = false;
+                                    
+                                    if (videoSnapshot.hasData && videoSnapshot.data != null) {
+                                      final videoData = videoSnapshot.data!.data() as Map<String, dynamic>?;
+                                      final tryLaterBy = List<String>.from(videoData?['tryLaterBy'] ?? []);
+                                      if (tryLaterBy.contains(currentUserId)) {
+                                        isSaved = true;
+                                      }
+                                    }
+
+                                    if (!isSaved && groupsSnapshot.hasData && groupsSnapshot.data != null) {
+                                      for (var group in groupsSnapshot.data!.docs) {
+                                        final videos = (group.data() as Map<String, dynamic>)['videos'] ?? {};
+                                        if (videos.containsKey(widget.video.id)) {
+                                          isSaved = true;
+                                          break;
+                                        }
+                                      }
+                                    }
+
+                                    return IconButton(
+                                      icon: Icon(
+                                        isSaved ? Icons.bookmark : Icons.bookmark_border,
+                                        color: isSaved ? Theme.of(context).primaryColor : Colors.white,
+                                        size: 30,
+                                      ),
+                                      onPressed: _showSaveOptions,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ],
@@ -430,7 +542,7 @@ class VideoCardState extends State<VideoCard> {
               if (!_isPlaying)
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       shape: BoxShape.circle,
@@ -438,7 +550,7 @@ class VideoCardState extends State<VideoCard> {
                     child: const Icon(
                       Icons.play_arrow,
                       color: Colors.white,
-                      size: 50,
+                      size: 60,
                     ),
                   ),
                 ),
@@ -455,12 +567,14 @@ class VideoCardState extends State<VideoCard> {
     required VoidCallback onTap,
     Color color = Colors.white,
   }) {
-    if (icon == Icons.favorite || icon == Icons.favorite_border) {
+    if (icon == Icons.thumb_up || icon == Icons.thumb_up_outlined) {
+      // Use StreamBuilder only for the like button
       return StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('videos')
             .doc(widget.video.id)
-            .snapshots(),
+            .snapshots()
+            .distinct(), // Add distinct to prevent duplicate emissions
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return Column(
@@ -470,7 +584,7 @@ class VideoCardState extends State<VideoCard> {
                   onPressed: onTap,
                 ),
                 Text(
-                  '0',
+                  widget.video.likes.toString(),
                   style: TextStyle(
                     color: color,
                     fontSize: 12,
@@ -481,9 +595,11 @@ class VideoCardState extends State<VideoCard> {
           }
 
           final videoData = snapshot.data!.data() as Map<String, dynamic>?;
-          final likedBy = List<String>.from(videoData?['likedBy'] ?? []);
+          if (videoData == null) return const SizedBox();
+
+          final likedBy = List<String>.from(videoData['likedBy'] ?? []);
           final isLiked = likedBy.contains(currentUserId);
-          final likesCount = videoData?['likes'] ?? 0;
+          final likesCount = videoData['likes'] ?? 0;
 
           return Column(
             children: [
@@ -507,18 +623,21 @@ class VideoCardState extends State<VideoCard> {
         },
       );
     } else if (icon == Icons.bookmark_border || icon == Icons.bookmark) {
+      // Rest of the bookmark button code remains the same
       return StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(currentUserId)
             .collection('groups')
-            .snapshots(),
+            .snapshots()
+            .distinct(), // Add distinct here too
         builder: (context, groupsSnapshot) {
           return StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('videos')
                 .doc(widget.video.id)
-                .snapshots(),
+                .snapshots()
+                .distinct(), // And here
             builder: (context, videoSnapshot) {
               bool isSaved = false;
               
@@ -567,6 +686,7 @@ class VideoCardState extends State<VideoCard> {
       );
     }
 
+    // Default button for other icons (like comments)
     return Column(
       children: [
         IconButton(
@@ -586,8 +706,10 @@ class VideoCardState extends State<VideoCard> {
 
   @override
   void dispose() {
-    _controller.pause();
-    _controller.dispose();
+    // Only dispose if it's not a preloaded controller
+    if (widget.preloadedController == null) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 } 
