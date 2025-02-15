@@ -56,9 +56,10 @@ class MainNavigationScreen extends StatefulWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            icon,
+            isSelected ? _getFilledIcon(icon) : icon,
             color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
             size: 24,
+            weight: isSelected ? 700 : 400,
           ),
           const SizedBox(height: 2),
           Text(
@@ -66,11 +67,20 @@ class MainNavigationScreen extends StatefulWidget {
             style: TextStyle(
               color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
               fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
         ],
       ),
     );
+  }
+
+  static IconData _getFilledIcon(IconData icon) {
+    if (icon == Icons.home) return Icons.home_filled;
+    if (icon == Icons.play_circle_outline) return Icons.play_circle_filled;
+    if (icon == Icons.search) return Icons.search;
+    if (icon == Icons.person) return Icons.person;
+    return icon;
   }
 
   static Widget _buildAddButton(BuildContext context, Function(int) onTap) {

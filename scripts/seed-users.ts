@@ -14,44 +14,40 @@ const storage = admin.storage();
 
 const sampleVideos = [
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1a31SEbwJLwebROMSbnPUaFPt4bIBDAOf',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerEscapes.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1fhXvI_8IBgVUGjWPb_ooBLLZf8hpMZg6',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1611270629569-8b357cb88da9',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerFun.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1JX3lO_DVMqvMfo8x1f1bxJzR1UwJFc9G',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerJoyrides.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1romC0MQEiQWnOciw_xd7U0oLMJ8x9xnH',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerMeltdowns.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1NYZafr5dL_wjEkOlIRdit8Cstpmh_nrS',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1dNYvHI44yTFk2ZagAKH_yiFidaYqc-iw',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1J0RuklYRr4frLheRjs54UNjzgMPJZrcO',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1-LjQUXL1fb_a_r1QehHcpi7uR7aVuBTs',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73',
   },
   {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg',
-  },
-  {
-    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
-    thumbnailUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1s4mXFQb9F3u5ByJtLPpiKg8TaAheA13U',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947',
   }
 ];
 
@@ -306,52 +302,13 @@ const sampleMealComments = [
   "This would be great for meal prep!"
 ];
 
-// Add function to upload video and get URL
-async function uploadVideoAndGetUrl(filename: string): Promise<{videoUrl: string, thumbnailUrl: string}> {
-  try {
-    // Upload video file
-    const videoBuffer = require('fs').readFileSync(`assets/videos/${filename}`);
-    const videoFile = storage.bucket().file(`sample_videos/${filename}`);
-    await videoFile.save(videoBuffer);
-    await videoFile.makePublic();
-    const videoUrl = videoFile.publicUrl();
-
-    // For thumbnail, we'll use a default image for now
-    // You can replace this with actual video thumbnails if you have them
-    const thumbnailUrl = 'https://picsum.photos/seed/burger/300/300';
-
-    console.log(`Uploaded video: ${filename}`);
-    return { videoUrl, thumbnailUrl };
-  } catch (error) {
-    console.error(`Error uploading video ${filename}:`, error);
-    throw error;
-  }
-}
-
-// Add your custom videos to the array
-async function initializeSampleVideos() {
-  const burger1 = await uploadVideoAndGetUrl('Burger_1.mp4');
-  const burger2 = await uploadVideoAndGetUrl('Burger_2.mp4');
-  
-  sampleVideos.push(
-    {
-      videoUrl: burger1.videoUrl,
-      thumbnailUrl: burger1.thumbnailUrl,
-    },
-    {
-      videoUrl: burger2.videoUrl,
-      thumbnailUrl: burger2.thumbnailUrl,
-    }
-  );
-}
-
 async function createUser() {
   // Common first names
   const firstNames = [
-    'James', 'John', 'Robert', 'Michael', 'William',
-    'David', 'Richard', 'Joseph', 'Thomas', 'Christopher',
-    'Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia',
-    'Mia', 'Charlotte', 'Amelia', 'Harper', 'Evelyn'
+    'James', 'John', 'Robert', 'William', 'David',
+    'Richard', 'Joseph', 'Thomas', 'Christopher', 'Emma',
+    'Olivia', 'Ava', 'Isabella', 'Sophia', 'Mia',
+    'Charlotte', 'Amelia', 'Harper', 'Evelyn'
   ];
 
   // Common last names
@@ -429,20 +386,6 @@ async function createVideo(userId: string) {
   const userDoc = await db.collection('users').doc(userId).get();
   const userData = userDoc.data();
   
-  // Get 3-5 random ingredients
-  const numIngredients = Math.floor(Math.random() * 3) + 3;
-  const ingredients = Array.from({ length: numIngredients }, () => {
-    const randomIndex = Math.floor(Math.random() * commonIngredients.length);
-    return commonIngredients[randomIndex];
-  });
-
-  // Get 3-5 random instructions
-  const numInstructions = Math.floor(Math.random() * 3) + 3;
-  const instructions = Array.from({ length: numInstructions }, () => {
-    const randomIndex = Math.floor(Math.random() * cookingInstructions.length);
-    return cookingInstructions[randomIndex];
-  });
-
   try {
     // Get random likers (between 5 and 20)
     const numLikes = Math.floor(Math.random() * 16) + 5;
@@ -463,8 +406,8 @@ async function createVideo(userId: string) {
       thumbnailUrl: randomVideo.thumbnailUrl,
       title: recipeTitles[Math.floor(Math.random() * recipeTitles.length)],
       description: recipeDescriptions[Math.floor(Math.random() * recipeDescriptions.length)],
-      ingredients,
-      instructions,
+      ingredients: commonIngredients.slice(0, 5),
+      instructions: cookingInstructions.slice(0, 3),
       likes: likedBy.length,
       likedBy: likedBy,
       views: Math.floor(Math.random() * 100) + 50, // Random views between 50-150
@@ -905,72 +848,72 @@ const adamVideos = [
   {
     title: 'Perfect Homemade Pizza',
     description: 'Learn how to make restaurant-quality pizza at home',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/pizza/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1a31SEbwJLwebROMSbnPUaFPt4bIBDAOf',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591',
     ingredients: ['Pizza dough', 'Tomato sauce', 'Mozzarella', 'Fresh basil'],
     instructions: ['Prepare the dough', 'Add toppings', 'Bake at high heat'],
   },
   {
     title: 'Classic Pasta Carbonara',
     description: 'Authentic Italian carbonara recipe',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/pasta/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1fhXvI_8IBgVUGjWPb_ooBLLZf8hpMZg6',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1612874742237-6526221588e3',
     ingredients: ['Spaghetti', 'Eggs', 'Pecorino Romano', 'Guanciale'],
     instructions: ['Cook pasta', 'Prepare sauce', 'Combine and serve'],
   },
   {
     title: 'Ultimate Burger Guide',
     description: 'How to make the perfect burger',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/burger/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1JX3lO_DVMqvMfo8x1f1bxJzR1UwJFc9G',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd',
     ingredients: ['Ground beef', 'Burger buns', 'Lettuce', 'Tomato'],
     instructions: ['Form patties', 'Season well', 'Grill to perfection'],
   },
   {
     title: 'Creamy Mac and Cheese',
     description: 'The ultimate comfort food recipe',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/mac/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1romC0MQEiQWnOciw_xd7U0oLMJ8x9xnH',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9',
     ingredients: ['Macaroni', 'Cheddar cheese', 'Milk', 'Butter'],
     instructions: ['Boil pasta', 'Make cheese sauce', 'Combine and bake'],
   },
   {
     title: 'Chocolate Chip Cookies',
     description: 'Soft and chewy chocolate chip cookies',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/cookies/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1NYZafr5dL_wjEkOlIRdit8Cstpmh_nrS',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e',
     ingredients: ['Flour', 'Butter', 'Chocolate chips', 'Brown sugar'],
     instructions: ['Mix ingredients', 'Form cookies', 'Bake until golden'],
   },
   {
     title: 'Spicy Thai Curry',
     description: 'Authentic Thai red curry recipe',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/curry/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1dNYvHI44yTFk2ZagAKH_yiFidaYqc-iw',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd',
     ingredients: ['Coconut milk', 'Red curry paste', 'Chicken', 'Vegetables'],
     instructions: ['Cook curry paste', 'Add coconut milk', 'Simmer with ingredients'],
   },
   {
     title: 'Fresh Sushi Rolls',
     description: 'Learn to make sushi at home',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/sushi/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1J0RuklYRr4frLheRjs54UNjzgMPJZrcO',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c',
     ingredients: ['Sushi rice', 'Nori', 'Fresh fish', 'Vegetables'],
     instructions: ['Prepare rice', 'Layer ingredients', 'Roll and cut'],
   },
   {
     title: 'Homemade Bread',
     description: 'Simple no-knead bread recipe',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/bread/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1-LjQUXL1fb_a_r1QehHcpi7uR7aVuBTs',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73',
     ingredients: ['Flour', 'Yeast', 'Salt', 'Water'],
     instructions: ['Mix ingredients', 'Let rise', 'Bake in Dutch oven'],
   },
   {
     title: 'Grilled Steak',
     description: 'Perfect steak every time',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/steak/300/300',
+    videoUrl: 'https://drive.google.com/uc?export=download&id=1s4mXFQb9F3u5ByJtLPpiKg8TaAheA13U',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947',
     ingredients: ['Ribeye steak', 'Salt', 'Pepper', 'Garlic'],
     instructions: ['Season well', 'Grill to temperature', 'Rest before cutting'],
   }

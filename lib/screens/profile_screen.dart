@@ -31,6 +31,8 @@ import '../screens/meal_post_create_screen.dart';
 import '../screens/video_upload_screen.dart';
 import '../widgets/poke_button.dart';
 import '../widgets/notification_dropdown.dart';
+import '../widgets/video_card.dart';
+import '../screens/main_navigation_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -1540,9 +1542,47 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => VideoPlayerScreen(
-                      videoData: videoData,
-                      videoId: videoId,
+                    builder: (context) => Scaffold(
+                      backgroundColor: Colors.black,
+                      extendBody: true,
+                      body: Stack(
+                        children: [
+                          VideoCard(
+                            videoData: videoData,
+                            videoId: videoId,
+                            currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                            onUserTap: () {},
+                            onLike: () {},
+                            onBookmark: () {},
+                            autoPlay: true,
+                          ),
+                          // Back button overlay
+                          SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8, left: 8),
+                              child: IconButton(
+                                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      bottomNavigationBar: MainNavigationScreen.buildNavigationBar(
+                        context,
+                        4, // Profile tab index
+                        (index) {
+                          if (index == 4) {
+                            Navigator.of(context).pop();
+                          } else {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) => MainNavigationScreen(initialIndex: index),
+                              ),
+                            );
+                          }
+                        },
+                      ),
                     ),
                   ),
                 );
@@ -1574,6 +1614,23 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                         child: const Center(child: Icon(Icons.error)),
                       );
                     },
+                  ),
+                  // Add video icon overlay
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Icon(
+                      Icons.video_collection_rounded,
+                      color: Colors.white.withOpacity(0.85),
+                      size: 14,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withOpacity(0.6),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
                   ),
                   // Show pin indicator if video is pinned
                   if (videoData['isPinned'] == true)
