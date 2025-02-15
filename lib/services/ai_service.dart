@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 
 class VideoInfo {
   final Duration duration;
@@ -39,34 +40,10 @@ class AIService {
   }
 
   Future<String> transcribeVideo(File videoFile) async {
-    // Check original file size
+    // Check file size
     final fileSize = await videoFile.length();
-    File fileToTranscribe = videoFile;
-
     if (fileSize > _maxFileSizeBytes) {
-      try {
-        // Compress video and extract first frame
-        final MediaInfo? mediaInfo = await VideoCompress.compressVideo(
-          videoFile.path,
-          quality: VideoQuality.LowQuality, // Use low quality to ensure small file size
-          deleteOrigin: false, // Don't delete the original
-          includeAudio: true, // Include audio as we need it for transcription
-        );
-
-        if (mediaInfo?.file == null) {
-          throw Exception('Failed to compress video');
-        }
-
-        fileToTranscribe = mediaInfo!.file!;
-        
-        // Check if the compressed file is still too large
-        final compressedSize = await fileToTranscribe.length();
-        if (compressedSize > _maxFileSizeBytes) {
-          throw Exception('Video is too large even after compression');
-        }
-      } catch (e) {
-        throw Exception('Error compressing video: $e');
-      }
+      throw Exception('Video file is too large for transcription (max 25MB)');
     }
 
     try {
@@ -78,7 +55,7 @@ class AIService {
         ..fields['model'] = 'whisper-1'
         ..files.add(await http.MultipartFile.fromPath(
           'file',
-          fileToTranscribe.path,
+          videoFile.path,
         ));
 
       final response = await request.send();
@@ -89,18 +66,21 @@ class AIService {
       }
 
       final data = json.decode(responseBody);
-      return data['text'];
-    } finally {
-      // Clean up compressed file if it's different from the original
-      if (fileToTranscribe.path != videoFile.path) {
-        try {
-          await fileToTranscribe.delete();
-        } catch (e) {
-          print('Error deleting compressed video file: $e');
-        }
-      }
-      // Clear the cache from VideoCompress
-      await VideoCompress.deleteAllCache();
+      String transcription = data['text'];
+      
+      // Sanitize the transcription text
+      transcription = transcription
+          .replaceAll(RegExp(r'[\u0000-\u001F\u007F-\u009F]'), '') // Remove control characters
+          .replaceAll(RegExp(r'[^\x00-\x7F]+'), '') // Remove non-ASCII characters
+          .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
+          .trim(); // Trim leading/trailing whitespace
+          
+      debugPrint('Transcription (sanitized): $transcription');
+      
+      return transcription;
+    } catch (e) {
+      debugPrint('Error during transcription: $e');
+      rethrow;
     }
   }
 

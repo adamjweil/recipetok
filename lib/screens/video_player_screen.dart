@@ -37,9 +37,15 @@ class VideoPlayerScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: VideoCard(
-        video: video,
-        autoplay: true,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: VideoCard(
+              video: video,
+              autoplay: true,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -5,15 +5,20 @@ import 'package:recipetok/screens/home_screen.dart';
 import 'package:recipetok/screens/discover_screen.dart';
 import 'package:recipetok/screens/video_upload_screen.dart';
 import 'package:recipetok/screens/meal_post_create_screen.dart';
+import 'package:recipetok/models/video.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
   final String? userId;
+  final Video? initialVideo;
+  final bool showBackButton;
   
   const MainNavigationScreen({
     super.key,
     this.initialIndex = 0,
     this.userId,
+    this.initialVideo,
+    this.showBackButton = false,
   });
 
   @override
@@ -134,7 +139,10 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<Widget> get _screens => [
     const HomeScreen(),      // index 0
-    const VideoScreen(),     // index 1
+    VideoScreen(
+      initialVideo: widget.initialVideo,
+      showBackButton: widget.showBackButton,
+    ),     // index 1
     Container(),            // index 2 (placeholder for center button)
     const DiscoverScreen(),  // index 3 - replaced UsersScreen
     ProfileScreen(

@@ -8,6 +8,7 @@ import 'package:recipetok/screens/video_processing_wizard.dart';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:video_compress/video_compress.dart';
 
 class VideoProcessingScreen extends StatefulWidget {
   final String videoPath;
@@ -81,46 +82,88 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         throw Exception('Video duration cannot exceed 2 minutes');
       }
 
-      // Step 1: Upload video to Firebase Storage
+      // Step 1: Compress video
+      setState(() {
+        _currentStep = 'Compressing video...';
+        _progress = 0.1;
+      });
+
+      debugPrint('Starting video compression...');
+      final MediaInfo? compressedVideoInfo = await VideoCompress.compressVideo(
+        widget.videoPath,
+        quality: VideoQuality.LowQuality,
+        deleteOrigin: false,
+        includeAudio: true,
+      );
+
+      if (compressedVideoInfo?.file == null) {
+        throw Exception('Failed to compress video');
+      }
+
+      final compressedVideoFile = compressedVideoInfo!.file!;
+      final compressedSize = await compressedVideoFile.length();
+      final originalSize = await videoFile.length();
+      debugPrint('Original size: ${(originalSize / 1024 / 1024).toStringAsFixed(2)} MB');
+      debugPrint('Compressed size: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
+
+      // If compression resulted in a larger file, use the original
+      final fileToUpload = compressedSize > originalSize ? videoFile : compressedVideoFile;
+      debugPrint('Using ${compressedSize > originalSize ? 'original' : 'compressed'} file for upload');
+
+      // Step 2: Upload video to Firebase Storage
       setState(() {
         _currentStep = 'Uploading video...';
         _progress = 0.2;
       });
 
-      // Update storage path to include userId
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('videos/${widget.userId}/$videoId.mp4');
           
-      await storageRef.putFile(
-        videoFile,
+      final uploadTask = storageRef.putFile(
+        fileToUpload,
         SettableMetadata(
           contentType: 'video/mp4',
           customMetadata: {
             'userId': widget.userId,
             'uploadedAt': DateTime.now().toIso8601String(),
+            'compressed': 'true',
           },
         ),
       );
-      final videoUrl = await storageRef.getDownloadURL();
 
-      // Step 2: Transcribe video
-      setState(() {
-        _currentStep = 'Transcribing video...';
-        _progress = 0.4;
+      // Track upload progress
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        if (snapshot.totalBytes == 0) return; // Prevent division by zero
+        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+        if (progress.isFinite) { // Only update if progress is a valid number
+          setState(() {
+            _progress = 0.2 + (progress * 0.3).clamp(0.0, 0.3); // Progress from 20% to 50%, clamped to valid range
+            _currentStep = 'Uploading video: ${(progress * 100).toStringAsFixed(1)}%';
+          });
+        }
       });
 
-      final transcript = await aiService.transcribeVideo(File(widget.videoPath));
+      await uploadTask;
+      final videoUrl = await storageRef.getDownloadURL();
 
-      // Step 3: Generate recipe data
+      // Step 3: Transcribe video
+      setState(() {
+        _currentStep = 'Transcribing video...';
+        _progress = 0.6;
+      });
+
+      final transcript = await aiService.transcribeVideo(fileToUpload);
+
+      // Step 4: Generate recipe data
       setState(() {
         _currentStep = 'Analyzing recipe...';
-        _progress = 0.7;
+        _progress = 0.8;
       });
 
       final recipeData = await aiService.generateRecipeData(transcript);
 
-      // Step 4: Create draft
+      // Step 5: Create draft
       setState(() {
         _currentStep = 'Preparing results...';
         _progress = 0.9;
@@ -172,6 +215,16 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
           ),
         );
       }
+
+      // Clean up
+      if (fileToUpload.path != videoFile.path) {
+        try {
+          await fileToUpload.delete();
+        } catch (e) {
+          debugPrint('Error deleting compressed video: $e');
+        }
+      }
+      await VideoCompress.deleteAllCache();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
