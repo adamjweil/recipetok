@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../utils/custom_cache_manager.dart';
 import '../widgets/video_card.dart';
 import './video_player_screen.dart';
+import '../models/video.dart';
 import 'dart:async' show unawaited;
 
 class VideoScreen extends StatefulWidget {
@@ -286,13 +287,11 @@ class _VideoScreenState extends State<VideoScreen> {
               
               return VideoCard(
                 key: ValueKey('video_$videoId'),
-                videoData: videoData,
-                videoId: videoId,
-                onUserTap: () {},
-                onLike: () => _toggleVideoLike(videoId),
-                onBookmark: () => _toggleBookmark(videoId, videoData),
-                currentUserId: currentUserId,
-                autoPlay: _currentVideoIndex == index,
+                video: Video.fromMap(
+                  videoId,
+                  videoData,
+                ),
+                autoplay: _currentVideoIndex == index,
               );
             },
           );

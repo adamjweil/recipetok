@@ -5,6 +5,8 @@ import 'package:path/path.dart' as path;
 import 'package:recipetok/models/video_draft.dart';
 import 'package:recipetok/services/ai_service.dart';
 import 'package:recipetok/screens/video_processing_wizard.dart';
+import 'package:uuid/uuid.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class VideoProcessingScreen extends StatefulWidget {
   final String videoPath;
@@ -33,7 +35,7 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
 
   bool _isFormatSupported(String filePath) {
     final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
-    debugPrint('Checking file extension: $extension'); // Debug line
+    debugPrint('Checking file extension: $extension');
     return _supportedFormats.contains(extension);
   }
 
@@ -69,24 +71,36 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
       }
 
       final aiService = AIService();
+      final videoId = const Uuid().v4();
 
-      // Step 1: Transcribe video
+      // Step 1: Upload video to Firebase Storage
+      setState(() {
+        _currentStep = 'Uploading video...';
+        _progress = 0.2;
+      });
+
+      final videoFile = File(widget.videoPath);
+      final storageRef = FirebaseStorage.instance.ref().child('videos/$videoId.mp4');
+      await storageRef.putFile(videoFile);
+      final videoUrl = await storageRef.getDownloadURL();
+
+      // Step 2: Transcribe video
       setState(() {
         _currentStep = 'Transcribing video...';
-        _progress = 0.2;
+        _progress = 0.4;
       });
 
       final transcript = await aiService.transcribeVideo(File(widget.videoPath));
 
-      // Step 2: Generate recipe data
+      // Step 3: Generate recipe data
       setState(() {
         _currentStep = 'Analyzing recipe...';
-        _progress = 0.6;
+        _progress = 0.7;
       });
 
       final recipeData = await aiService.generateRecipeData(transcript);
 
-      // Step 3: Create draft
+      // Step 4: Create draft
       setState(() {
         _currentStep = 'Preparing results...';
         _progress = 0.9;
@@ -95,6 +109,7 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
       final draft = VideoDraft(
         userId: widget.userId,
         videoPath: widget.videoPath,
+        videoUrl: videoUrl,
         title: recipeData['title'],
         description: recipeData['description'],
         ingredients: List<String>.from(recipeData['ingredients']),

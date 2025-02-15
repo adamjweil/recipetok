@@ -165,13 +165,8 @@ class _ForYouTabState extends State<_ForYouTab> {
             children: [
               // Video player
               VideoCard(
-                videoData: video.toMap(),
-                videoId: video.id,
-                onUserTap: () {},
-                onLike: () {},
-                onBookmark: () {},
-                currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                autoPlay: true,
+                video: video,
+                autoplay: true,
               ),
               // Close button
               SafeArea(
