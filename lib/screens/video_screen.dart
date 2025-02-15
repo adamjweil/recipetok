@@ -21,14 +21,14 @@ class _VideoScreenState extends State<VideoScreen> {
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
   int _currentVideoIndex = 0;
   List<QueryDocumentSnapshot>? _cachedVideos;
+  VideoPlayerController? _preloadedController;
+  bool _isPreloadedVideoReady = false;
 
   @override
   void initState() {
     super.initState();
     _pageController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _playInitialVideo();
-    });
+    _preloadFirstVideo();
   }
 
   void _onScroll() {
@@ -40,11 +40,34 @@ class _VideoScreenState extends State<VideoScreen> {
     }
   }
 
-  void _playInitialVideo() {
-    if (_cachedVideos != null && _cachedVideos!.isNotEmpty) {
-      setState(() {
-        _currentVideoIndex = 0;
-      });
+  Future<void> _preloadFirstVideo() async {
+    try {
+      final snapshot = await _firestore
+          .collection('videos')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final firstVideoData = snapshot.docs.first.data() as Map<String, dynamic>;
+        _preloadedController = VideoPlayerController.network(
+          firstVideoData['videoUrl'],
+          videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+        );
+
+        await _preloadedController!.initialize();
+        if (mounted) {
+          setState(() {
+            _isPreloadedVideoReady = true;
+          });
+          _preloadedController!
+            ..setLooping(true)
+            ..setVolume(0.0)
+            ..play();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error preloading video: $e');
     }
   }
 
@@ -178,6 +201,7 @@ class _VideoScreenState extends State<VideoScreen> {
   void dispose() {
     _pageController.removeListener(_onScroll);
     _pageController.dispose();
+    _preloadedController?.dispose();
     super.dispose();
   }
 
@@ -192,6 +216,26 @@ class _VideoScreenState extends State<VideoScreen> {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
+          // Show preloaded video while waiting for stream
+          if (snapshot.connectionState == ConnectionState.waiting && 
+              _cachedVideos == null && 
+              _isPreloadedVideoReady &&
+              _preloadedController != null) {
+            return Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: _preloadedController!.value.aspectRatio,
+                  child: VideoPlayer(_preloadedController!),
+                ),
+                const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            );
+          }
+
           if (snapshot.connectionState == ConnectionState.waiting && _cachedVideos == null) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -202,6 +246,12 @@ class _VideoScreenState extends State<VideoScreen> {
             _cachedVideos = snapshot.data;
             if (_currentVideoIndex >= videos.length) {
               _currentVideoIndex = videos.length - 1;
+            }
+            
+            // Dispose of preloaded controller once stream data is available
+            if (_preloadedController != null) {
+              _preloadedController!.dispose();
+              _preloadedController = null;
             }
           }
 
