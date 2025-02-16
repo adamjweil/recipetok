@@ -37,7 +37,13 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
   bool _isMuted = true;
   bool _isDescriptionExpanded = false;
   bool _isFollowing = false;
+  String _currentSubtitle = '';
+  Timer? _subtitleTimer;
   final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  List<Map<String, dynamic>>? _transcriptSegments;
+  bool _isDraggingProgress = false;
+  bool _isShowingControls = false;
+  Timer? _controlsTimer;
 
   // Public methods for external control
   void playVideo() {
@@ -48,6 +54,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           _isPlaying = true;
         });
       }
+      _updateSubtitles();
     }
   }
 
@@ -59,6 +66,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
           _isPlaying = false;
         });
       }
+      _subtitleTimer?.cancel();
     }
   }
 
@@ -70,6 +78,7 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     super.initState();
     _initializeVideo();
     _checkFollowStatus();
+    _loadTranscriptSegments();
   }
 
   Future<void> _initializeVideo() async {
@@ -242,6 +251,156 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
     );
   }
 
+  Future<void> _loadTranscriptSegments() async {
+    try {
+      final videoDoc = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(widget.video.id)
+          .get();
+      
+      if (videoDoc.exists) {
+        final data = videoDoc.data();
+        if (data != null && data['transcriptSegments'] != null) {
+          setState(() {
+            _transcriptSegments = List<Map<String, dynamic>>.from(data['transcriptSegments']);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading transcript segments: $e');
+    }
+  }
+
+  void _updateSubtitles() {
+    if (_transcriptSegments == null || !_isPlaying) {
+      _subtitleTimer?.cancel();
+      setState(() => _currentSubtitle = '');
+      return;
+    }
+
+    _subtitleTimer?.cancel();
+    _subtitleTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || !_isPlaying) {
+        timer.cancel();
+        return;
+      }
+
+      final position = _controller.value.position.inMilliseconds / 1000.0;
+      String newSubtitle = '';
+
+      for (final segment in _transcriptSegments!) {
+        final startTime = segment['startTime'].toDouble();
+        final endTime = segment['endTime'].toDouble();
+
+        if (position >= startTime && position <= endTime) {
+          newSubtitle = segment['text'];
+          break;
+        }
+      }
+
+      if (mounted && _currentSubtitle != newSubtitle) {
+        setState(() => _currentSubtitle = newSubtitle);
+      }
+    });
+  }
+
+  void _showControlsTemporarily() {
+    setState(() => _isShowingControls = true);
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && !_isDraggingProgress) {
+        setState(() => _isShowingControls = false);
+      }
+    });
+  }
+
+  Widget _buildProgressBar() {
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: _controller,
+      builder: (context, value, child) {
+        final duration = value.duration;
+        final position = value.position;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return GestureDetector(
+              onHorizontalDragStart: (details) {
+                setState(() => _isDraggingProgress = true);
+              },
+              onHorizontalDragUpdate: (details) {
+                final dx = details.localPosition.dx.clamp(0, constraints.maxWidth);
+                final newPosition = (dx / constraints.maxWidth) * duration.inMilliseconds;
+                _controller.seekTo(Duration(milliseconds: newPosition.toInt()));
+              },
+              onHorizontalDragEnd: (details) {
+                setState(() => _isDraggingProgress = false);
+                _showControlsTemporarily();
+              },
+              onTapDown: (details) {
+                final dx = details.localPosition.dx.clamp(0, constraints.maxWidth);
+                final newPosition = (dx / constraints.maxWidth) * duration.inMilliseconds;
+                _controller.seekTo(Duration(milliseconds: newPosition.toInt()));
+                _showControlsTemporarily();
+              },
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Stack(
+                  children: [
+                    // Background track
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(1.5),
+                      ),
+                    ),
+                    // Progress track
+                    FractionallySizedBox(
+                      widthFactor: duration.inMilliseconds > 0
+                          ? position.inMilliseconds / duration.inMilliseconds
+                          : 0.0,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(1.5),
+                        ),
+                      ),
+                    ),
+                    // Drag handle
+                    if (_isShowingControls || _isDraggingProgress)
+                      Positioned(
+                        left: duration.inMilliseconds > 0
+                            ? (position.inMilliseconds / duration.inMilliseconds) * constraints.maxWidth - 8
+                            : -8,
+                        top: -5,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
@@ -258,32 +417,21 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
         if (!mounted) return;
         
         if (visibilityInfo.visibleFraction < 0.5) {
-          _controller.pause();
-          if (mounted) {
-            setState(() {
-              _isPlaying = false;
-            });
-          }
+          pauseVideo();
         } else if (widget.autoplay && !_isPlaying) {
-          _controller.play();
-          if (mounted) {
-            setState(() {
-              _isPlaying = true;
-            });
-          }
+          playVideo();
         }
       },
       child: GestureDetector(
         onTap: () {
           setState(() {
             if (_isPlaying) {
-              _controller.pause();
-              _isPlaying = false;
+              pauseVideo();
             } else {
-              _controller.play();
-              _isPlaying = true;
+              playVideo();
             }
           });
+          _showControlsTemporarily();
         },
         child: Container(
           color: Colors.black,
@@ -554,6 +702,89 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
                     ),
                   ),
                 ),
+
+              // Add subtitle overlay
+              if (_currentSubtitle.isNotEmpty)
+                Positioned(
+                  left: 16,
+                  right: 80, // Leave space for the right-side buttons
+                  bottom: MediaQuery.of(context).size.height * 0.35, // Moved up from 0.3 to 0.35
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Text(
+                          _currentSubtitle,
+                          key: ValueKey<String>(_currentSubtitle),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            shadows: [
+                              Shadow(
+                                blurRadius: 4,
+                                color: Colors.black54,
+                                offset: Offset(1, 1),
+                              ),
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Add progress bar just above the title
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.of(context).padding.bottom + 75, // Increased from 65 to 75 to move it up
+                child: _buildProgressBar(),
+              ),
+
+              // Add timestamp overlay
+              if (_isShowingControls || _isDraggingProgress)
+                Positioned(
+                  right: 16,
+                  bottom: MediaQuery.of(context).padding.bottom + 115, // Increased from 105 to 115 to maintain relative positioning
+                  child: ValueListenableBuilder<VideoPlayerValue>(
+                    valueListenable: _controller,
+                    builder: (context, value, child) {
+                      final position = value.position;
+                      final duration = value.duration;
+                      
+                      String _formatDuration(Duration d) {
+                        final minutes = d.inMinutes.toString().padLeft(2, '0');
+                        final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+                        return '$minutes:$seconds';
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
             ],
           ),
         ),
@@ -706,7 +937,8 @@ class VideoCardState extends State<VideoCard> with SingleTickerProviderStateMixi
 
   @override
   void dispose() {
-    // Only dispose if it's not a preloaded controller
+    _controlsTimer?.cancel();
+    _subtitleTimer?.cancel();
     if (widget.preloadedController == null) {
       _controller.dispose();
     }
