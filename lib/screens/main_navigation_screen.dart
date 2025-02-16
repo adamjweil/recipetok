@@ -63,7 +63,7 @@ class MainNavigationScreen extends StatefulWidget {
           Icon(
             isSelected ? _getFilledIcon(icon) : icon,
             color: isSelected ? Theme.of(context).primaryColor : Colors.grey,
-            size: 24,
+            size: isSelected ? 28 : 24,
             weight: isSelected ? 700 : 400,
           ),
           const SizedBox(height: 2),

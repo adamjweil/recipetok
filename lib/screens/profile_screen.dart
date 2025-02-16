@@ -1531,13 +1531,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             final videoId = sortedVideos[index].id;
             final thumbnailUrl = videoData['thumbnailUrl'] as String?;
             
-            if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
-              return Container(
-                color: Colors.grey[200],
-                child: const Center(child: Icon(Icons.video_library)),
-              );
-            }
-
             return GestureDetector(
               onTap: () {
                 final video = Video.fromMap(videoId, videoData);
@@ -1553,7 +1546,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 );
               },
               onLongPressStart: (LongPressStartDetails details) {
-                // This provides the correct tap position for the menu
                 _handleVideoLongPress(
                   context,
                   videoData,
@@ -1564,22 +1556,28 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
-                    imageUrl: thumbnailUrl,
-                    fit: BoxFit.cover,
-                    cacheManager: CustomCacheManager.instance,
-                    placeholder: (context, url) => Container(
+                  if (thumbnailUrl == null || thumbnailUrl.isEmpty)
+                    Container(
                       color: Colors.grey[200],
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) {
-                      debugPrint('❌ Image loading error for video $videoId: $error');
-                      return Container(
+                      child: const Center(child: Icon(Icons.video_library)),
+                    )
+                  else
+                    CachedNetworkImage(
+                      imageUrl: thumbnailUrl,
+                      fit: BoxFit.cover,
+                      cacheManager: CustomCacheManager.instance,
+                      placeholder: (context, url) => Container(
                         color: Colors.grey[200],
-                        child: const Center(child: Icon(Icons.error)),
-                      );
-                    },
-                  ),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) {
+                        debugPrint('❌ Image loading error for video $videoId: $error');
+                        return Container(
+                          color: Colors.grey[200],
+                          child: const Center(child: Icon(Icons.error)),
+                        );
+                      },
+                    ),
                   // Add video icon overlay
                   Positioned(
                     top: 6,
@@ -1667,13 +1665,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     final videoId = videos[index].id;
                     final thumbnailUrl = videoData['thumbnailUrl'] as String?;
 
-                    if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
-                      return Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: Icon(Icons.video_library)),
-                      );
-                    }
-
                     return GestureDetector(
                       onTap: () {
                         final video = Video.fromMap(videoId, videoData);
@@ -1691,22 +1682,28 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          CachedNetworkImage(
-                            imageUrl: thumbnailUrl,
-                            fit: BoxFit.cover,
-                            cacheManager: CustomCacheManager.instance,
-                            placeholder: (context, url) => Container(
+                          if (thumbnailUrl == null || thumbnailUrl.isEmpty)
+                            Container(
                               color: Colors.grey[200],
-                              child: const Center(child: CircularProgressIndicator()),
-                            ),
-                            errorWidget: (context, url, error) {
-                              debugPrint('❌ Image loading error for video $videoId: $error');
-                              return Container(
+                              child: const Center(child: Icon(Icons.video_library)),
+                            )
+                          else
+                            CachedNetworkImage(
+                              imageUrl: thumbnailUrl,
+                              fit: BoxFit.cover,
+                              cacheManager: CustomCacheManager.instance,
+                              placeholder: (context, url) => Container(
                                 color: Colors.grey[200],
-                                child: const Center(child: Icon(Icons.error)),
-                              );
-                            },
-                          ),
+                                child: const Center(child: CircularProgressIndicator()),
+                              ),
+                              errorWidget: (context, url, error) {
+                                debugPrint('❌ Image loading error for video $videoId: $error');
+                                return Container(
+                                  color: Colors.grey[200],
+                                  child: const Center(child: Icon(Icons.error)),
+                                );
+                              },
+                            ),
                           // Add video icon overlay
                           Positioned(
                             top: 6,
@@ -1828,111 +1825,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   );
                 },
               ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Helper method to build video grid
-  Widget _buildVideoGrid(List<QueryDocumentSnapshot> videos) {
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 1,
-        mainAxisSpacing: 1,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: videos.length,
-      itemBuilder: (context, index) {
-        final videoData = videos[index].data() as Map<String, dynamic>;
-        final videoId = videos[index].id;
-        final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-
-        if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
-          return Container(
-            color: Colors.grey[200],
-            child: const Center(child: Icon(Icons.video_library)),
-          );
-        }
-
-        return GestureDetector(
-          onTap: () {
-            final video = Video.fromMap(videoId, videoData);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MainNavigationScreen(
-                  initialIndex: 1, // Videos tab
-                  initialVideo: video,
-                  showBackButton: true,
-                ),
-              ),
-            );
-          },
-          onLongPressStart: (LongPressStartDetails details) {
-            // This provides the correct tap position for the menu
-            _handleVideoLongPress(
-              context,
-              videoData,
-              videoId,
-              details.globalPosition,
-            );
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: thumbnailUrl,
-                fit: BoxFit.cover,
-                cacheManager: CustomCacheManager.instance,
-                placeholder: (context, url) => Container(
-                  color: Colors.grey[200],
-                  child: const Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (context, url, error) {
-                  debugPrint('❌ Image loading error for video $videoId: $error');
-                  return Container(
-                    color: Colors.grey[200],
-                    child: const Center(child: Icon(Icons.error)),
-                  );
-                },
-              ),
-              // Add video icon overlay
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Icon(
-                  Icons.video_collection_rounded,
-                  color: Colors.white.withOpacity(0.85),
-                  size: 14,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withOpacity(0.6),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-              // Show pin indicator if video is pinned
-              if (videoData['isPinned'] == true)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Icon(
-                    Icons.push_pin,
-                    color: Colors.white,
-                    size: 20,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 3,
-                      ),
-                    ],
-                  ),
-                ),
             ],
           ),
         );
