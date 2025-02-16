@@ -20,6 +20,34 @@ class VideoInfo {
   });
 }
 
+class TranscriptSegment {
+  final String text;
+  final double startTime;
+  final double endTime;
+
+  TranscriptSegment({
+    required this.text,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'text': text,
+      'startTime': startTime,
+      'endTime': endTime,
+    };
+  }
+
+  factory TranscriptSegment.fromMap(Map<String, dynamic> map) {
+    return TranscriptSegment(
+      text: map['text'] ?? '',
+      startTime: map['startTime']?.toDouble() ?? 0.0,
+      endTime: map['endTime']?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 class AIService {
   static final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
   static const String _baseUrl = 'https://api.openai.com/v1';
@@ -39,7 +67,7 @@ class AIService {
     );
   }
 
-  Future<String> transcribeVideo(File videoFile) async {
+  Future<List<TranscriptSegment>> transcribeVideo(File videoFile) async {
     // Check file size
     final fileSize = await videoFile.length();
     if (fileSize > _maxFileSizeBytes) {
@@ -53,35 +81,95 @@ class AIService {
           'Authorization': 'Bearer $_apiKey',
         })
         ..fields['model'] = 'whisper-1'
+        ..fields['response_format'] = 'verbose_json'
+        ..fields['timestamp_granularities'] = '["word"]'
         ..files.add(await http.MultipartFile.fromPath(
           'file',
           videoFile.path,
         ));
 
+      debugPrint('Sending transcription request...');
       final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
+      var responseBody = await response.stream.bytesToString();
 
       if (response.statusCode != 200) {
+        debugPrint('Transcription failed with status ${response.statusCode}: $responseBody');
         throw Exception('Failed to transcribe video: ${response.statusCode}\n$responseBody');
       }
 
-      final data = json.decode(responseBody);
-      String transcription = data['text'];
+      debugPrint('Received transcription response');
       
-      // Sanitize the transcription text
-      transcription = transcription
-          .replaceAll(RegExp(r'[\u0000-\u001F\u007F-\u009F]'), '') // Remove control characters
-          .replaceAll(RegExp(r'[^\x00-\x7F]+'), '') // Remove non-ASCII characters
-          .replaceAll(RegExp(r'\s+'), ' ') // Normalize whitespace
-          .trim(); // Trim leading/trailing whitespace
+      // Clean the response by removing any markdown code block markers
+      responseBody = responseBody
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
+      Map<String, dynamic> data;
+      try {
+        data = json.decode(responseBody) as Map<String, dynamic>;
+      } catch (e) {
+        debugPrint('Failed to parse response as JSON: $responseBody');
+        debugPrint('Parse error: $e');
+        throw Exception('Invalid response format from transcription service');
+      }
+
+      if (!data.containsKey('segments')) {
+        debugPrint('Response missing segments: $data');
+        throw Exception('Transcription response missing segments');
+      }
+
+      final segments = <TranscriptSegment>[];
+      
+      // Parse the segments from the response
+      for (var segment in data['segments'] as List) {
+        try {
+          if (segment is! Map) continue;
           
-      debugPrint('Transcription (sanitized): $transcription');
-      
-      return transcription;
+          final text = _sanitizeText(segment['text']?.toString() ?? '');
+          if (text.isEmpty) continue;
+
+          final startTime = double.tryParse(segment['start']?.toString() ?? '') ?? 0.0;
+          final endTime = double.tryParse(segment['end']?.toString() ?? '') ?? 0.0;
+
+          segments.add(TranscriptSegment(
+            text: text,
+            startTime: startTime,
+            endTime: endTime,
+          ));
+        } catch (e) {
+          debugPrint('Error parsing segment: $e\nSegment data: $segment');
+          continue;
+        }
+      }
+
+      debugPrint('Successfully parsed ${segments.length} segments');
+      return segments;
     } catch (e) {
       debugPrint('Error during transcription: $e');
       rethrow;
     }
+  }
+
+  String _sanitizeText(String text) {
+    return text
+        .trim()
+        // Remove control characters
+        .replaceAll(RegExp(r'[\u0000-\u001F\u007F-\u009F]'), '')
+        // Remove non-printable characters
+        .replaceAll(RegExp(r'[^\x20-\x7E\s]'), '')
+        // Normalize whitespace
+        .replaceAll(RegExp(r'\s+'), ' ')
+        // Replace smart quotes with regular quotes
+        .replaceAll(''', "'")
+        .replaceAll(''', "'")
+        .replaceAll('"', '"')
+        .replaceAll('"', '"')
+        // Replace other common problematic characters
+        .replaceAll('–', '-')
+        .replaceAll('—', '-')
+        .replaceAll('…', '...')
+        .trim();
   }
 
   Future<Map<String, dynamic>> generateRecipeData(String transcript) async {

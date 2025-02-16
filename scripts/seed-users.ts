@@ -8,6 +8,17 @@ import * as os from 'os';
 import fetch from 'node-fetch';
 import ffmpeg from 'fluent-ffmpeg';
 import * as tmp from 'tmp';
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
+import { Readable } from 'stream';
+import FormData from 'form-data';
+
+// Update dotenv config to look in root directory
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Initialize Firebase Admin with the correct bucket name
 admin.initializeApp({
@@ -309,6 +320,118 @@ const sampleMealComments = [
   "This would be great for meal prep!"
 ];
 
+// Update the WhisperResponse interface
+interface WhisperSegment {
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface WhisperResponse {
+  segments: WhisperSegment[];
+  text: string;
+}
+
+// Add this function for text sanitization
+function sanitizeText(text: string): string {
+  return text
+    .trim()
+    // Remove control characters
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+    // Remove non-printable characters
+    .replace(/[^\x20-\x7E\s]/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    // Replace smart quotes with regular quotes
+    .replace(/['']/g, "'")
+    .replace(/[""]/g, '"')
+    // Replace other common problematic characters
+    .replace(/[–—]/g, '-')
+    .replace(/…/g, '...')
+    .trim();
+}
+
+// Update the transcribeVideo function
+async function transcribeVideo(videoUrl: string): Promise<any[]> {
+  try {
+    // Download video
+    console.log('Downloading video...');
+    const response = await fetch(videoUrl);
+    const buffer = await response.arrayBuffer();
+    const tempFile = tmp.fileSync({ postfix: '.mp4' });
+    fs.writeFileSync(tempFile.name, Buffer.from(buffer));
+
+    // Create form data using form-data package
+    console.log('Sending request to Whisper API...');
+    const form = new FormData();
+    form.append('file', fs.createReadStream(tempFile.name));
+    form.append('model', 'whisper-1');
+    form.append('response_format', 'verbose_json');
+
+    const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...form.getHeaders(),
+      },
+      body: form,
+    });
+
+    if (!transcriptionResponse.ok) {
+      const errorText = await transcriptionResponse.text();
+      console.error('Whisper API error:', errorText);
+      throw new Error(`Whisper API error: ${transcriptionResponse.status} ${errorText}`);
+    }
+
+    const transcriptionData = await transcriptionResponse.json() as WhisperResponse;
+    
+    // Clean up temp file
+    tempFile.removeCallback();
+
+    if (!transcriptionData || !transcriptionData.segments) {
+      console.error('Unexpected API response:', transcriptionData);
+      return [];
+    }
+
+    // Transform segments into the format we need and sanitize text
+    const segments = transcriptionData.segments.map((segment: WhisperSegment) => {
+      if (!segment || typeof segment.text !== 'string') {
+        console.warn('Invalid segment:', segment);
+        return null;
+      }
+
+      const sanitizedText = sanitizeText(segment.text);
+      if (!sanitizedText) return null;
+      
+      return {
+        text: sanitizedText,
+        startTime: Number(segment.start) || 0,
+        endTime: Number(segment.end) || 0,
+      };
+    }).filter((segment): segment is NonNullable<typeof segment> => segment !== null);
+
+    console.log(`Successfully transcribed ${segments.length} segments`);
+    return segments;
+  } catch (error) {
+    console.error('Error transcribing video:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Stack trace:', error.stack);
+    }
+    return [];
+  }
+}
+
+// Helper function to convert stream to buffer
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('error', (err) => reject(err));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
 async function createUser() {
   // Common first names
   const firstNames = [
@@ -501,6 +624,11 @@ async function createVideo(userId: string) {
       expires: '03-01-2500',
     });
 
+    // Get transcript segments
+    console.log(`Transcribing video: ${randomVideo.videoUrl}`);
+    const transcriptSegments = await transcribeVideo(randomVideo.videoUrl);
+    console.log(`Transcribed ${transcriptSegments.length} segments`);
+
     const videoDoc = await db.collection('videos').add({
       userId,
       username: userData?.displayName || 'Anonymous',
@@ -517,6 +645,7 @@ async function createVideo(userId: string) {
       commentCount: 0,
       isPinned: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      transcriptSegments: transcriptSegments,
     });
 
     // Create the likes subcollection document

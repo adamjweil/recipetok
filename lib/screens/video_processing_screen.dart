@@ -30,6 +30,9 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
   late Animation<double> _progressAnimation;
   String _currentStep = 'Preparing video...';
   double _progress = 0.0;
+  bool _isProcessing = false;
+  bool _isDisposed = false;
+  String? _error;
 
   final Set<String> _supportedFormats = {
     'mp4', 'mpeg', 'mpga', 'webm', 'm4a', 'wav'
@@ -59,12 +62,22 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
 
   @override
   void dispose() {
+    _isDisposed = true;
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _processVideo() async {
+    if (_isProcessing) return;
+    
+    setState(() {
+      _isProcessing = true;
+      _error = null;
+    });
+
     try {
+      if (_isDisposed) return;
+
       // Check video format first
       if (!_isFormatSupported(widget.videoPath)) {
         throw FormatException(
@@ -153,7 +166,8 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         _progress = 0.6;
       });
 
-      final transcript = await aiService.transcribeVideo(fileToUpload);
+      final transcriptSegments = await aiService.transcribeVideo(fileToUpload);
+      final transcriptData = transcriptSegments.map((segment) => segment.toMap()).toList();
 
       // Step 4: Generate recipe data
       setState(() {
@@ -161,7 +175,9 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         _progress = 0.8;
       });
 
-      final recipeData = await aiService.generateRecipeData(transcript);
+      final recipeData = await aiService.generateRecipeData(
+        transcriptSegments.map((s) => s.text).join(' ')
+      );
 
       // Step 5: Create draft
       setState(() {
@@ -184,7 +200,7 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
       );
 
       // Create the video document with proper data types
-      await FirebaseFirestore.instance.collection('videos').add({
+      final videoDoc = await FirebaseFirestore.instance.collection('videos').add({
         'userId': widget.userId,
         'videoPath': widget.videoPath,
         'videoUrl': videoUrl,
@@ -194,15 +210,16 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         'instructions': List<String>.from(recipeData['instructions']),
         'calories': recipeData['calories'],
         'cookTimeMinutes': recipeData['cookTimeMinutes'],
-        'likes': 0,  // Ensure this is an integer
-        'likedBy': [],  // Initialize as empty array
-        'views': 0,  // Ensure this is an integer
-        'commentCount': 0,  // Ensure this is an integer
+        'likes': 0,
+        'likedBy': [],
+        'views': 0,
+        'commentCount': 0,
         'isPinned': false,
         'createdAt': FieldValue.serverTimestamp(),
-        'thumbnailUrl': '',  // Add default thumbnail URL
-        'username': '',  // Will be updated with user's name
-        'userImage': '',  // Will be updated with user's image
+        'thumbnailUrl': '',
+        'username': '',
+        'userImage': '',
+        'transcriptSegments': transcriptData,
       });
 
       if (mounted) {
@@ -225,30 +242,33 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         }
       }
       await VideoCompress.deleteAllCache();
+
+      if (mounted) {
+        Navigator.of(context).pop(videoDoc.id);
+      }
     } catch (e) {
+      if (_isDisposed) return;
+      
+      debugPrint('Error processing video: $e');
+      setState(() {
+        _error = e.toString();
+        _isProcessing = false;
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e is FormatException 
-                ? e.message 
-                : 'Error processing video: $e'
-            ),
-            duration: const Duration(seconds: 5),
+            content: Text('Error: ${e.toString()}'),
             action: SnackBarAction(
-              label: 'OK',
+              label: 'Retry',
               onPressed: () {
-                Navigator.pop(context);
+                if (mounted) {
+                  _processVideo();
+                }
               },
             ),
           ),
         );
-        // Add a slight delay before popping to ensure the user sees the message
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            Navigator.pop(context);
-          }
-        });
       }
     }
   }
