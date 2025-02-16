@@ -28,6 +28,12 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() && isOwner(userId);
       
+      // Groups subcollection
+      match /groups/{groupId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isSignedIn() && isOwner(userId);
+      }
+      
       // Notifications subcollection
       match /notifications/{notificationId} {
         allow read: if isSignedIn() && isOwner(userId);

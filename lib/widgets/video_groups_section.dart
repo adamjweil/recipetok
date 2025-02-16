@@ -29,25 +29,26 @@ class VideoGroupsSection extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const SizedBox.shrink();
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SliverToBoxAdapter(
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final groups = snapshot.data?.docs ?? [];
 
         if (groups.isEmpty && !showAddButton) {
-          return const SizedBox.shrink();
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              sliver: SliverToBoxAdapter(
                 child: Text(
                   'Collections',
                   style: TextStyle(
@@ -58,29 +59,30 @@ class VideoGroupsSection extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ),
-              const SizedBox(height: 12),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
                   childAspectRatio: 0.85,
                 ),
-                itemCount: groups.length + (showAddButton ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == groups.length && showAddButton) {
-                    return _buildCreateGroupButton(context);
-                  }
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    if (index == groups.length && showAddButton) {
+                      return _buildCreateGroupButton(context);
+                    }
 
-                  final group = groups[index].data() as Map<String, dynamic>;
-                  return _buildGroupItem(context, group, groups[index].id);
-                },
+                    final group = groups[index].data() as Map<String, dynamic>;
+                    return _buildGroupItem(context, group, groups[index].id);
+                  },
+                  childCount: groups.length + (showAddButton ? 1 : 0),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );

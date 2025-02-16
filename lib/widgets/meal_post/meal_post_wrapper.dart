@@ -47,6 +47,8 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
   bool _isPressed = false;
 
   final TextEditingController _commentController = TextEditingController();
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -65,6 +67,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
   void dispose() {
     _expandController.dispose();
     _commentController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -117,15 +120,11 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
     
     return Material(
       color: Colors.transparent,
-      child: InkWell(
+      child: GestureDetector(
         onTap: _showExpandedView,
         onTapDown: (_) => setState(() => _isPressed = true),
         onTapUp: (_) => setState(() => _isPressed = false),
         onTapCancel: () => setState(() => _isPressed = false),
-        splashColor: Theme.of(context).primaryColor.withOpacity(0.2),
-        highlightColor: Theme.of(context).primaryColor.withOpacity(0.1),
-        splashFactory: InkRipple.splashFactory,
-        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeInOut,
@@ -181,6 +180,24 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                   ),
                                 ),
                               ),
+                              // Add camera icon
+                              if (widget.post.photoUrls.length > 1)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Icon(
+                                      Icons.photo_library,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -1188,17 +1205,56 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                   ],
                 ),
               ),
-              // Image Section
+              // Image Section with PageView
               SizedBox(
                 height: MediaQuery.of(context).size.height * 0.4,
                 width: double.infinity,
-                child: Hero(
-                  tag: 'post_image_${widget.post.id}',
-                  child: CustomCacheManager.buildCachedImage(
-                    url: widget.post.photoUrls.first,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return Stack(
+                      children: [
+                        PageView.builder(
+                          controller: _pageController,
+                          itemCount: widget.post.photoUrls.length,
+                          onPageChanged: (index) {
+                            setState(() => _currentPage = index);
+                          },
+                          itemBuilder: (context, index) {
+                            final url = widget.post.photoUrls[index];
+                            return Hero(
+                              tag: index == 0 ? 'post_image_${widget.post.id}' : 'post_image_${widget.post.id}_$index',
+                              child: CustomCacheManager.buildCachedImage(
+                                url: url,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            );
+                          },
+                        ),
+                        // Add page indicator if there are multiple photos
+                        if (widget.post.photoUrls.length > 1)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                '${_currentPage + 1}/${widget.post.photoUrls.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
               

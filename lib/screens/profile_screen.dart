@@ -1631,7 +1631,18 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return const CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              ),
+            ],
+          );
         }
         
         final videos = snapshot.data?.docs ?? [];
@@ -1639,14 +1650,86 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         return CustomScrollView(
           slivers: [
             // Add VideoGroupsSection at the top
-            SliverToBoxAdapter(
-              child: VideoGroupsSection(),
-            ),
+            const VideoGroupsSection(),
             
             // Only show video grid if there are videos
             if (videos.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildVideoGrid(videos),
+              SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 1,
+                  mainAxisSpacing: 1,
+                  childAspectRatio: 0.8,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final videoData = videos[index].data() as Map<String, dynamic>;
+                    final videoId = videos[index].id;
+                    final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+
+                    if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
+                      return Container(
+                        color: Colors.grey[200],
+                        child: const Center(child: Icon(Icons.video_library)),
+                      );
+                    }
+
+                    return GestureDetector(
+                      onTap: () {
+                        final video = Video.fromMap(videoId, videoData);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MainNavigationScreen(
+                              initialIndex: 1, // Videos tab
+                              initialVideo: video,
+                              showBackButton: true,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: thumbnailUrl,
+                            fit: BoxFit.cover,
+                            cacheManager: CustomCacheManager.instance,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[200],
+                              child: const Center(child: CircularProgressIndicator()),
+                            ),
+                            errorWidget: (context, url, error) {
+                              debugPrint('❌ Image loading error for video $videoId: $error');
+                              return Container(
+                                color: Colors.grey[200],
+                                child: const Center(child: Icon(Icons.error)),
+                              );
+                            },
+                          ),
+                          // Add video icon overlay
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Icon(
+                              Icons.video_collection_rounded,
+                              color: Colors.white.withOpacity(0.85),
+                              size: 14,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withOpacity(0.6),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  childCount: videos.length,
+                ),
               ),
           ],
         );
