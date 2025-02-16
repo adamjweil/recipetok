@@ -28,10 +28,13 @@ class ExpandableMealPost extends StatefulWidget {
 class _ExpandableMealPostState extends State<ExpandableMealPost> {
   final TextEditingController _commentController = TextEditingController();
   bool _isPostingComment = false;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   @override
   void dispose() {
     _commentController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -459,30 +462,71 @@ class _ExpandableMealPostState extends State<ExpandableMealPost> {
   }
 
   Widget _buildPostImage(String? imageUrl) {
-    if (!CustomCacheManager.isValidImageUrl(imageUrl)) {
-      return AspectRatio(
-        aspectRatio: 1,
-        child: Container(
-          color: Colors.grey[200],
-          child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
-        ),
-      );
-    }
+    return Stack(
+      children: [
+        if (widget.post.photoUrls.isEmpty)
+          AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              color: Colors.grey[200],
+              child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+            ),
+          )
+        else
+          AspectRatio(
+            aspectRatio: 1,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.post.photoUrls.length,
+              onPageChanged: (index) {
+                setState(() => _currentPage = index);
+              },
+              itemBuilder: (context, index) {
+                final url = widget.post.photoUrls[index];
+                if (!CustomCacheManager.isValidImageUrl(url)) {
+                  return Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                  );
+                }
 
-    return AspectRatio(
-      aspectRatio: 1,
-      child: CachedNetworkImage(
-        imageUrl: imageUrl!,
-        cacheManager: CustomCacheManager.instance,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-          color: Colors.grey[200],
-        ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey[200],
-          child: Icon(Icons.error_outline, color: Colors.grey[400]),
-        ),
-      ),
+                return CachedNetworkImage(
+                  imageUrl: url,
+                  cacheManager: CustomCacheManager.instance,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.error_outline, color: Colors.grey[400]),
+                  ),
+                );
+              },
+            ),
+          ),
+        // Add page indicator dots if there are multiple photos
+        if (widget.post.photoUrls.length > 1)
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${_currentPage + 1}/${widget.post.photoUrls.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 } 

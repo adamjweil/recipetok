@@ -41,6 +41,7 @@ dependencies:
   json_annotation: ^4.8.1
   image_picker: ^1.0.7
   timeago: ^3.6.0
+  flutter_image_compress: ^2.1.0
   
   cached_network_image: ^3.3.0
   # The following adds the Cupertino Icons font to your application.
@@ -71,6 +72,10 @@ dependencies:
   provider: ^6.1.1
   path: ^1.8.3
   uuid: ^4.2.2
+  image_editor_plus: ^1.0.0
+  expandable: ^5.0.1
+  reorderable_grid_view: ^2.2.8
+  flutter_animate: ^4.5.0
 
 dev_dependencies:
   flutter_test:
