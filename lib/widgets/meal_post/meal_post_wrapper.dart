@@ -298,25 +298,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                             initialData: null,
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox(
-                                      width: 60,
-                                      height: 24,
-                                      child: Shimmer.fromColors(
-                                        baseColor: Colors.grey[300]!,
-                                        highlightColor: Colors.grey[100]!,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
+                                return const SizedBox();
                               }
                               
                               final postData = snapshot.data!.data() as Map<String, dynamic>?;
@@ -335,7 +317,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                     ConstrainedBox(
                                       constraints: const BoxConstraints(maxWidth: 60),
                                       child: SizedBox(
-                                        width: likedBy.take(3).length * 20.0 - (likedBy.take(3).length - 1) * 12.0,
+                                        width: min(likedBy.take(3).length * 20.0, 60.0),
                                         height: 24,
                                         child: Stack(
                                           children: likedBy.take(3).map((userId) {
@@ -343,8 +325,24 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                             return Positioned(
                                               left: index * 12.0,
                                               child: FutureBuilder<DocumentSnapshot>(
-                                                future: _getUserData(userId.toString()),
+                                                future: _getUserData(userId),
                                                 builder: (context, userSnapshot) {
+                                                  if (!userSnapshot.hasData) {
+                                                    return Container(
+                                                      decoration: BoxDecoration(
+                                                        shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: Colors.white,
+                                                          width: 1.5,
+                                                        ),
+                                                      ),
+                                                      child: const CircleAvatar(
+                                                        radius: 9,
+                                                        backgroundColor: Colors.grey,
+                                                      ),
+                                                    );
+                                                  }
+
                                                   final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
                                                   return Container(
                                                     decoration: BoxDecoration(
@@ -382,14 +380,14 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                       ? FutureBuilder<List<String>>(
                                           future: Future.wait(
                                             likedBy.take(2).map((userId) async {
-                                              final userDoc = await _getUserData(userId.toString());
+                                              final userDoc = await _getUserData(userId);
                                               final fullName = (userDoc.data() as Map<String, dynamic>?)?['displayName'] ?? 'Unknown';
                                               return fullName.split(' ')[0];
                                             }),
                                           ),
                                           builder: (context, snapshot) {
-                                            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                                              return totalLikes == 0 ? const SizedBox() : Text(
+                                            if (!snapshot.hasData) {
+                                              return Text(
                                                 '$totalLikes gave props',
                                                 style: TextStyle(
                                                   fontSize: 10,
