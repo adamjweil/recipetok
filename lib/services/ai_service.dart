@@ -81,8 +81,7 @@ class AIService {
           'Authorization': 'Bearer $_apiKey',
         })
         ..fields['model'] = 'whisper-1'
-        ..fields['response_format'] = 'verbose_json'
-        ..fields['timestamp_granularities'] = '["word"]'
+        ..fields['response_format'] = 'json'
         ..files.add(await http.MultipartFile.fromPath(
           'file',
           videoFile.path,
@@ -99,14 +98,9 @@ class AIService {
 
       debugPrint('Received transcription response');
       
-      // Clean the response by removing any markdown code block markers
-      responseBody = responseBody
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
-
       Map<String, dynamic> data;
       try {
+        debugPrint('Attempting to parse response: $responseBody');
         data = json.decode(responseBody) as Map<String, dynamic>;
       } catch (e) {
         debugPrint('Failed to parse response as JSON: $responseBody');
@@ -114,37 +108,20 @@ class AIService {
         throw Exception('Invalid response format from transcription service');
       }
 
-      if (!data.containsKey('segments')) {
-        debugPrint('Response missing segments: $data');
-        throw Exception('Transcription response missing segments');
+      // With the simpler JSON format, we'll create a single segment from the text
+      final text = _sanitizeText(data['text']?.toString() ?? '');
+      if (text.isEmpty) {
+        throw Exception('No text found in transcription');
       }
 
-      final segments = <TranscriptSegment>[];
-      
-      // Parse the segments from the response
-      for (var segment in data['segments'] as List) {
-        try {
-          if (segment is! Map) continue;
-          
-          final text = _sanitizeText(segment['text']?.toString() ?? '');
-          if (text.isEmpty) continue;
-
-          final startTime = double.tryParse(segment['start']?.toString() ?? '') ?? 0.0;
-          final endTime = double.tryParse(segment['end']?.toString() ?? '') ?? 0.0;
-
-          segments.add(TranscriptSegment(
-            text: text,
-            startTime: startTime,
-            endTime: endTime,
-          ));
-        } catch (e) {
-          debugPrint('Error parsing segment: $e\nSegment data: $segment');
-          continue;
-        }
-      }
-
-      debugPrint('Successfully parsed ${segments.length} segments');
-      return segments;
+      // Create a single segment with the entire transcription
+      return [
+        TranscriptSegment(
+          text: text,
+          startTime: 0.0,
+          endTime: 0.0,  // We won't have timing information with this format
+        )
+      ];
     } catch (e) {
       debugPrint('Error during transcription: $e');
       rethrow;
@@ -175,17 +152,11 @@ class AIService {
   Future<Map<String, dynamic>> generateRecipeData(String transcript) async {
     final url = Uri.parse('$_baseUrl/chat/completions');
     final prompt = '''
-Analyze this cooking video transcript and extract the following information in JSON format:
-1. A brief, engaging description
-2. List of ingredients with quantities
-3. Step-by-step cooking instructions
-4. Estimated calories per serving
-5. Estimated cooking time in minutes
-6. Suggested title for the recipe
+Analyze this cooking video transcript and extract the following information. Return ONLY a JSON object with no additional text or markdown formatting.
 
 Transcript: $transcript
 
-Please format the response as valid JSON with the following structure:
+The response must be a valid JSON object with this exact structure:
 {
   "title": "string",
   "description": "string",
@@ -194,6 +165,8 @@ Please format the response as valid JSON with the following structure:
   "calories": number,
   "cookTimeMinutes": number
 }
+
+Do not include any markdown formatting, code blocks, or additional text. Return only the JSON object.
 ''';
 
     final response = await http.post(
@@ -224,6 +197,30 @@ Please format the response as valid JSON with the following structure:
 
     final data = json.decode(response.body);
     final content = data['choices'][0]['message']['content'];
-    return json.decode(content);
+    
+    // Clean the content by removing any markdown code blocks and extra whitespace
+    final cleanContent = content
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .replaceAll(RegExp(r'^\s+|\s+$'), '')
+        .trim();
+
+    try {
+      debugPrint('Attempting to parse recipe data: $cleanContent');
+      return json.decode(cleanContent) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Failed to parse recipe data: $e');
+      debugPrint('Raw content: $cleanContent');
+      
+      // Fallback response if parsing fails
+      return {
+        'title': 'Recipe',
+        'description': content.replaceAll(RegExp(r'[{}[\]]'), '').trim(),
+        'ingredients': <String>['Could not parse ingredients'],
+        'instructions': <String>['Could not parse instructions'],
+        'calories': 0,
+        'cookTimeMinutes': 30,
+      };
+    }
   }
 } 

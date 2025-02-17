@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/video_card.dart';
 import '../screens/main_navigation_screen.dart';
 import '../models/video.dart';
+import '../screens/profile_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -188,7 +189,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       _showTrendingSearches = false;
     });
 
-    // Implement search logic here
+    // Search functionality will be implemented in _buildUserSearchResults
   }
 
   @override
@@ -251,7 +252,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           fillColor: Colors.grey[100],
           contentPadding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        onSubmitted: _onSearch,
+        onChanged: _onSearch,
       ),
     );
   }
@@ -282,22 +283,23 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     return Expanded(
       child: DefaultTabController(
         length: 2,
+        initialIndex: 0, // Start with Users tab
         child: Column(
           children: [
             Container(
               color: Colors.white,
               child: const TabBar(
                 tabs: [
+                  Tab(text: 'Users'),  // Swapped order
                   Tab(text: 'Videos'),
-                  Tab(text: 'Users'),
                 ],
               ),
             ),
             Expanded(
               child: TabBarView(
                 children: [
+                  _buildUserSearchResults(),  // Swapped order
                   _buildVideoSearchResults(),
-                  _buildUserSearchResults(),
                 ],
               ),
             ),
@@ -313,8 +315,121 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 
   Widget _buildUserSearchResults() {
-    // Implement user search results
-    return const Center(child: Text('User results'));
+    if (_searchQuery == null || _searchQuery!.isEmpty) {
+      return Center(
+        child: Text(
+          'Enter a name to search for users',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
+
+    print('\n--- Search Debug Info ---');
+    print('Search query: $_searchQuery');
+    print('Attempting to fetch users...');
+
+    // Let's just get ALL users first and filter client-side to debug
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          print('Error fetching users: ${snapshot.error}');
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          print('Loading users...');
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        final allUsers = snapshot.data?.docs ?? [];
+        print('\nTotal users in database: ${allUsers.length}');
+        
+        // Print all users for debugging
+        allUsers.forEach((doc) {
+          final userData = doc.data() as Map<String, dynamic>;
+          print('User ${doc.id}:');
+          print('  displayName: ${userData['displayName']}');
+          print('  firstName: ${userData['firstName']}');
+          print('  lastName: ${userData['lastName']}');
+        });
+
+        // Client-side filtering
+        final filteredUsers = allUsers.where((doc) {
+          final userData = doc.data() as Map<String, dynamic>;
+          final displayName = (userData['displayName'] ?? '').toString().toLowerCase();
+          final firstName = (userData['firstName'] ?? '').toString().toLowerCase();
+          final lastName = (userData['lastName'] ?? '').toString().toLowerCase();
+          final query = _searchQuery!.toLowerCase();
+
+          return displayName.contains(query) || 
+                 firstName.contains(query) || 
+                 lastName.contains(query);
+        }).toList();
+
+        print('\nFiltered users count: ${filteredUsers.length}');
+        filteredUsers.forEach((doc) {
+          final userData = doc.data() as Map<String, dynamic>;
+          print('Matched user: ${userData['displayName']}');
+        });
+
+        if (filteredUsers.isEmpty) {
+          return Center(
+            child: Text(
+              'No users found matching "$_searchQuery"',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: filteredUsers.length,
+          itemBuilder: (context, index) {
+            final userData = filteredUsers[index].data() as Map<String, dynamic>;
+            final displayName = userData['displayName'] ?? 'Unknown User';
+            final userImage = userData['avatarUrl'] ?? '';
+
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.grey[300],
+                backgroundImage: userImage.isNotEmpty
+                    ? CachedNetworkImageProvider(userImage)
+                    : null,
+                child: userImage.isEmpty
+                    ? const Icon(Icons.person, color: Colors.white)
+                    : null,
+              ),
+              title: Text(displayName),
+              subtitle: Text('${userData['firstName']} ${userData['lastName']}'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProfileScreen(userId: filteredUsers[index].id),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildVideoGrid() {
