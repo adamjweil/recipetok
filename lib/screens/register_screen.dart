@@ -59,6 +59,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'avatarUrl': user.photoURL ?? '',
         });
 
+        // Create welcome notification
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .add({
+          'type': 'welcome',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'userId': user.uid,
+        });
+
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(
             context,
@@ -108,6 +120,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'uid': userCredential.user!.uid,
         'displayName': userCredential.user!.displayName ?? userCredential.user!.email!.split('@')[0],
         'avatarUrl': userCredential.user!.photoURL ?? '',
+      });
+
+      // Create welcome notification
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .collection('notifications')
+          .add({
+        'type': 'welcome',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'userId': userCredential.user!.uid,
       });
 
       if (mounted) {
@@ -184,6 +208,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'uid': user.uid,
           'displayName': displayName ?? user.email?.split('@')[0] ?? 'User',
           'avatarUrl': user.photoURL ?? '',
+        });
+
+        // Create welcome notification
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .add({
+          'type': 'welcome',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'userId': user.uid,
         });
 
         if (mounted) {

@@ -265,6 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
           case AuthorizationErrorCode.notHandled:
             errorMessage = 'Sign in not handled';
             break;
+          case AuthorizationErrorCode.notInteractive:
+            errorMessage = 'Sign in requires user interaction';
+            break;
           case AuthorizationErrorCode.unknown:
             errorMessage = 'Unknown error occurred. Please check your Apple Developer account settings';
             break;

@@ -5,6 +5,7 @@ enum NotificationType {
   like,
   comment,
   poke,
+  welcome,
 }
 
 class AppNotification {
@@ -45,7 +46,7 @@ class AppNotification {
       id: id,
       userId: map['userId'] ?? '',
       type: NotificationType.values.firstWhere(
-        (e) => e.toString() == map['type'],
+        (e) => e.toString().split('.').last == map['type'],
         orElse: () => NotificationType.follow,
       ),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
@@ -66,6 +67,8 @@ class AppNotification {
         return 'commented on your post';
       case NotificationType.poke:
         return 'poked you';
+      case NotificationType.welcome:
+        return 'Welcome to Munchster! Start by sharing your first recipe 🎉';
     }
   }
 } 

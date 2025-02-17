@@ -138,6 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _firstNameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -160,6 +161,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _lastNameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
