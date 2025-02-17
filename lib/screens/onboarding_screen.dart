@@ -25,6 +25,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _gender != null;
 
   Future<void> _selectDate(BuildContext context) async {
+    // Remove focus from any text field
+    FocusScope.of(context).unfocus();
+    
     await showCupertinoModalPopup(
       context: context,
       builder: (BuildContext context) {
@@ -41,11 +44,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     CupertinoButton(
                       child: const Text('Cancel'),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        FocusScope.of(context).unfocus();
+                      },
                     ),
                     CupertinoButton(
                       child: const Text('OK'),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        FocusScope.of(context).unfocus();
+                      },
                     ),
                   ],
                 ),
@@ -76,6 +85,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     try {
+      // Ensure keyboard is dismissed
+      FocusScope.of(context).unfocus();
+      
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No user found');
 
@@ -93,6 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       });
 
       if (mounted) {
+        // Add a small delay to ensure keyboard is fully dismissed
+        await Future.delayed(const Duration(milliseconds: 100));
+        
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
