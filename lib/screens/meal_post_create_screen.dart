@@ -13,6 +13,9 @@ import '../models/meal_post.dart';
 import '../widgets/foodie_filters.dart';
 import '../widgets/media_preview.dart';
 import '../widgets/step_progress_indicator.dart';
+import '../widgets/ai_analysis_loading.dart';
+import '../widgets/ai_suggestion_field.dart';
+import '../services/ai_service.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class MealPostCreateScreen extends StatefulWidget {
@@ -32,14 +35,20 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   final _caloriesController = TextEditingController();
   final _proteinController = TextEditingController();
   final _expandableController = ExpandableController();
+  final _aiService = AIService();
   
   List<File> _selectedPhotos = [];
+  List<File> _originalPhotos = []; // Store original photos before editing
   MealType _selectedMealType = MealType.snack;
   bool _isPublic = true;
   bool _isVegetarian = false;
   bool _isLoading = false;
+  bool _isAnalyzing = false;
   int _currentStep = 0;
   static const int MAX_PHOTOS = 10;
+
+  // Store AI confidence levels
+  Map<String, double> _confidenceLevels = {};
 
   @override
   void initState() {
@@ -58,6 +67,65 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     _proteinController.dispose();
     _expandableController.dispose();
     super.dispose();
+  }
+
+  Future<void> _analyzePhotos() async {
+    if (_originalPhotos.isEmpty) return;
+
+    setState(() => _isAnalyzing = true);
+
+    try {
+      final suggestions = await _aiService.analyzeFoodImages(_originalPhotos);
+      
+      if (suggestions.isNotEmpty) {
+        setState(() {
+          // Update form fields with AI suggestions
+          if (suggestions['title'] != null) {
+            _titleController.text = suggestions['title'];
+          }
+          if (suggestions['description'] != null) {
+            _descriptionController.text = suggestions['description'];
+          }
+          if (suggestions['ingredients'] != null) {
+            _ingredientsController.text = suggestions['ingredients'];
+          }
+          if (suggestions['instructions'] != null) {
+            _instructionsController.text = suggestions['instructions'];
+          }
+          if (suggestions['cookTime'] != null) {
+            _cookTimeController.text = suggestions['cookTime'].toString();
+          }
+          if (suggestions['calories'] != null) {
+            _caloriesController.text = suggestions['calories'].toString();
+          }
+          if (suggestions['protein'] != null) {
+            _proteinController.text = suggestions['protein'].toString();
+          }
+          if (suggestions['mealType'] != null) {
+            _selectedMealType = suggestions['mealType'];
+          }
+          if (suggestions['isVegetarian'] != null) {
+            _isVegetarian = suggestions['isVegetarian'];
+          }
+
+          // Update confidence levels
+          _confidenceLevels = Map<String, double>.from(suggestions['confidence'] ?? {});
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error analyzing photos: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+      }
+    }
   }
 
   Future<void> _showMediaPicker() async {
@@ -125,11 +193,15 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
       if (photo == null) return;
 
+      // Store original photo
+      final originalFile = File(photo.path);
+      setState(() => _originalPhotos.add(originalFile));
+
       final Uint8List? editedImage = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ImageEditor(
-            image: File(photo.path).readAsBytesSync(),
+            image: originalFile.readAsBytesSync(),
           ),
         ),
       );
@@ -140,10 +212,13 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         final tempFile = File('${tempDir.path}/edited_${DateTime.now().millisecondsSinceEpoch}.jpg');
         await tempFile.writeAsBytes(editedImage);
         
-        setState(() {
-          _selectedPhotos.add(tempFile);
-        });
+        setState(() => _selectedPhotos.add(tempFile));
         HapticFeedback.lightImpact();
+
+        // Analyze photos if this is the first one
+        if (_selectedPhotos.length == 1) {
+          await _analyzePhotos();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -169,11 +244,15 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       for (var image in images) {
         if (_selectedPhotos.length >= MAX_PHOTOS) break;
         
+        // Store original photo
+        final originalFile = File(image.path);
+        setState(() => _originalPhotos.add(originalFile));
+
         final Uint8List? editedImage = await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ImageEditor(
-              image: File(image.path).readAsBytesSync(),
+              image: originalFile.readAsBytesSync(),
             ),
           ),
         );
@@ -184,11 +263,14 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           final tempFile = File('${tempDir.path}/edited_${DateTime.now().millisecondsSinceEpoch}.jpg');
           await tempFile.writeAsBytes(editedImage);
           
-          setState(() {
-            _selectedPhotos.add(tempFile);
-          });
+          setState(() => _selectedPhotos.add(tempFile));
           HapticFeedback.lightImpact();
         }
+      }
+
+      // Analyze photos if we have new ones
+      if (_selectedPhotos.isNotEmpty) {
+        await _analyzePhotos();
       }
     } catch (e) {
       if (mounted) {
@@ -353,34 +435,52 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextFormField(
-            controller: _titleController,
-            decoration: InputDecoration(
-              labelText: 'Meal Title',
-              hintText: 'Classic Homemade Lasagna',
-              prefixIcon: const Icon(Icons.restaurant_menu),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          AISuggestionField(
+            confidence: _confidenceLevels['title'] ?? 0,
+            onReset: () {
+              setState(() {
+                _titleController.clear();
+                _confidenceLevels['title'] = 0;
+              });
+            },
+            child: TextFormField(
+              controller: _titleController,
+              decoration: InputDecoration(
+                labelText: 'Meal Title',
+                hintText: 'Classic Homemade Lasagna',
+                prefixIcon: const Icon(Icons.restaurant_menu),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
-              filled: true,
-              fillColor: Colors.grey[50],
+              validator: (value) => value?.isEmpty ?? true
+                  ? 'Please enter a title'
+                  : null,
             ),
-            validator: (value) => value?.isEmpty ?? true
-                ? 'Please enter a title'
-                : null,
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            controller: _descriptionController,
-            maxLines: 3,
-            decoration: InputDecoration(
-              labelText: 'Description',
-              hintText: 'Share the story behind this dish...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+          AISuggestionField(
+            confidence: _confidenceLevels['description'] ?? 0,
+            onReset: () {
+              setState(() {
+                _descriptionController.clear();
+                _confidenceLevels['description'] = 0;
+              });
+            },
+            child: TextFormField(
+              controller: _descriptionController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Description',
+                hintText: 'Share the story behind this dish...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.grey[50],
               ),
-              filled: true,
-              fillColor: Colors.grey[50],
             ),
           ),
         ],
@@ -419,39 +519,54 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Ingredients Section
-            TextFormField(
-              controller: _ingredientsController,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: 'Ingredients',
-                hintText: '- 2 cups flour\n- 1 cup sugar\n- 3 eggs',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            AISuggestionField(
+              confidence: _confidenceLevels['ingredients'] ?? 0,
+              onReset: () {
+                setState(() {
+                  _ingredientsController.clear();
+                  _confidenceLevels['ingredients'] = 0;
+                });
+              },
+              child: TextFormField(
+                controller: _ingredientsController,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText: 'Ingredients',
+                  hintText: '- 2 cups flour\n- 1 cup sugar\n- 3 eggs',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[50],
                 ),
-                filled: true,
-                fillColor: Colors.grey[50],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Instructions Section
-            TextFormField(
-              controller: _instructionsController,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: 'Instructions',
-                hintText: '1. Preheat oven\n2. Mix ingredients\n3. Bake for 30 minutes',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            AISuggestionField(
+              confidence: _confidenceLevels['instructions'] ?? 0,
+              onReset: () {
+                setState(() {
+                  _instructionsController.clear();
+                  _confidenceLevels['instructions'] = 0;
+                });
+              },
+              child: TextFormField(
+                controller: _instructionsController,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  labelText: 'Instructions',
+                  hintText: '1. Preheat oven\n2. Mix ingredients\n3. Bake for 30 minutes',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[50],
                 ),
-                filled: true,
-                fillColor: Colors.grey[50],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Nutritional Info Section
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -473,35 +588,62 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: TextFormField(
-                          controller: _cookTimeController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Cook Time (min)',
-                            prefixIcon: Icon(Icons.timer),
+                        child: AISuggestionField(
+                          confidence: _confidenceLevels['cookTime'] ?? 0,
+                          onReset: () {
+                            setState(() {
+                              _cookTimeController.clear();
+                              _confidenceLevels['cookTime'] = 0;
+                            });
+                          },
+                          child: TextFormField(
+                            controller: _cookTimeController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Cook Time (min)',
+                              prefixIcon: Icon(Icons.timer),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: TextFormField(
-                          controller: _caloriesController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Calories',
-                            prefixIcon: Icon(Icons.local_fire_department),
+                        child: AISuggestionField(
+                          confidence: _confidenceLevels['calories'] ?? 0,
+                          onReset: () {
+                            setState(() {
+                              _caloriesController.clear();
+                              _confidenceLevels['calories'] = 0;
+                            });
+                          },
+                          child: TextFormField(
+                            controller: _caloriesController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Calories',
+                              prefixIcon: Icon(Icons.local_fire_department),
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _proteinController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Protein (g)',
-                      prefixIcon: Icon(Icons.fitness_center),
+                  AISuggestionField(
+                    confidence: _confidenceLevels['protein'] ?? 0,
+                    onReset: () {
+                      setState(() {
+                        _proteinController.clear();
+                        _confidenceLevels['protein'] = 0;
+                      });
+                    },
+                    child: TextFormField(
+                      controller: _proteinController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Protein (g)',
+                        prefixIcon: Icon(Icons.fitness_center),
+                      ),
                     ),
                   ),
                 ],
@@ -563,12 +705,36 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
 
-      // Get user data
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final userData = userDoc.data() ?? {};
+      // Get user data with better error handling
+      String userName = 'Anonymous';
+      String? userAvatarUrl = 'assets/images/default_avatar.png';
+
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+            
+        if (userDoc.exists) {
+          final userData = userDoc.data() ?? {};
+          userName = userData['displayName'] ?? currentUser.displayName ?? 'Anonymous';
+          userAvatarUrl = userData['avatarUrl'] ?? userAvatarUrl;
+        } else {
+          // If user document doesn't exist, create it with default values
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .set({
+                'displayName': currentUser.displayName ?? 'Anonymous',
+                'email': currentUser.email,
+                'avatarUrl': userAvatarUrl,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+        }
+      } catch (e) {
+        debugPrint('Error fetching user data: $e');
+        // Continue with default values if user data fetch fails
+      }
 
       // Upload photos with progress tracking
       final List<String> photoUrls = [];
@@ -606,11 +772,12 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       // Calculate carbon saved
       final carbonSaved = _isVegetarian ? 1.2 : 0.0;
 
-      // Create meal post
+      // Create meal post with verified user data
       final mealPost = MealPost(
         id: '',
         userId: currentUser.uid,
-        userName: userData['displayName'] ?? 'Anonymous',
+        userName: userName,
+        userAvatarUrl: userAvatarUrl,
         title: _titleController.text,
         photoUrls: photoUrls,
         mealType: _selectedMealType,
@@ -621,7 +788,6 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         carbonSaved: carbonSaved,
         isPublic: _isPublic,
         createdAt: DateTime.now(),
-        userAvatarUrl: userData['avatarUrl'],
         caption: '',
         description: _descriptionController.text,
         ingredients: _ingredientsController.text,
@@ -700,43 +866,97 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       appBar: AppBar(
         title: const Text('Create Recipe'),
         elevation: 0,
-        actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.check),
-            label: const Text('Share'),
-            onPressed: _isLoading ? null : _createPost,
+      ),
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                StepProgressIndicator(
+                  currentStep: _currentStep,
+                  totalSteps: 4,
+                  onStepTapped: (step) {
+                    setState(() => _currentStep = step);
+                    HapticFeedback.lightImpact();
+                  },
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      _buildMediaSection(),
+                      _buildMealTypeSelector(),
+                      _buildRequiredFields(),
+                      _buildOptionalFields(),
+                      _buildToggleSection(),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.close),
+                                label: const Text('Discard'),
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Discard Recipe?'),
+                                      content: const Text(
+                                        'Are you sure you want to discard this recipe? All your progress will be lost.'
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context); // Close dialog
+                                            Navigator.pop(context); // Close create screen
+                                          },
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.red,
+                                          ),
+                                          child: const Text('Discard'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.check),
+                                label: const Text('Share Recipe'),
+                                onPressed: _isLoading ? null : _createPost,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (_isAnalyzing)
+            const AIAnalysisLoading(),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  StepProgressIndicator(
-                    currentStep: _currentStep,
-                    totalSteps: 4,
-                    onStepTapped: (step) {
-                      setState(() => _currentStep = step);
-                      HapticFeedback.lightImpact();
-                    },
-                  ),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        _buildMediaSection(),
-                        _buildMealTypeSelector(),
-                        _buildRequiredFields(),
-                        _buildOptionalFields(),
-                        _buildToggleSection(),
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
     );
   }
 }

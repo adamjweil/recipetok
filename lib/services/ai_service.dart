@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
+import '../models/meal_post.dart';
+import './google_vision_service.dart';
 
 class VideoInfo {
   final Duration duration;
@@ -52,6 +54,7 @@ class AIService {
   static final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
   static const String _baseUrl = 'https://api.openai.com/v1';
   static const int _maxFileSizeBytes = 25 * 1024 * 1024; // 25MB
+  final GoogleVisionService _visionService = GoogleVisionService();
 
   Future<VideoInfo> getVideoInfo(File videoFile) async {
     final MediaInfo? mediaInfo = await VideoCompress.getMediaInfo(videoFile.path);
@@ -221,6 +224,30 @@ Do not include any markdown formatting, code blocks, or additional text. Return 
         'calories': 0,
         'cookTimeMinutes': 30,
       };
+    }
+  }
+
+  Future<Map<String, dynamic>> analyzeFoodImages(List<File> images) async {
+    try {
+      return await _visionService.analyzeFoodImage(images);
+    } catch (e) {
+      debugPrint('Error in analyzeFoodImages: $e');
+      return {};
+    }
+  }
+
+  MealType _parseMealType(String? type) {
+    if (type == null) return MealType.snack;
+    
+    switch (type.toLowerCase()) {
+      case 'breakfast':
+        return MealType.breakfast;
+      case 'lunch':
+        return MealType.lunch;
+      case 'dinner':
+        return MealType.dinner;
+      default:
+        return MealType.snack;
     }
   }
 } 

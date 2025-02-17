@@ -101,11 +101,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // Create display name from first and last name
+      final firstName = _firstNameController.text.trim();
+      final lastName = _lastNameController.text.trim();
+      final displayName = '$firstName $lastName'.trim();
+
       // Update Firestore user data
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
         'bio': _bioController.text,
-        'firstName': _firstNameController.text,
-        'lastName': _lastNameController.text,
+        'firstName': firstName,
+        'lastName': lastName,
+        'displayName': displayName,
         'gender': _gender,
         'birthDate': _birthDate?.toIso8601String(),
       });

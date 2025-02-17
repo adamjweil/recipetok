@@ -79,9 +79,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No user found');
 
+      // Create display name from first and last name
+      final firstName = _firstNameController.text.trim();
+      final lastName = _lastNameController.text.trim();
+      final displayName = '$firstName $lastName'.trim();
+
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'firstName': _firstNameController.text,
-        'lastName': _lastNameController.text,
+        'firstName': firstName,
+        'lastName': lastName,
+        'displayName': displayName,
         'birthDate': _birthDate?.toIso8601String(),
         'gender': _gender,
       });

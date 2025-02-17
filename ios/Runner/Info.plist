@@ -71,5 +71,15 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>The microphone is used to record your voice-over instructions while creating recipe videos. This audio will be combined with your video to create complete cooking tutorials that can be shared with other users.</string>
+	<key>GIDClientID</key>
+	<string>${CLIENT_ID from GoogleService-Info.plist}</string>
+	<key>CFBundleURLSchemes</key>
+	<array>
+		<string>${REVERSED_CLIENT_ID from GoogleService-Info.plist}</string>
+	</array>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
 </dict>
 </plist>
