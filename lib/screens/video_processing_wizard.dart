@@ -11,10 +11,12 @@ import 'package:video_compress/video_compress.dart';
 
 class VideoProcessingWizard extends StatefulWidget {
   final VideoDraft draft;
+  final String videoId;
 
   const VideoProcessingWizard({
     super.key,
     required this.draft,
+    required this.videoId,
   });
 
   @override
@@ -193,9 +195,7 @@ class _VideoProcessingWizardState extends State<VideoProcessingWizard> {
       });
       debugPrint('💾 Saving recipe data to Firestore...');
 
-      await FirebaseFirestore.instance.collection('videos').add({
-        'userId': _currentDraft.userId,
-        'videoUrl': videoUrl,
+      await FirebaseFirestore.instance.collection('videos').doc(widget.videoId).update({
         'thumbnailUrl': thumbnailUrl,
         'title': _currentDraft.title,
         'description': _currentDraft.description,
@@ -203,10 +203,6 @@ class _VideoProcessingWizardState extends State<VideoProcessingWizard> {
         'instructions': _currentDraft.instructions,
         'calories': _currentDraft.calories,
         'cookTimeMinutes': _currentDraft.cookTimeMinutes,
-        'createdAt': FieldValue.serverTimestamp(),
-        'likes': [],
-        'comments': [],
-        'views': 0,
         'isPublic': true,
       });
 

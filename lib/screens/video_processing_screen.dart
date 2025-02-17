@@ -228,6 +228,7 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
           MaterialPageRoute(
             builder: (context) => VideoProcessingWizard(
               draft: draft,
+              videoId: videoDoc.id,
             ),
           ),
         );
@@ -242,10 +243,6 @@ class _VideoProcessingScreenState extends State<VideoProcessingScreen>
         }
       }
       await VideoCompress.deleteAllCache();
-
-      if (mounted) {
-        Navigator.of(context).pop(videoDoc.id);
-      }
     } catch (e) {
       if (_isDisposed) return;
       
