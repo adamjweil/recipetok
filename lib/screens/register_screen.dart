@@ -398,11 +398,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
-                    child: SignInWithAppleButton(
-                      onPressed: _isLoading 
-                        ? () {} // Empty function when loading
-                        : () => _signInWithApple(),
-                      style: SignInWithAppleButtonStyle.black,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _signInWithApple,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.grey[300]!),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      icon: const Icon(Icons.apple, size: 24),
+                      label: const Text('Continue with Apple'),
                     ),
                   ),
                 ],

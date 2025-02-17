@@ -80,7 +80,7 @@ class _FoodPreferencesScreenState extends State<FoodPreferencesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'What types of food get you excited?',
+                'What are your favorite types of food?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       fontSize: 32,

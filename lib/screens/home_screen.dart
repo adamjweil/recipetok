@@ -29,43 +29,30 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   VideoCardState? _currentlyPlayingVideo;
   List<QueryDocumentSnapshot>? _cachedVideos;
   final Map<String, GlobalKey<VideoCardState>> _videoKeys = {};
-
-  // Add this to maintain state when switching tabs
-  @override
-  bool get wantKeepAlive => true;
-
-  // Add a posts cache
   final Map<String, MealPost> _postsCache = {};
-
   static const int _postsPerBatch = 10;
   DocumentSnapshot? _lastDocument;
   bool _hasMorePosts = true;
   bool _isLoadingMore = false;
-
-  // Add these new declarations
   final ScrollController _scrollController = ScrollController();
   List<String> followingUsers = [];
-
-  // Add this near the top of the _HomeScreenState class
   final Map<String, bool> _followedUsers = {};
   final Map<String, double> _countdownValues = {};
   final Map<String, DateTime> _countdownStartTimes = {};
-
-  // Add this field at the top of the class with other declarations
   final Set<String> _usersToFollow = {};
-
-  // Add this field at the top of the class with other declarations
   DateTime? _firstCountdownStartTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
     _initializeFollowingUsers();
     
-    // Add scroll listener for pagination
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= 
-          _scrollController.position.maxScrollExtent * 0.8 && // Load when 80% scrolled
+          _scrollController.position.maxScrollExtent * 0.8 && 
           !_isLoadingMore &&
           _hasMorePosts) {
         _loadMorePosts();
@@ -77,17 +64,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     });
   }
 
-  // Add this method to initialize following users
   Future<void> _initializeFollowingUsers() async {
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(currentUserId)
         .get();
     
-    setState(() {
-      followingUsers = List<String>.from(userDoc.data()?['following'] ?? []);
-      followingUsers.add(currentUserId); // Include user's own posts
-    });
+    if (mounted) {
+      setState(() {
+        followingUsers = List<String>.from(userDoc.data()?['following'] ?? []);
+        followingUsers.add(currentUserId); // Include user's own posts
+      });
+    }
   }
 
   // Add this method to play the first video
@@ -218,26 +206,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       appBar: AppBar(
         title: const Text('Activity Feed'),
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, size: 20),
-            onPressed: () async {
-              try {
-                await GoogleSignIn().signOut();
-                await FirebaseAuth.instance.signOut();
-                if (mounted) {
-                  Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error signing out: $e')),
-                  );
-                }
-              }
-            },
-          ),
-        ],
       ),
       body: StreamBuilder<List<String>>(
         stream: _getFollowingUsers(),
@@ -255,7 +223,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           // If user isn't following anyone, show recommendations
           if (followingUsers.length <= 1) {  // <= 1 because it includes the user themselves
             return SingleChildScrollView(
-              child: _buildRecommendedUsers(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: _buildRecommendedUsers(),
+              ),
             );
           }
 
@@ -468,32 +439,46 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              // Welcome text with even longer fade-in animation
+              // Welcome text with animation
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 2500), // Increased from 2000
+                duration: const Duration(milliseconds: 2500),
                 builder: (context, value, child) {
                   return Opacity(
                     opacity: value,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Expanded(
-                            child: Text(
-                              'Welcome to Munchster!',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const Text(
-                            ' 👋',
-                            style: TextStyle(
-                              fontSize: 28,
+                            child: StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(currentUserId)
+                                  .snapshots(),
+                              builder: (context, userSnapshot) {
+                                if (userSnapshot.hasData) {
+                                  final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
+                                  final firstName = userData['firstName'] as String? ?? 'there';
+                                  return Text(
+                                    'Welcome, $firstName! 👋',
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  );
+                                }
+                                return const Text(
+                                  'Welcome! 👋',
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -584,6 +569,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         final recommendedUsers = snapshot.data!;
 
         return Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
@@ -591,12 +577,31 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome to Munchster! 👋',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(currentUserId)
+                        .snapshots(),
+                    builder: (context, userSnapshot) {
+                      if (userSnapshot.hasData) {
+                        final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
+                        final firstName = userData['firstName'] as String? ?? 'there';
+                        return Text(
+                          'Welcome, $firstName! 👋',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      }
+                      return const Text(
+                        'Welcome! 👋',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -612,6 +617,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: recommendedUsers.length,
               itemBuilder: (context, index) {
                 final recommendation = recommendedUsers[index];
@@ -621,15 +627,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 final matchingPreferences = recommendation['matchingPreferences'] as int;
 
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // User info section with gradient background
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -641,42 +646,41 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             ],
                           ),
                           borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16),
+                            top: Radius.circular(12),
                           ),
                         ),
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
-                            // Avatar with border
                             Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: Theme.of(context).primaryColor.withOpacity(0.2),
-                                  width: 3,
+                                  width: 2,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
+                                    blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
                               child: CircleAvatar(
-                                radius: 45,
+                                radius: 32,
                                 backgroundColor: Colors.white,
                                 backgroundImage: userData['avatarUrl'] != null
                                     ? NetworkImage(userData['avatarUrl'])
                                     : null,
                                 child: userData['avatarUrl'] == null
                                     ? Icon(Icons.person, 
-                                        size: 40, 
+                                        size: 32, 
                                         color: Theme.of(context).primaryColor)
                                     : null,
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -690,18 +694,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                             Text(
                                               userData['displayName'] ?? 'Unknown',
                                               style: const TextStyle(
-                                                fontSize: 18,
+                                                fontSize: 16,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                             if (userData['bio'] != null) ...[
-                                              const SizedBox(height: 4),
+                                              const SizedBox(height: 2),
                                               Text(
                                                 userData['bio'],
                                                 style: TextStyle(
                                                   color: Colors.grey[600],
-                                                  fontSize: 13,
-                                                  height: 1.3,
+                                                  fontSize: 12,
+                                                  height: 1.2,
                                                 ),
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
@@ -714,44 +718,46 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                       _buildFollowButton(userData['uid']),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  // Stats row with dividers
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        _buildStat(stats['posts'].toString(), 'posts'),
-                                        Container(
-                                          height: 24,
-                                          width: 1,
-                                          color: Colors.grey[300],
-                                        ),
-                                        _buildStat(
-                                          stats['avgLikes'].toStringAsFixed(1),
-                                          'avg likes',
-                                        ),
-                                        Container(
-                                          height: 24,
-                                          width: 1,
-                                          color: Colors.grey[300],
-                                        ),
-                                        _buildStat(
-                                          stats['avgComments'].toStringAsFixed(1),
-                                          'avg comments',
-                                        ),
-                                      ],
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: MediaQuery.of(context).size.width * 0.5, // Reduce to 70% of previous width
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(6),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.03),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          _buildStat(stats['posts'].toString(), 'posts'),
+                                          Container(
+                                            height: 16,
+                                            width: 1,
+                                            color: Colors.grey[300],
+                                          ),
+                                          _buildStat(
+                                            stats['avgLikes'].toStringAsFixed(1),
+                                            'avg likes',
+                                          ),
+                                          Container(
+                                            height: 16,
+                                            width: 1,
+                                            color: Colors.grey[300],
+                                          ),
+                                          _buildStat(
+                                            stats['avgComments'].toStringAsFixed(1),
+                                            'avg comments',
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -760,19 +766,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           ],
                         ),
                       ),
-                      // Recent posts preview with improved layout
                       if (recentPosts.isNotEmpty)
                         Container(
-                          height: 120,
-                          padding: const EdgeInsets.all(12),
+                          height: 100,
+                          padding: const EdgeInsets.all(8),
                           child: Row(
                             children: recentPosts.map((post) {
                               final postData = post.data() as Map<String, dynamic>;
                               return Expanded(
                                 child: Container(
-                                  margin: const EdgeInsets.only(right: 8),
+                                  margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.black.withOpacity(0.1),
@@ -782,7 +787,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                     ],
                                   ),
                                   child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(8),
                                     child: Image.network(
                                       postData['photoUrls'][0],
                                       fit: BoxFit.cover,
@@ -793,17 +798,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             }).toList(),
                           ),
                         ),
-                      // Recommendation reason with improved design
                       Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
+                            horizontal: 12,
+                            vertical: 8,
                           ),
                           decoration: BoxDecoration(
                             color: Theme.of(context).primaryColor.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: Theme.of(context).primaryColor.withOpacity(0.1),
                               width: 1,
@@ -814,16 +818,16 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               Icon(
                                 Icons.recommend,
                                 color: Theme.of(context).primaryColor,
-                                size: 20,
+                                size: 16,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'Matches ${matchingPreferences} of your food preferences and posts regularly with high engagement',
                                   style: TextStyle(
                                     color: Colors.grey[800],
-                                    fontSize: 13,
-                                    height: 1.4,
+                                    fontSize: 12,
+                                    height: 1.3,
                                   ),
                                 ),
                               ),
@@ -843,32 +847,34 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   }
 
   Widget _buildStat(String value, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            letterSpacing: 0.5,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              letterSpacing: 0.3,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.3,
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // Update the _followUser method
   Future<void> _followUser(String userId) async {
     try {
       setState(() {
@@ -894,7 +900,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  // Update the button section in the recommendation card
   Widget _buildFollowButton(String userId) {
     if (_followedUsers[userId] == true) {
       final startTime = _countdownStartTimes[userId] ?? DateTime.now();
@@ -906,13 +911,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         duration: Duration(seconds: initialValue.toInt()),
         onEnd: () async {
           try {
-            // Only execute the batch follow operation if this is the first timer to complete
             if (_countdownStartTimes[userId] == _firstCountdownStartTime) {
               final batch = FirebaseFirestore.instance.batch();
 
-              // Add all users to follow in a single batch
               for (final userToFollow in _usersToFollow) {
-                // Update current user's following array
                 batch.update(
                   FirebaseFirestore.instance.collection('users').doc(currentUserId),
                   {
@@ -920,7 +922,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   }
                 );
 
-                // Update each target user's followers array
                 batch.update(
                   FirebaseFirestore.instance.collection('users').doc(userToFollow),
                   {
@@ -933,7 +934,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               
               if (mounted) {
                 setState(() {
-                  // Clear all follow states
                   for (final userToFollow in _usersToFollow) {
                     _followedUsers[userToFollow] = false;
                     _countdownValues.remove(userToFollow);
@@ -943,32 +943,25 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   _firstCountdownStartTime = null;
                 });
 
-                // Refresh the following list
                 await _initializeFollowingUsers();
               }
             } else {
-              // For other timers, just update the UI state
               if (mounted) {
                 setState(() {
                   _followedUsers[userId] = false;
                   _countdownValues.remove(userId);
                   _countdownStartTimes.remove(userId);
+                  _usersToFollow.remove(userId);
+                  
+                  if (_countdownStartTimes.isEmpty) {
+                    _firstCountdownStartTime = null;
+                  }
                 });
               }
             }
           } catch (e) {
             debugPrint('Error following users after countdown: $e');
             if (mounted) {
-              setState(() {
-                _followedUsers[userId] = false;
-                _countdownValues.remove(userId);
-                _countdownStartTimes.remove(userId);
-                _usersToFollow.remove(userId);
-                
-                if (_countdownStartTimes.isEmpty) {
-                  _firstCountdownStartTime = null;
-                }
-              });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Error following users: $e')),
               );
@@ -1260,13 +1253,12 @@ class _CommentsSheetState extends State<CommentsSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          // Enhanced Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(

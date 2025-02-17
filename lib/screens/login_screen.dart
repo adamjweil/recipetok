@@ -455,11 +455,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (defaultTargetPlatform == TargetPlatform.iOS)
                   SizedBox(
                     width: double.infinity,
-                    child: SignInWithAppleButton(
-                      onPressed: _isLoading 
-                        ? () {} // Empty function when loading
-                        : () => _signInWithApple(),
-                      style: SignInWithAppleButtonStyle.black,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _signInWithApple,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: Theme.of(context).primaryColor),
+                      ),
+                      icon: const Icon(Icons.apple, size: 24),
+                      label: const Text('Continue with Apple'),
                     ),
                   ),
                 const SizedBox(height: 24),
