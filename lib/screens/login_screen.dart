@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -138,6 +143,137 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to initiate Google sign in')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  }
+
+  String _sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // First check if Apple Sign In is available
+      final isAvailable = await SignInWithApple.isAvailable();
+      if (!isAvailable) {
+        throw Exception('Apple Sign In is not available on this device');
+      }
+
+      // Generate nonce
+      final rawNonce = _generateNonce();
+      final nonce = _sha256ofString(rawNonce);
+
+      print('Requesting Apple credential...'); // Debug print
+
+      // Request credential for the sign in
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+
+      print('Apple credential received: ${appleCredential.identityToken != null}'); // Debug print
+
+      if (appleCredential.identityToken == null) {
+        throw Exception('No Identity Token received from Apple');
+      }
+
+      // Create OAuthCredential
+      final oauthCredential = OAuthProvider("apple.com").credential(
+        idToken: appleCredential.identityToken,
+        rawNonce: rawNonce,
+      );
+
+      print('Signing in to Firebase...'); // Debug print
+
+      // Sign in with Firebase
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(oauthCredential);
+      final user = userCredential.user;
+
+      if (user != null) {
+        print('Firebase sign in successful. Checking Firestore...'); // Debug print
+
+        // Check if user exists in Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          print('Creating new user document in Firestore...'); // Debug print
+          
+          // Create new user document if it doesn't exist
+          String? displayName;
+          if (appleCredential.givenName != null && appleCredential.familyName != null) {
+            displayName = '${appleCredential.givenName} ${appleCredential.familyName}';
+          }
+
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'username': displayName?.toLowerCase().replaceAll(' ', '_') ?? 'user_${user.uid.substring(0, 5)}',
+            'displayName': displayName ?? 'User',
+            'email': user.email,
+            'avatarUrl': user.photoURL,
+            'createdAt': FieldValue.serverTimestamp(),
+            'followers': [],
+            'following': [],
+            'videoCount': 0,
+          });
+        }
+
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/main');
+        }
+      }
+    } catch (e, stackTrace) {
+      print('Error during Apple sign in: $e'); // Debug print
+      print('Stack trace: $stackTrace'); // Debug print
+      
+      String errorMessage = 'Failed to sign in with Apple';
+      
+      if (e is SignInWithAppleAuthorizationException) {
+        switch (e.code) {
+          case AuthorizationErrorCode.canceled:
+            errorMessage = 'Sign in was canceled';
+            break;
+          case AuthorizationErrorCode.failed:
+            errorMessage = 'Sign in failed: ${e.message}';
+            break;
+          case AuthorizationErrorCode.invalidResponse:
+            errorMessage = 'Invalid response received';
+            break;
+          case AuthorizationErrorCode.notHandled:
+            errorMessage = 'Sign in not handled';
+            break;
+          case AuthorizationErrorCode.unknown:
+            errorMessage = 'Unknown error occurred. Please check your Apple Developer account settings';
+            break;
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
         );
       }
     } finally {
@@ -312,6 +448,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: const Text('Continue with Google'),
                   ),
                 ),
+                const SizedBox(height: 16),
+                if (defaultTargetPlatform == TargetPlatform.iOS)
+                  SizedBox(
+                    width: double.infinity,
+                    child: SignInWithAppleButton(
+                      onPressed: _isLoading 
+                        ? () {} // Empty function when loading
+                        : () => _signInWithApple(),
+                      style: SignInWithAppleButtonStyle.black,
+                    ),
+                  ),
                 const SizedBox(height: 24),
                 Center(
                   child: TextButton(

@@ -140,7 +140,7 @@ class MealPost {
       'photoUrls': photoUrls,
       'ingredients': ingredients,
       'instructions': instructions,
-      'mealType': mealType.toString(),
+      'mealType': mealType.toString().split('.').last,
       'cookTime': cookTime,
       'calories': calories,
       'protein': protein,
