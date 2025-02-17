@@ -20,7 +20,7 @@ class NotificationDropdown extends StatelessWidget {
         final unreadCount = snapshot.data?.where((n) => !n.isRead).length ?? 0;
 
         return PopupMenuButton<void>(
-          offset: const Offset(0, 56),
+          offset: const Offset(0, 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           position: PopupMenuPosition.under,
           icon: Stack(
@@ -152,6 +152,10 @@ class NotificationDropdown extends StatelessWidget {
       case NotificationType.poke:
         iconData = Icons.back_hand;
         color = Colors.orange;
+        break;
+      case NotificationType.welcome:
+        iconData = Icons.celebration;
+        color = Colors.purple;
         break;
     }
 
