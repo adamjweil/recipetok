@@ -4,12 +4,16 @@ class AISuggestionField extends StatelessWidget {
   final Widget child;
   final double confidence;
   final VoidCallback? onReset;
+  final bool isPunGenerator;
+  final VoidCallback? onGeneratePun;
 
   const AISuggestionField({
     super.key,
     required this.child,
     required this.confidence,
     this.onReset,
+    this.isPunGenerator = false,
+    this.onGeneratePun,
   });
 
   @override
@@ -17,14 +21,14 @@ class AISuggestionField extends StatelessWidget {
     return Stack(
       children: [
         child,
-        if (confidence > 0)
+        if (confidence > 0 || isPunGenerator)
           Positioned(
             top: 0,
             right: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: _getConfidenceColor(confidence),
+                color: isPunGenerator ? Colors.purple.withOpacity(0.9) : _getConfidenceColor(confidence),
                 borderRadius: const BorderRadius.only(
                   topRight: Radius.circular(12),
                   bottomLeft: Radius.circular(12),
@@ -34,27 +38,27 @@ class AISuggestionField extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.auto_awesome,
+                    isPunGenerator ? Icons.auto_fix_high : Icons.auto_awesome,
                     size: 14,
-                    color: confidence > 0.7 ? Colors.white : Colors.black87,
+                    color: Colors.white,
                   ),
                   const SizedBox(width: 4),
-                  Text(
+                  if (!isPunGenerator) Text(
                     '${(confidence * 100).round()}%',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: confidence > 0.7 ? Colors.white : Colors.black87,
+                      color: Colors.white,
                     ),
                   ),
-                  if (onReset != null) ...[
+                  if (isPunGenerator || onReset != null) ...[
                     const SizedBox(width: 4),
                     GestureDetector(
-                      onTap: onReset,
+                      onTap: isPunGenerator ? onGeneratePun : onReset,
                       child: Icon(
-                        Icons.refresh,
+                        isPunGenerator ? Icons.casino : Icons.refresh,
                         size: 14,
-                        color: confidence > 0.7 ? Colors.white : Colors.black87,
+                        color: Colors.white,
                       ),
                     ),
                   ],

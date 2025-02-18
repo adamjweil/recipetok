@@ -80,10 +80,25 @@ class GoogleVisionService {
   Map<String, dynamic> _processVisionResults(List<vision.AnnotateImageResponse> responses) {
     final Set<String> foodItems = {};
     final Set<String> ingredients = {};
+    final Set<String> detectedIngredients = {};
     bool isVegetarian = true;
+    String? dishType;
+    String? dishName;
     
     // Common non-vegetarian ingredients to check for
     final nonVegKeywords = {'meat', 'chicken', 'beef', 'pork', 'fish', 'seafood'};
+
+    // Food category keywords to help identify dish types
+    final foodCategories = {
+      'salad': ['salad', 'lettuce', 'greens', 'vegetable dish'],
+      'pasta': ['pasta', 'noodle', 'spaghetti', 'macaroni'],
+      'sandwich': ['sandwich', 'burger', 'sub', 'wrap'],
+      'soup': ['soup', 'stew', 'broth', 'chowder'],
+      'dessert': ['cake', 'pie', 'ice cream', 'dessert', 'sweet'],
+      'breakfast': ['eggs', 'pancake', 'waffle', 'breakfast', 'toast'],
+      'protein': ['chicken', 'beef', 'fish', 'meat', 'steak', 'salmon'],
+      'appetizer': ['appetizer', 'snack', 'finger food', 'starter'],
+    };
 
     for (var response in responses) {
       // Process label annotations
@@ -93,10 +108,20 @@ class GoogleVisionService {
           final confidence = label.score ?? 0.0;
 
           if (confidence > 0.7) {
+            // Check for food items and categorize them
             if (description.contains('food') || 
                 description.contains('dish') || 
-                description.contains('meal')) {
+                description.contains('meal') ||
+                description.contains('cuisine')) {
               foodItems.add(label.description ?? '');
+            }
+
+            // Identify dish type based on categories
+            for (var category in foodCategories.entries) {
+              if (category.value.any((keyword) => description.contains(keyword))) {
+                dishType = category.key;
+                break;
+              }
             }
 
             // Check for non-vegetarian ingredients
@@ -104,21 +129,47 @@ class GoogleVisionService {
               isVegetarian = false;
             }
 
-            // Add as potential ingredient
-            ingredients.add(label.description ?? '');
+            // Add as potential ingredient if it's a food item
+            if (!description.contains('food') && 
+                !description.contains('dish') && 
+                !description.contains('meal') &&
+                !description.contains('cuisine')) {
+              ingredients.add(label.description ?? '');
+              detectedIngredients.add(label.description ?? '');
+            }
+          }
+        }
+      }
+
+      // Process object annotations for more specific food items
+      if (response.localizedObjectAnnotations != null) {
+        for (var object in response.localizedObjectAnnotations!) {
+          final name = object.name?.toLowerCase() ?? '';
+          final confidence = object.score ?? 0.0;
+
+          if (confidence > 0.7 && (
+              name.contains('food') || 
+              foodCategories.values.any((keywords) => keywords.any((k) => name.contains(k))))) {
+            detectedIngredients.add(object.name ?? '');
+            if (dishName == null) {
+              dishName = object.name;
+            }
           }
         }
       }
     }
 
-    // Determine meal type based on detected items
-    final mealType = _determineMealType(foodItems);
+    // Determine the most specific dish name from detected items
+    if (dishName == null && foodItems.isNotEmpty) {
+      dishName = foodItems.first;
+    }
 
     return {
-      'title': _generateTitle(foodItems),
-      'description': _generateDescription(foodItems),
-      'mealType': mealType,
+      'foodItems': foodItems.toList(),
+      'detectedIngredients': detectedIngredients.toList(),
       'ingredients': ingredients.join('\n'),
+      'dishType': dishType,
+      'dishName': dishName,
       'isVegetarian': isVegetarian,
       'confidence': {
         'title': 0.8,
