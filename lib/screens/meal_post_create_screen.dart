@@ -4,7 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_editor_plus/image_editor_plus.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:expandable/expandable.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:io';
@@ -50,6 +50,194 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   // Store AI confidence levels
   Map<String, double> _confidenceLevels = {};
 
+  // Add these new variables
+  final List<String> _foodPuns = [
+    // Monday puns
+    "Manic Mondae Sundae 🍨",
+    "Monday Blues-berry Pie 🫐",
+    "Mondaze Glazed Donuts 🍩",
+    // Tuesday puns
+    "Taco Boozeday 🌮",
+    "Two's Day Double Decker 🥪",
+    "Total Tueslay Parfait 🍮",
+    // Wednesday puns
+    "Wok This Way Wednesday 🥢",
+    "Wings-day Buffalo Special 🍗",
+    "What The Fork Wednesday 🍴",
+    // Thursday puns
+    "Thirstday Smoothie 🥤",
+    "Thicc Thursday Milkshake 🥛",
+    "Thunder Thighs Thursday 🍗",
+    // Friday puns
+    "Fry-day Feast 🍟",
+    "Feast Mode Friday 🍽️",
+    "Fork Yeah Friday 🔥",
+    // Saturday puns
+    "Slay-turday Snacks ✨",
+    "Sauce Boss Saturday 💫",
+    "Snack That Saturday 💅",
+    // Sunday puns
+    "Sun-dae Funday 🍦",
+    "Slay & Filet Sunday 🔪",
+    "Sweet & Savage Sunday 😈"
+  ];
+
+  String _generateFoodPun() {
+    final dayOfWeek = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
+    final startIndex = (dayOfWeek - 1) * 3; // Each day has 3 puns
+    final endIndex = startIndex + 3;
+    final dayPuns = _foodPuns.sublist(startIndex, endIndex);
+    return dayPuns[DateTime.now().millisecond % 3]; // Random selection based on current millisecond
+  }
+
+  // Replace the static food puns with a dynamic title generator
+  String _generateDynamicTitle(Map<String, dynamic> suggestions) {
+    // Debug what we're getting from the AI
+    debugPrint('🔍 AI Suggestions for title: ${suggestions.toString()}');
+    
+    // Get all the food-related information
+    final List<String> detectedIngredients = 
+        List<String>.from(suggestions['detectedIngredients'] ?? []);
+    final List<String> foodItems = 
+        List<String>.from(suggestions['foodItems'] ?? []);
+    final String? dishType = suggestions['dishType'] as String?;
+    final String? dishName = suggestions['dishName'] as String?;
+    
+    debugPrint('🥗 Detected Ingredients: $detectedIngredients');
+    debugPrint('🍽️ Food Items: $foodItems');
+    debugPrint('🍴 Dish Type: $dishType');
+    debugPrint('📝 Dish Name: $dishName');
+
+    // If we have no food information at all, return a generic title
+    if (detectedIngredients.isEmpty && foodItems.isEmpty && 
+        dishType == null && dishName == null) {
+      return 'Tasty Creation ✨';
+    }
+
+    // Determine the main subject for the title
+    String mainSubject = '';
+    if (dishName != null && dishName.isNotEmpty) {
+      mainSubject = dishName.toLowerCase();
+    } else if (dishType != null && dishType.isNotEmpty) {
+      mainSubject = dishType.toLowerCase();
+    } else if (detectedIngredients.isNotEmpty) {
+      mainSubject = detectedIngredients[0].toLowerCase();
+    } else if (foodItems.isNotEmpty) {
+      mainSubject = foodItems[0].toLowerCase();
+    }
+
+    // Get just one additional ingredient for more specific titles
+    String? additionalIngredient = detectedIngredients
+        .where((i) => i.toLowerCase() != mainSubject.toLowerCase())
+        .firstOrNull;
+
+    // Get the day of week for temporal puns
+    final dayOfWeek = DateTime.now().weekday;
+    final dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final currentDay = dayNames[dayOfWeek];
+
+    // Templates based on dish types
+    final templates = {
+      // Salads and Vegetables
+      RegExp(r'salad|lettuce|vegetable|greens'): [
+        "Green Goddess $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥗",
+        "That Fresh $mainSubject Energy${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🌱",
+        "Living My Best $mainSubject Life${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+      ],
+      // Proteins
+      RegExp(r'chicken|beef|fish|salmon|tuna|shrimp|meat|steak'): [
+        "Epic $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 💪",
+        "Main Character $mainSubject Moment${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🔥",
+        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} ⚡",
+      ],
+      // Pasta and Noodles
+      RegExp(r'pasta|noodle|spaghetti|ramen'): [
+        "Pasta La Vista: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🍝",
+        "Noodle Goals: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍜",
+        "Slurp & Serve: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🌟",
+      ],
+      // Sandwiches and Burgers
+      RegExp(r'sandwich|burger|wrap'): [
+        "Stack Attack: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥪",
+        "Between Bread Heaven: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍔",
+        "Sandwich Slay: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+      ],
+      // Soups and Stews
+      RegExp(r'soup|stew|broth'): [
+        "Soup-er Star: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥣",
+        "Cozy Bowl of $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍲",
+        "Liquid Gold: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+      ],
+      // Breakfast
+      RegExp(r'breakfast|egg|pancake|waffle|toast'): [
+        "Rise & Shine: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🌅",
+        "Breakfast of Champions: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍳",
+        "Morning Magic: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ⭐",
+      ],
+    };
+
+    // Find matching category for the main subject
+    String title = '';
+    for (var category in templates.entries) {
+      if (category.key.hasMatch(mainSubject)) {
+        final options = category.value;
+        title = options[DateTime.now().millisecond % options.length];
+        break;
+      }
+    }
+
+    // If no specific category matched, use generic templates
+    if (title.isEmpty) {
+      final genericTemplates = [
+        "$currentDay $mainSubject Magic${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+        "Serving $mainSubject Realness${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💅",
+        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🔥",
+        "$mainSubject But Make It Fashion${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💫",
+      ];
+      title = genericTemplates[DateTime.now().millisecond % genericTemplates.length];
+    }
+
+    return title.substring(0, 1).toUpperCase() + title.substring(1);
+  }
+
+  // Add this new method for generating clever descriptions
+  String _generateCleverDescription(Map<String, dynamic> suggestions) {
+    final detectedIngredients = suggestions['detectedIngredients'] as List<String>? ?? [];
+    if (detectedIngredients.isEmpty) {
+      return suggestions['description'] ?? '';
+    }
+
+    // Join ingredients with proper grammar
+    String ingredientsList = '';
+    if (detectedIngredients.length == 1) {
+      ingredientsList = detectedIngredients[0];
+    } else if (detectedIngredients.length == 2) {
+      ingredientsList = '${detectedIngredients[0]} and ${detectedIngredients[1]}';
+    } else {
+      final lastIngredient = detectedIngredients.last;
+      final otherIngredients = detectedIngredients.sublist(0, detectedIngredients.length - 1);
+      ingredientsList = '${otherIngredients.join(', ')}, and $lastIngredient';
+    }
+
+    // List of clever templates
+    final templates = [
+      "Dancing on your taste buds: a symphony of $ingredientsList 🎵",
+      "Warning: This combo of $ingredientsList might cause extreme happiness 🚀",
+      "Living my best life with $ingredientsList ✨",
+      "Plot twist: $ingredientsList just became besties on this plate 🤝",
+      "When $ingredientsList had a party and everyone showed up 🎉",
+      "Caught in the act: $ingredientsList being absolutely delicious 📸",
+      "Breaking news: $ingredientsList just broke the internet 🌟",
+      "The collab we didn't know we needed: $ingredientsList 🔥",
+      "Main character energy: $ingredientsList stealing the show ⭐",
+      "POV: You're about to devour $ingredientsList like nobody's watching 👀",
+    ];
+
+    // Select a random template
+    final randomIndex = DateTime.now().millisecond % templates.length;
+    return templates[randomIndex];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,16 +264,19 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
     try {
       final suggestions = await _aiService.analyzeFoodImages(_originalPhotos);
+      debugPrint('📸 AI Analysis Results: ${suggestions.toString()}');
       
       if (suggestions.isNotEmpty) {
         setState(() {
-          // Update form fields with AI suggestions
-          if (suggestions['title'] != null) {
-            _titleController.text = suggestions['title'];
-          }
-          if (suggestions['description'] != null) {
-            _descriptionController.text = suggestions['description'];
-          }
+          // Generate dynamic title based on detected ingredients
+          _titleController.text = _generateDynamicTitle(suggestions);
+          _confidenceLevels['title'] = 1.0;
+
+          // Generate clever description based on detected ingredients
+          _descriptionController.text = _generateCleverDescription(suggestions);
+          _confidenceLevels['description'] = 1.0;
+
+          // Update other form fields with AI suggestions
           if (suggestions['ingredients'] != null) {
             _ingredientsController.text = suggestions['ingredients'];
           }
@@ -108,8 +299,11 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
             _isVegetarian = suggestions['isVegetarian'];
           }
 
-          // Update confidence levels
+          // Update confidence levels for other fields
           _confidenceLevels = Map<String, double>.from(suggestions['confidence'] ?? {});
+          // Ensure title and description confidence stay at 100%
+          _confidenceLevels['title'] = 1.0;
+          _confidenceLevels['description'] = 1.0;
         });
       }
     } catch (e) {
@@ -197,22 +391,32 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       final originalFile = File(photo.path);
       setState(() => _originalPhotos.add(originalFile));
 
-      final Uint8List? editedImage = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ImageEditor(
-            image: originalFile.readAsBytesSync(),
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: originalFile.path,
+        aspectRatioPresets: [
+          CropAspectRatioPreset.square,
+          CropAspectRatioPreset.ratio3x2,
+          CropAspectRatioPreset.original,
+          CropAspectRatioPreset.ratio4x3,
+          CropAspectRatioPreset.ratio16x9
+        ],
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Edit Photo',
+            toolbarColor: Theme.of(context).primaryColor,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
           ),
-        ),
+          IOSUiSettings(
+            title: 'Edit Photo',
+            aspectRatioLockEnabled: false,
+          ),
+        ],
       );
 
-      if (editedImage != null && mounted) {
-        // Create a temporary file to store the edited image
-        final tempDir = await Directory.systemTemp.createTemp();
-        final tempFile = File('${tempDir.path}/edited_${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await tempFile.writeAsBytes(editedImage);
-        
-        setState(() => _selectedPhotos.add(tempFile));
+      if (croppedFile != null && mounted) {
+        setState(() => _selectedPhotos.add(File(croppedFile.path)));
         HapticFeedback.lightImpact();
 
         // Analyze photos if this is the first one
@@ -248,22 +452,32 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         final originalFile = File(image.path);
         setState(() => _originalPhotos.add(originalFile));
 
-        final Uint8List? editedImage = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ImageEditor(
-              image: originalFile.readAsBytesSync(),
+        final croppedFile = await ImageCropper().cropImage(
+          sourcePath: originalFile.path,
+          aspectRatioPresets: [
+            CropAspectRatioPreset.square,
+            CropAspectRatioPreset.ratio3x2,
+            CropAspectRatioPreset.original,
+            CropAspectRatioPreset.ratio4x3,
+            CropAspectRatioPreset.ratio16x9
+          ],
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Edit Photo',
+              toolbarColor: Theme.of(context).primaryColor,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.original,
+              lockAspectRatio: false,
             ),
-          ),
+            IOSUiSettings(
+              title: 'Edit Photo',
+              aspectRatioLockEnabled: false,
+            ),
+          ],
         );
 
-        if (editedImage != null && mounted) {
-          // Create a temporary file to store the edited image
-          final tempDir = await Directory.systemTemp.createTemp();
-          final tempFile = File('${tempDir.path}/edited_${DateTime.now().millisecondsSinceEpoch}.jpg');
-          await tempFile.writeAsBytes(editedImage);
-          
-          setState(() => _selectedPhotos.add(tempFile));
+        if (croppedFile != null && mounted) {
+          setState(() => _selectedPhotos.add(File(croppedFile.path)));
           HapticFeedback.lightImpact();
         }
       }
@@ -447,7 +661,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
               controller: _titleController,
               decoration: InputDecoration(
                 labelText: 'Meal Title',
-                hintText: 'Classic Homemade Lasagna',
+                hintText: 'Your edgy title will appear here...',
                 prefixIcon: const Icon(Icons.restaurant_menu),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -864,7 +1078,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Recipe'),
+        title: const Text('Meal Post'),
         elevation: 0,
       ),
       body: Stack(

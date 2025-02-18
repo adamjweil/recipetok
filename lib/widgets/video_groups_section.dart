@@ -6,7 +6,7 @@ import '../utils/custom_cache_manager.dart';
 import './create_group_modal.dart';
 import './group_details_modal.dart';
 
-class VideoGroupsSection extends StatelessWidget {
+class VideoGroupsSection extends StatefulWidget {
   final bool showAddButton;
   final String? userId;
 
@@ -17,8 +17,86 @@ class VideoGroupsSection extends StatelessWidget {
   });
 
   @override
+  State<VideoGroupsSection> createState() => _VideoGroupsSectionState();
+}
+
+class _VideoGroupsSectionState extends State<VideoGroupsSection> {
+  bool _isExpanded = true;
+
+  void _showInfoModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.folder_special,
+                        color: Theme.of(context).primaryColor,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'About Collections',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Organize Your Recipe Videos',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create collections to categorize and easily find your favorite recipe videos. Perfect for organizing by cuisine, meal type, or cooking technique.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final String profileUserId = userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    final String profileUserId = widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
     
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -40,7 +118,7 @@ class VideoGroupsSection extends StatelessWidget {
 
         final groups = snapshot.data?.docs ?? [];
 
-        if (groups.isEmpty && !showAddButton) {
+        if (groups.isEmpty && !widget.showAddButton) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 
@@ -49,14 +127,28 @@ class VideoGroupsSection extends StatelessWidget {
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               sliver: SliverToBoxAdapter(
-                child: Text(
-                  'Collections',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                  textAlign: TextAlign.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Collections',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.help_outline,
+                        size: 18,
+                        color: Colors.grey[600],
+                      ),
+                      onPressed: () => _showInfoModal(context),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -71,14 +163,14 @@ class VideoGroupsSection extends StatelessWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    if (index == groups.length && showAddButton) {
+                    if (index == groups.length && widget.showAddButton) {
                       return _buildCreateGroupButton(context);
                     }
 
                     final group = groups[index].data() as Map<String, dynamic>;
                     return _buildGroupItem(context, group, groups[index].id);
                   },
-                  childCount: groups.length + (showAddButton ? 1 : 0),
+                  childCount: groups.length + (widget.showAddButton ? 1 : 0),
                 ),
               ),
             ),
@@ -89,14 +181,18 @@ class VideoGroupsSection extends StatelessWidget {
   }
 
   Widget _buildGroupItem(BuildContext context, Map<String, dynamic> group, String groupId) {
+    final videos = (group['videos'] as Map<String, dynamic>?) ?? {};
+    final recipes = (group['recipes'] as Map<String, dynamic>?) ?? {};
+    final totalItems = videos.length + recipes.length;
+
     return GestureDetector(
       onTap: () => _showGroupModal(context, group, groupId),
       child: Column(
         children: [
           Expanded(
             child: FractionallySizedBox(
-              widthFactor: 0.75,
-              heightFactor: 0.75,
+              widthFactor: 0.5625,
+              heightFactor: 0.5625,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -132,6 +228,13 @@ class VideoGroupsSection extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
+          Text(
+            '$totalItems items',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
         ],
       ),
     );
@@ -144,8 +247,8 @@ class VideoGroupsSection extends StatelessWidget {
         children: [
           Expanded(
             child: FractionallySizedBox(
-              widthFactor: 0.75,
-              heightFactor: 0.75,
+              widthFactor: 0.5625,
+              heightFactor: 0.5625,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
