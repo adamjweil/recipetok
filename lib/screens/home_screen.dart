@@ -14,6 +14,9 @@ import '../widgets/meal_post/meal_post_wrapper.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/rendering.dart';
 import 'dart:math';
+import '../widgets/notification_dropdown.dart';
+import './profile_screen.dart';
+import './main_navigation_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,7 +37,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   DocumentSnapshot? _lastDocument;
   bool _hasMorePosts = true;
   bool _isLoadingMore = false;
-  final ScrollController _scrollController = ScrollController();
+  final ScrollController _friendsScrollController = ScrollController();
+  final ScrollController _globalScrollController = ScrollController();
   List<String> followingUsers = [];
   final Map<String, bool> _followedUsers = {};
   final Map<String, double> _countdownValues = {};
@@ -42,20 +46,55 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   final Set<String> _usersToFollow = {};
   DateTime? _firstCountdownStartTime;
 
+  // Add new variables for feed filtering
+  bool _isGlobalFeed = false;
+  final Map<String, List<MealPost>> _feedCache = {
+    'friends': [],
+    'global': [],
+  };
+  bool _isLoadingGlobal = false;
+  bool _isLoadingFriends = false;
+  DocumentSnapshot? _lastGlobalDocument;
+  DocumentSnapshot? _lastFriendsDocument;
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    _initializeFollowingUsers();
     
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= 
-          _scrollController.position.maxScrollExtent * 0.8 && 
+    // Initialize feed cache
+    _feedCache['friends'] = [];
+    _feedCache['global'] = [];
+    
+    // Add scroll listeners for both controllers
+    _friendsScrollController.addListener(() {
+      if (_friendsScrollController.position.pixels >= 
+          _friendsScrollController.position.maxScrollExtent * 0.8 && 
           !_isLoadingMore &&
-          _hasMorePosts) {
+          _hasMorePosts && 
+          !_isGlobalFeed) {
         _loadMorePosts();
+      }
+    });
+
+    _globalScrollController.addListener(() {
+      if (_globalScrollController.position.pixels >= 
+          _globalScrollController.position.maxScrollExtent * 0.8 && 
+          !_isLoadingMore &&
+          _hasMorePosts && 
+          _isGlobalFeed) {
+        _loadMorePosts();
+      }
+    });
+    
+    // First initialize following users
+    _initializeFollowingUsers().then((_) {
+      // Then load feeds only after we have the following users list
+      if (mounted) {
+        _loadFriendsFeed();
+        _loadGlobalFeed();
       }
     });
 
@@ -196,111 +235,131 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     });
     _videoKeys.clear();
     _pageController.dispose();
-    _scrollController.dispose(); // Don't forget to dispose the controller
+    _friendsScrollController.dispose();
+    _globalScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Activity Feed'),
-        automaticallyImplyLeading: false,
-      ),
-      body: StreamBuilder<List<String>>(
-        stream: _getFollowingUsers(),
-        builder: (context, followingSnapshot) {
-          if (followingSnapshot.hasError) {
-            return Center(child: Text('Error: ${followingSnapshot.error}'));
-          }
-
-          if (!followingSnapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final followingUsers = followingSnapshot.data!;
-
-          // If user isn't following anyone, show recommendations
-          if (followingUsers.length <= 1) {  // <= 1 because it includes the user themselves
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: _buildRecommendedUsers(),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(36),
+        child: AppBar(
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFeedToggleButton(
+                      icon: Icons.group,
+                      label: 'Friends',
+                      isSelected: !_isGlobalFeed,
+                    ),
+                    _buildFeedToggleButton(
+                      icon: Icons.public,
+                      label: 'Global',
+                      isSelected: _isGlobalFeed,
+                    ),
+                  ],
+                ),
               ),
+            ],
+          ),
+          centerTitle: true,
+          actions: [
+            NotificationDropdown(),
+          ],
+          elevation: 1,
+          toolbarHeight: 36,
+        ),
+      ),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _buildFeedContent(),
+      ),
+    );
+  }
+
+  Widget _buildFeedContent() {
+    final posts = _feedCache[_isGlobalFeed ? 'global' : 'friends'] ?? [];
+    final isLoading = _isGlobalFeed ? _isLoadingGlobal : _isLoadingFriends;
+
+    if (posts.isEmpty && !isLoading) {
+      return Center(
+        key: ValueKey('empty_${_isGlobalFeed ? 'global' : 'friends'}_feed'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _isGlobalFeed ? Icons.public_off : Icons.group_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _isGlobalFeed
+                  ? 'No posts in the global feed yet'
+                  : 'No posts from friends yet',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isGlobalFeed
+                  ? 'Be the first to share something!'
+                  : 'Follow more users or create a post!',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      key: ValueKey('feed_${_isGlobalFeed ? 'global' : 'friends'}'),
+      padding: const EdgeInsets.fromLTRB(16, 5, 16, 0),
+      itemCount: posts.length + (isLoading ? 1 : 0),
+      controller: _isGlobalFeed ? _globalScrollController : _friendsScrollController,
+      addAutomaticKeepAlives: true,
+      addRepaintBoundaries: true,
+      cacheExtent: 3000.0,
+      itemBuilder: (context, index) {
+        if (index == posts.length) {
+          if (isLoading) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
             );
           }
+          return const SizedBox.shrink();
+        }
 
-          // Rest of the existing code for showing the feed
-          return StreamBuilder<QuerySnapshot>(
-            stream: _getPostsStream(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final posts = snapshot.data?.docs ?? [];
-
-              if (posts.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.restaurant_menu, 
-                        size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No meal posts yet',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Follow more users or create a post!',
-                        style: TextStyle(color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: posts.length,
-                key: const PageStorageKey('home_posts_list'),
-                addAutomaticKeepAlives: true,
-                addRepaintBoundaries: true,
-                controller: _scrollController,
-                // Increase cache extent to preload more items
-                cacheExtent: 3000.0,
-                itemBuilder: (context, index) {
-                  // Try to get post from cache first
-                  final String postId = posts[index].id;
-                  MealPost? post = _postsCache[postId];
-                  
-                  // If not in cache, create and cache it
-                  if (post == null) {
-                    post = MealPost.fromFirestore(posts[index]);
-                    _postsCache[postId] = post;
-                  }
-                  
-                  return KeyedSubtree(
-                    key: ValueKey(post.id),
-                    child: RepaintBoundary(
-                      child: MealPostWrapper(
-                        post: post,
-                        showUserInfo: true,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
+        final post = posts[index];
+        return KeyedSubtree(
+          key: ValueKey(post.id),
+          child: RepaintBoundary(
+            child: MealPostWrapper(
+              post: post,
+              showUserInfo: true,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -329,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         .where('userId', whereIn: followingUsers)
         .where('isPublic', isEqualTo: true)
         .orderBy('createdAt', descending: true)
-        .limit(50) // Increased from default to load more posts initially
+        .limit(50)
         .snapshots()
         .asyncMap((snapshot) async {
           if (snapshot.docs.isNotEmpty) {
@@ -1108,6 +1167,160 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         },
       );
     }).toList();
+  }
+
+  Future<void> _prefetchFeeds() async {
+    // Prefetch both feeds in the background
+    _loadFriendsFeed();
+    _loadGlobalFeed();
+  }
+
+  Future<void> _loadFriendsFeed() async {
+    if (_isLoadingFriends) return;
+    setState(() => _isLoadingFriends = true);
+
+    try {
+      final query = _lastFriendsDocument == null
+          ? _firestore
+              .collection('meal_posts')
+              .where('userId', whereIn: followingUsers)
+              .where('isPublic', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .limit(_postsPerBatch)
+          : _firestore
+              .collection('meal_posts')
+              .where('userId', whereIn: followingUsers)
+              .where('isPublic', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .startAfterDocument(_lastFriendsDocument!)
+              .limit(_postsPerBatch);
+
+      final snapshot = await query.get();
+      if (snapshot.docs.isNotEmpty) {
+        _lastFriendsDocument = snapshot.docs.last;
+        final posts = snapshot.docs.map((doc) => MealPost.fromFirestore(doc)).toList();
+        _feedCache['friends']?.addAll(posts);
+        
+        // Prefetch images with URL validation
+        for (var post in posts) {
+          if (post.userAvatarUrl != null && 
+              post.userAvatarUrl!.isNotEmpty && 
+              Uri.tryParse(post.userAvatarUrl!)?.hasAbsolutePath == true) {
+            unawaited(CustomCacheManager.instance.getSingleFile(post.userAvatarUrl!));
+          }
+          for (var url in post.photoUrls) {
+            if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
+              unawaited(CustomCacheManager.instance.getSingleFile(url));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading friends feed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingFriends = false);
+    }
+  }
+
+  Future<void> _loadGlobalFeed() async {
+    if (_isLoadingGlobal) return;
+    setState(() => _isLoadingGlobal = true);
+
+    try {
+      const globalBatchSize = 20;
+
+      final query = _lastGlobalDocument == null
+          ? _firestore
+              .collection('meal_posts')
+              .where('isPublic', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .limit(globalBatchSize)
+          : _firestore
+              .collection('meal_posts')
+              .where('isPublic', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .startAfterDocument(_lastGlobalDocument!)
+              .limit(globalBatchSize);
+
+      final snapshot = await query.get();
+      if (snapshot.docs.isNotEmpty) {
+        _lastGlobalDocument = snapshot.docs.last;
+        final posts = snapshot.docs.map((doc) => MealPost.fromFirestore(doc)).toList();
+        
+        if (_lastGlobalDocument == null) {
+          _feedCache['global'] = [];
+        }
+        
+        _feedCache['global']!.addAll(posts);
+        
+        // Prefetch images with URL validation
+        for (var post in posts) {
+          if (post.userAvatarUrl != null && 
+              post.userAvatarUrl!.isNotEmpty && 
+              Uri.tryParse(post.userAvatarUrl!)?.hasAbsolutePath == true) {
+            unawaited(CustomCacheManager.instance.getSingleFile(post.userAvatarUrl!));
+          }
+          for (var url in post.photoUrls) {
+            if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
+              unawaited(CustomCacheManager.instance.getSingleFile(url));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading global feed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingGlobal = false);
+    }
+  }
+
+  void _toggleFeedType() {
+    setState(() {
+      _isGlobalFeed = !_isGlobalFeed;
+      // Load more posts if needed
+      if (_isGlobalFeed && (_feedCache['global'] == null || _feedCache['global']!.isEmpty)) {
+        _loadGlobalFeed();
+      } else if (!_isGlobalFeed && (_feedCache['friends'] == null || _feedCache['friends']!.isEmpty)) {
+        _loadFriendsFeed();
+      }
+    });
+  }
+
+  Widget _buildFeedToggleButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: _toggleFeedType,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Theme.of(context).primaryColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : Colors.grey[600],
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? Colors.white : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
