@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:expandable/expandable.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../models/meal_post.dart';
@@ -17,6 +19,7 @@ import '../widgets/ai_analysis_loading.dart';
 import '../widgets/ai_suggestion_field.dart';
 import '../services/ai_service.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import '../services/vision_service.dart';
 
 class MealPostCreateScreen extends StatefulWidget {
   const MealPostCreateScreen({super.key});
@@ -83,131 +86,19 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   ];
 
   String _generateFoodPun() {
-    final dayOfWeek = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
-    final startIndex = (dayOfWeek - 1) * 3; // Each day has 3 puns
+    final dayOfWeek = DateTime.now().weekday;
+    final startIndex = (dayOfWeek - 1) * 3;
     final endIndex = startIndex + 3;
     final dayPuns = _foodPuns.sublist(startIndex, endIndex);
-    return dayPuns[DateTime.now().millisecond % 3]; // Random selection based on current millisecond
+    return dayPuns[DateTime.now().millisecond % 3];
   }
 
-  // Replace the static food puns with a dynamic title generator
-  String _generateDynamicTitle(Map<String, dynamic> suggestions) {
-    // Debug what we're getting from the AI
-    debugPrint('🔍 AI Suggestions for title: ${suggestions.toString()}');
-    
-    // Get all the food-related information
-    final List<String> detectedIngredients = 
-        List<String>.from(suggestions['detectedIngredients'] ?? []);
-    final List<String> foodItems = 
-        List<String>.from(suggestions['foodItems'] ?? []);
-    final String? dishType = suggestions['dishType'] as String?;
-    final String? dishName = suggestions['dishName'] as String?;
-    
-    debugPrint('🥗 Detected Ingredients: $detectedIngredients');
-    debugPrint('🍽️ Food Items: $foodItems');
-    debugPrint('🍴 Dish Type: $dishType');
-    debugPrint('📝 Dish Name: $dishName');
-
-    // If we have no food information at all, return a generic title
-    if (detectedIngredients.isEmpty && foodItems.isEmpty && 
-        dishType == null && dishName == null) {
-      return 'Tasty Creation ✨';
-    }
-
-    // Determine the main subject for the title
-    String mainSubject = '';
-    if (dishName != null && dishName.isNotEmpty) {
-      mainSubject = dishName.toLowerCase();
-    } else if (dishType != null && dishType.isNotEmpty) {
-      mainSubject = dishType.toLowerCase();
-    } else if (detectedIngredients.isNotEmpty) {
-      mainSubject = detectedIngredients[0].toLowerCase();
-    } else if (foodItems.isNotEmpty) {
-      mainSubject = foodItems[0].toLowerCase();
-    }
-
-    // Get just one additional ingredient for more specific titles
-    String? additionalIngredient = detectedIngredients
-        .where((i) => i.toLowerCase() != mainSubject.toLowerCase())
-        .firstOrNull;
-
-    // Get the day of week for temporal puns
-    final dayOfWeek = DateTime.now().weekday;
-    final dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    final currentDay = dayNames[dayOfWeek];
-
-    // Templates based on dish types
-    final templates = {
-      // Salads and Vegetables
-      RegExp(r'salad|lettuce|vegetable|greens'): [
-        "Green Goddess $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥗",
-        "That Fresh $mainSubject Energy${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🌱",
-        "Living My Best $mainSubject Life${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
-      ],
-      // Proteins
-      RegExp(r'chicken|beef|fish|salmon|tuna|shrimp|meat|steak'): [
-        "Epic $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 💪",
-        "Main Character $mainSubject Moment${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🔥",
-        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} ⚡",
-      ],
-      // Pasta and Noodles
-      RegExp(r'pasta|noodle|spaghetti|ramen'): [
-        "Pasta La Vista: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🍝",
-        "Noodle Goals: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍜",
-        "Slurp & Serve: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🌟",
-      ],
-      // Sandwiches and Burgers
-      RegExp(r'sandwich|burger|wrap'): [
-        "Stack Attack: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥪",
-        "Between Bread Heaven: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍔",
-        "Sandwich Slay: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
-      ],
-      // Soups and Stews
-      RegExp(r'soup|stew|broth'): [
-        "Soup-er Star: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥣",
-        "Cozy Bowl of $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍲",
-        "Liquid Gold: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
-      ],
-      // Breakfast
-      RegExp(r'breakfast|egg|pancake|waffle|toast'): [
-        "Rise & Shine: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🌅",
-        "Breakfast of Champions: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍳",
-        "Morning Magic: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} ⭐",
-      ],
-    };
-
-    // Find matching category for the main subject
-    String title = '';
-    for (var category in templates.entries) {
-      if (category.key.hasMatch(mainSubject)) {
-        final options = category.value;
-        title = options[DateTime.now().millisecond % options.length];
-        break;
-      }
-    }
-
-    // If no specific category matched, use generic templates
-    if (title.isEmpty) {
-      final genericTemplates = [
-        "$currentDay $mainSubject Magic${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
-        "Serving $mainSubject Realness${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💅",
-        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🔥",
-        "$mainSubject But Make It Fashion${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💫",
-      ];
-      title = genericTemplates[DateTime.now().millisecond % genericTemplates.length];
-    }
-
-    return title.substring(0, 1).toUpperCase() + title.substring(1);
-  }
-
-  // Add this new method for generating clever descriptions
   String _generateCleverDescription(Map<String, dynamic> suggestions) {
     final detectedIngredients = suggestions['detectedIngredients'] as List<String>? ?? [];
     if (detectedIngredients.isEmpty) {
       return suggestions['description'] ?? '';
     }
 
-    // Join ingredients with proper grammar
     String ingredientsList = '';
     if (detectedIngredients.length == 1) {
       ingredientsList = detectedIngredients[0];
@@ -219,7 +110,6 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       ingredientsList = '${otherIngredients.join(', ')}, and $lastIngredient';
     }
 
-    // List of clever templates
     final templates = [
       "Dancing on your taste buds: a symphony of $ingredientsList 🎵",
       "Warning: This combo of $ingredientsList might cause extreme happiness 🚀",
@@ -233,9 +123,81 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       "POV: You're about to devour $ingredientsList like nobody's watching 👀",
     ];
 
-    // Select a random template
-    final randomIndex = DateTime.now().millisecond % templates.length;
-    return templates[randomIndex];
+    return templates[DateTime.now().millisecond % templates.length];
+  }
+
+  String _generateDynamicTitle(Map<String, dynamic> suggestions) {
+    debugPrint('🔍 AI Suggestions for title: ${suggestions.toString()}');
+    
+    final List<String> detectedIngredients = 
+        List<String>.from(suggestions['detectedIngredients'] ?? []);
+    final List<String> foodItems = 
+        List<String>.from(suggestions['foodItems'] ?? []);
+    final String? dishType = suggestions['dishType'] as String?;
+    final String? dishName = suggestions['dishName'] as String?;
+    
+    if (detectedIngredients.isEmpty && foodItems.isEmpty && 
+        dishType == null && dishName == null) {
+      return 'Tasty Creation ✨';
+    }
+
+    String mainSubject = '';
+    if (dishName != null && dishName.isNotEmpty) {
+      mainSubject = dishName.toLowerCase();
+    } else if (dishType != null && dishType.isNotEmpty) {
+      mainSubject = dishType.toLowerCase();
+    } else if (detectedIngredients.isNotEmpty) {
+      mainSubject = detectedIngredients[0].toLowerCase();
+    } else if (foodItems.isNotEmpty) {
+      mainSubject = foodItems[0].toLowerCase();
+    }
+
+    String? additionalIngredient = detectedIngredients
+        .where((i) => i.toLowerCase() != mainSubject.toLowerCase())
+        .firstOrNull;
+
+    final dayOfWeek = DateTime.now().weekday;
+    final dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final currentDay = dayNames[dayOfWeek];
+
+    final templates = {
+      RegExp(r'salad|lettuce|vegetable|greens'): [
+        "Green Goddess $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🥗",
+        "That Fresh $mainSubject Energy${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🌱",
+        "Living My Best $mainSubject Life${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+      ],
+      RegExp(r'chicken|beef|fish|salmon|tuna|shrimp|meat|steak'): [
+        "Epic $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 💪",
+        "Main Character $mainSubject Moment${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🔥",
+        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} ⚡",
+      ],
+      RegExp(r'pasta|noodle|spaghetti|ramen'): [
+        "Pasta La Vista: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🍝",
+        "Noodle Goals: $mainSubject${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 🍜",
+        "Slurp & Serve: $mainSubject${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🌟",
+      ],
+    };
+
+    String title = '';
+    for (var category in templates.entries) {
+      if (category.key.hasMatch(mainSubject)) {
+        final options = category.value;
+        title = options[DateTime.now().millisecond % options.length];
+        break;
+      }
+    }
+
+    if (title.isEmpty) {
+      final genericTemplates = [
+        "$currentDay $mainSubject Magic${additionalIngredient != null ? ' with $additionalIngredient' : ''} ✨",
+        "Serving $mainSubject Realness${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💅",
+        "That $mainSubject Energy${additionalIngredient != null ? ' with $additionalIngredient' : ''} 🔥",
+        "$mainSubject But Make It Fashion${additionalIngredient != null ? ' (ft. $additionalIngredient)' : ''} 💫",
+      ];
+      title = genericTemplates[DateTime.now().millisecond % genericTemplates.length];
+    }
+
+    return title.substring(0, 1).toUpperCase() + title.substring(1);
   }
 
   @override
@@ -258,12 +220,12 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   }
 
   Future<void> _analyzePhotos() async {
-    if (_originalPhotos.isEmpty) return;
+    if (_selectedPhotos.isEmpty) return;
 
     setState(() => _isAnalyzing = true);
 
     try {
-      final suggestions = await _aiService.analyzeFoodImages(_originalPhotos);
+      final suggestions = await _aiService.analyzeFoodImages(_selectedPhotos);
       debugPrint('📸 AI Analysis Results: ${suggestions.toString()}');
       
       if (suggestions.isNotEmpty) {
@@ -273,7 +235,17 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           _confidenceLevels['title'] = 1.0;
 
           // Generate clever description based on detected ingredients
-          _descriptionController.text = _generateCleverDescription(suggestions);
+          final sortedEntries = suggestions['detectedIngredients']
+              .where((entry) => entry.value > 0)
+              .toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+
+          final topFiveEntries = sortedEntries.take(5).toList();
+          final topItems = topFiveEntries.map((e) => e.key).toList();
+          
+          _descriptionController.text = _generateCleverDescription({
+            'detectedIngredients': topItems,
+          });
           _confidenceLevels['description'] = 1.0;
 
           // Update other form fields with AI suggestions
@@ -322,121 +294,13 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     }
   }
 
-  Future<void> _showMediaPicker() async {
-    HapticFeedback.mediumImpact();
-    
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 200,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.camera_alt, color: Colors.blue),
-                    title: const Text('Take Photo'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _captureImage();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.photo_library, color: Colors.green),
-                    title: const Text('Choose from Gallery'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _pickImage();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _captureImage() async {
-    final ImagePicker picker = ImagePicker();
-    
-    try {
-      final XFile? photo = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 80,
-      );
-
-      if (photo == null) return;
-
-      // Store original photo
-      final originalFile = File(photo.path);
-      setState(() => _originalPhotos.add(originalFile));
-
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: originalFile.path,
-        aspectRatioPresets: [
-          CropAspectRatioPreset.square,
-          CropAspectRatioPreset.ratio3x2,
-          CropAspectRatioPreset.original,
-          CropAspectRatioPreset.ratio4x3,
-          CropAspectRatioPreset.ratio16x9
-        ],
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Edit Photo',
-            toolbarColor: Theme.of(context).primaryColor,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.original,
-            lockAspectRatio: false,
-          ),
-          IOSUiSettings(
-            title: 'Edit Photo',
-            aspectRatioLockEnabled: false,
-          ),
-        ],
-      );
-
-      if (croppedFile != null && mounted) {
-        setState(() => _selectedPhotos.add(File(croppedFile.path)));
-        HapticFeedback.lightImpact();
-
-        // Analyze photos if this is the first one
-        if (_selectedPhotos.length == 1) {
-          await _analyzePhotos();
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error capturing image: $e')),
-        );
-      }
-    }
-  }
-
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
+    final _visionService = VisionService.instance;
     
     try {
+      await _visionService.initialize();
+      
       final List<XFile> images = await picker.pickMultiImage(
         maxWidth: 1920,
         maxHeight: 1920,
@@ -450,7 +314,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         
         // Store original photo
         final originalFile = File(image.path);
-        setState(() => _originalPhotos.add(originalFile));
+        setState(() => _selectedPhotos.add(originalFile));
 
         final croppedFile = await ImageCropper().cropImage(
           sourcePath: originalFile.path,
@@ -477,7 +341,28 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         );
 
         if (croppedFile != null && mounted) {
-          setState(() => _selectedPhotos.add(File(croppedFile.path)));
+          final croppedImage = File(croppedFile.path);
+          
+          // Detect food in the image
+          final detectionResults = await _visionService.detectFood(croppedImage);
+          
+          setState(() {
+            _selectedPhotos.add(croppedImage);
+            
+            // Auto-fill description with detected items if it's empty
+            final sortedEntries = detectionResults.entries
+                .where((entry) => entry.value > 0)
+                .toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+
+            final topFiveEntries = sortedEntries.take(5).toList();
+            final topItems = topFiveEntries.map((e) => e.key).toList();
+            
+            _descriptionController.text = _generateCleverDescription({
+              'detectedIngredients': topItems,
+            });
+          });
+          
           HapticFeedback.lightImpact();
         }
       }
@@ -490,6 +375,232 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error picking images: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showMediaPicker() async {
+    HapticFeedback.mediumImpact();
+    
+    final bool isSimulator = !kIsWeb && Platform.isIOS && !Platform.isAndroid;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: isSimulator ? 150 : 200,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Only show camera option if not on simulator
+                  if (!isSimulator)
+                    ListTile(
+                      leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                      title: const Text('Take Photo'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _captureImage();
+                      },
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_library, color: Colors.green),
+                    title: const Text('Choose from Gallery'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage();
+                    },
+                  ),
+                  if (isSimulator)
+                    ListTile(
+                      leading: const Icon(Icons.image, color: Colors.orange),
+                      title: const Text('Use Sample Image'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await _loadSampleImage();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadSampleImage() async {
+    try {
+      // Load the sample image from assets
+      final byteData = await rootBundle.load('assets/images/sample_salad.jpg');
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/sample_salad.jpg');
+      await tempFile.writeAsBytes(byteData.buffer.asUint8List());
+
+      // Initialize Vision service and detect food
+      final _visionService = VisionService.instance;
+      await _visionService.initialize();
+      final detectionResults = await _visionService.detectFood(tempFile);
+
+      if (mounted) {
+        // Show preview dialog with labels
+        await showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Stack(
+                        children: [
+                          // Image
+                          Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            child: Image.file(
+                              tempFile,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          // Labels overlay
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.7),
+                                  Colors.transparent,
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.7),
+                                ],
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Detected Items:',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: () {
+                                    final sortedEntries = detectionResults.entries
+                                        .where((entry) => entry.value > 0)
+                                        .toList()
+                                        ..sort((a, b) => b.value.compareTo(a.value));
+
+                                    final topFiveEntries = sortedEntries.take(5).toList();
+                                    
+                                    return topFiveEntries.map<Widget>((e) => Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    )).toList();
+                                  }(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedPhotos.add(tempFile);
+                                _originalPhotos.add(tempFile);
+                              });
+                              Navigator.pop(context);
+                              
+                              // Auto-fill description with detected items
+                              final sortedEntries = detectionResults.entries
+                                  .where((entry) => entry.value > 0)
+                                  .toList()
+                                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                              final topFiveEntries = sortedEntries.take(5).toList();
+                              
+                              final topItems = topFiveEntries.map((e) => e.key).toList();
+                              
+                              _descriptionController.text = _generateCleverDescription({
+                                'detectedIngredients': topItems,
+                              });
+                              
+                              // Analyze the sample image for additional details
+                              _analyzePhotos();
+                            },
+                            child: const Text('Use This Image'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load sample image: $e')),
         );
       }
     }
@@ -581,6 +692,106 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         ],
       ),
     ).animate().fadeIn().slideX();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Meal Post'),
+        elevation: 0,
+      ),
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                StepProgressIndicator(
+                  currentStep: _currentStep,
+                  totalSteps: 4,
+                  onStepTapped: (step) {
+                    setState(() => _currentStep = step);
+                    HapticFeedback.lightImpact();
+                  },
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      _buildMediaSection(),
+                      _buildMealTypeSelector(),
+                      _buildRequiredFields(),
+                      _buildOptionalFields(),
+                      _buildToggleSection(),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.close),
+                                label: const Text('Discard'),
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Discard Recipe?'),
+                                      content: const Text(
+                                        'Are you sure you want to discard this recipe? All your progress will be lost.'
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context); // Close dialog
+                                            Navigator.pop(context); // Close create screen
+                                          },
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.red,
+                                          ),
+                                          child: const Text('Discard'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.check),
+                                label: const Text('Share Recipe'),
+                                onPressed: _isLoading ? null : _createPost,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isAnalyzing)
+            const AIAnalysisLoading(),
+        ],
+      ),
+    );
   }
 
   Widget _buildMealTypeSelector() {
@@ -1042,6 +1253,89 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     }
   }
 
+  Future<void> _captureImage() async {
+    final ImagePicker picker = ImagePicker();
+    final _visionService = VisionService.instance;
+    
+    try {
+      await _visionService.initialize();
+      
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 80,
+      );
+
+      if (photo == null) return;
+
+      // Store original photo
+      final originalFile = File(photo.path);
+      setState(() => _originalPhotos.add(originalFile));
+
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: originalFile.path,
+        aspectRatioPresets: [
+          CropAspectRatioPreset.square,
+          CropAspectRatioPreset.ratio3x2,
+          CropAspectRatioPreset.original,
+          CropAspectRatioPreset.ratio4x3,
+          CropAspectRatioPreset.ratio16x9
+        ],
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Edit Photo',
+            toolbarColor: Theme.of(context).primaryColor,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(
+            title: 'Edit Photo',
+            aspectRatioLockEnabled: false,
+          ),
+        ],
+      );
+
+      if (croppedFile != null && mounted) {
+        final croppedImage = File(croppedFile.path);
+        
+        // Detect food in the image
+        final detectionResults = await _visionService.detectFood(croppedImage);
+        
+        setState(() {
+          _selectedPhotos.add(croppedImage);
+          
+          // Auto-fill description with detected items if it's empty
+          final sortedEntries = detectionResults.entries
+              .where((entry) => entry.value > 0)
+              .toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+
+          final topFiveEntries = sortedEntries.take(5).toList();
+          final topItems = topFiveEntries.map((e) => e.key).toList();
+          
+          _descriptionController.text = _generateCleverDescription({
+            'detectedIngredients': topItems,
+          });
+        });
+        
+        HapticFeedback.lightImpact();
+
+        // Analyze photos if this is the first one
+        if (_selectedPhotos.length == 1) {
+          await _analyzePhotos();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error capturing image: $e')),
+        );
+      }
+    }
+  }
+
   Future<File> _compressImage(File file) async {
     try {
       final bytes = await file.readAsBytes();
@@ -1072,106 +1366,6 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       debugPrint('Error compressing image: $e');
       return file; // Return original if compression fails
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meal Post'),
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                StepProgressIndicator(
-                  currentStep: _currentStep,
-                  totalSteps: 4,
-                  onStepTapped: (step) {
-                    setState(() => _currentStep = step);
-                    HapticFeedback.lightImpact();
-                  },
-                ),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _buildMediaSection(),
-                      _buildMealTypeSelector(),
-                      _buildRequiredFields(),
-                      _buildOptionalFields(),
-                      _buildToggleSection(),
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon: const Icon(Icons.close),
-                                label: const Text('Discard'),
-                                onPressed: () {
-                                  HapticFeedback.mediumImpact();
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Discard Recipe?'),
-                                      content: const Text(
-                                        'Are you sure you want to discard this recipe? All your progress will be lost.'
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.pop(context); // Close dialog
-                                            Navigator.pop(context); // Close create screen
-                                          },
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: Colors.red,
-                                          ),
-                                          child: const Text('Discard'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.check),
-                                label: const Text('Share Recipe'),
-                                onPressed: _isLoading ? null : _createPost,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_isAnalyzing)
-            const AIAnalysisLoading(),
-        ],
-      ),
-    );
   }
 }
 
