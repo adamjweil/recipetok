@@ -235,13 +235,22 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           _confidenceLevels['title'] = 1.0;
 
           // Generate clever description based on detected ingredients
-          final sortedEntries = suggestions['detectedIngredients']
-              .where((entry) => entry.value > 0)
-              .toList()
-              ..sort((a, b) => b.value.compareTo(a.value));
+          final detectedIngredients = suggestions['detectedIngredients'];
+          List<String> topItems = [];
+          
+          if (detectedIngredients != null) {
+            if (detectedIngredients is List) {
+              topItems = List<String>.from(detectedIngredients);
+            } else if (detectedIngredients is Map) {
+              final sortedEntries = detectedIngredients.entries
+                  .where((entry) => entry.value > 0)
+                  .toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
 
-          final topFiveEntries = sortedEntries.take(5).toList();
-          final topItems = topFiveEntries.map((e) => e.key).toList();
+              final topFiveEntries = sortedEntries.take(5).toList();
+              topItems = topFiveEntries.map((e) => e.key.toString()).toList();
+            }
+          }
           
           _descriptionController.text = _generateCleverDescription({
             'detectedIngredients': topItems,
@@ -250,10 +259,10 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
           // Update other form fields with AI suggestions
           if (suggestions['ingredients'] != null) {
-            _ingredientsController.text = suggestions['ingredients'];
+            _ingredientsController.text = suggestions['ingredients'].toString();
           }
           if (suggestions['instructions'] != null) {
-            _instructionsController.text = suggestions['instructions'];
+            _instructionsController.text = suggestions['instructions'].toString();
           }
           if (suggestions['cookTime'] != null) {
             _cookTimeController.text = suggestions['cookTime'].toString();
@@ -279,6 +288,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         });
       }
     } catch (e) {
+      debugPrint('❌ Error analyzing photos: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -314,8 +324,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         
         // Store original photo
         final originalFile = File(image.path);
-        setState(() => _selectedPhotos.add(originalFile));
-
+        
         final croppedFile = await ImageCropper().cropImage(
           sourcePath: originalFile.path,
           aspectRatioPresets: [
@@ -346,24 +355,161 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           // Detect food in the image
           final detectionResults = await _visionService.detectFood(croppedImage);
           
-          setState(() {
-            _selectedPhotos.add(croppedImage);
-            
-            // Auto-fill description with detected items if it's empty
-            final sortedEntries = detectionResults.entries
-                .where((entry) => entry.value > 0)
-                .toList()
-                ..sort((a, b) => b.value.compareTo(a.value));
+          if (mounted) {
+            // Show preview dialog with labels
+            final shouldUseImage = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => Dialog(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.9,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Image
+                            Image.file(
+                              croppedImage,
+                              fit: BoxFit.contain,
+                            ),
+                            // Labels overlay with gradient background
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withOpacity(0.7),
+                                    Colors.transparent,
+                                    Colors.transparent,
+                                    Colors.black.withOpacity(0.7),
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Detected Items:',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      shadows: [
+                                        Shadow(
+                                          offset: Offset(0, 1),
+                                          blurRadius: 3.0,
+                                          color: Colors.black,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: () {
+                                      final sortedEntries = detectionResults.entries
+                                          .where((entry) => entry.value > 0)
+                                          .toList()
+                                        ..sort((a, b) => b.value.compareTo(a.value));
 
-            final topFiveEntries = sortedEntries.take(5).toList();
-            final topItems = topFiveEntries.map((e) => e.key).toList();
-            
-            _descriptionController.text = _generateCleverDescription({
-              'detectedIngredients': topItems,
-            });
-          });
-          
-          HapticFeedback.lightImpact();
+                                      final topFiveEntries = sortedEntries.take(5).toList();
+                                      
+                                      return topFiveEntries.map<Widget>((e) => Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.6),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.white.withOpacity(0.2),
+                                              width: 0.5,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              shadows: [
+                                                Shadow(
+                                                  offset: Offset(0, 1),
+                                                  blurRadius: 3.0,
+                                                  color: Colors.black,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      )).toList();
+                                    }(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context, false);
+                              },
+                              child: const Text('Skip'),
+                            ),
+                            const SizedBox(width: 16),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context, true);
+                              },
+                              child: const Text('Use This Image'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ) ?? false;
+
+            if (shouldUseImage) {
+              setState(() {
+                _selectedPhotos.add(croppedImage);
+                _originalPhotos.add(originalFile);
+                
+                // Auto-fill description with detected items
+                final sortedEntries = detectionResults.entries
+                    .where((entry) => entry.value > 0)
+                    .toList()
+                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                final topFiveEntries = sortedEntries.take(5).toList();
+                final topItems = topFiveEntries.map((e) => e.key).toList();
+                
+                _descriptionController.text = _generateCleverDescription({
+                  'detectedIngredients': topItems,
+                });
+              });
+              
+              HapticFeedback.lightImpact();
+            }
+          }
         }
       }
 
@@ -389,7 +535,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        height: isSimulator ? 150 : 200,
+        height: 250,  // Increased height to accommodate all options
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -409,16 +555,14 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Only show camera option if not on simulator
-                  if (!isSimulator)
-                    ListTile(
-                      leading: const Icon(Icons.camera_alt, color: Colors.blue),
-                      title: const Text('Take Photo'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _captureImage();
-                      },
-                    ),
+                  ListTile(
+                    leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                    title: const Text('Take Photo'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _captureImage();
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.photo_library, color: Colors.green),
                     title: const Text('Choose from Gallery'),
@@ -427,15 +571,14 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
                       _pickImage();
                     },
                   ),
-                  if (isSimulator)
-                    ListTile(
-                      leading: const Icon(Icons.image, color: Colors.orange),
-                      title: const Text('Use Sample Image'),
-                      onTap: () async {
-                        Navigator.pop(context);
-                        await _loadSampleImage();
-                      },
-                    ),
+                  ListTile(
+                    leading: const Icon(Icons.image, color: Colors.orange),
+                    title: const Text('Use Sample Image'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _loadSampleImage();
+                    },
+                  ),
                 ],
               ),
             ),
@@ -1127,14 +1270,18 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     HapticFeedback.heavyImpact();
 
     try {
+      debugPrint('🚀 Starting meal post creation...');
+      
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) throw Exception('User not logged in');
+      debugPrint('👤 Current user ID: ${currentUser.uid}');
 
       // Get user data with better error handling
       String userName = 'Anonymous';
       String? userAvatarUrl = 'assets/images/default_avatar.png';
 
       try {
+        debugPrint('📝 Fetching user data...');
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
@@ -1144,8 +1291,9 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           final userData = userDoc.data() ?? {};
           userName = userData['displayName'] ?? currentUser.displayName ?? 'Anonymous';
           userAvatarUrl = userData['avatarUrl'] ?? userAvatarUrl;
+          debugPrint('✅ User data fetched: $userName');
         } else {
-          // If user document doesn't exist, create it with default values
+          debugPrint('⚠️ User document not found, creating new one...');
           await FirebaseFirestore.instance
               .collection('users')
               .doc(currentUser.uid)
@@ -1157,14 +1305,17 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
               });
         }
       } catch (e) {
-        debugPrint('Error fetching user data: $e');
+        debugPrint('❌ Error fetching user data: $e');
         // Continue with default values if user data fetch fails
       }
 
       // Upload photos with progress tracking
+      debugPrint('📸 Starting photo upload...');
       final List<String> photoUrls = [];
       for (var i = 0; i < _selectedPhotos.length; i++) {
         final photo = _selectedPhotos[i];
+        
+        debugPrint('📤 Uploading photo ${i + 1} of ${_selectedPhotos.length}...');
         
         // Update loading state with progress
         if (mounted) {
@@ -1192,43 +1343,53 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         await ref.putFile(compressedImage, metadata);
         final url = await ref.getDownloadURL();
         photoUrls.add(url);
+        debugPrint('✅ Photo ${i + 1} uploaded successfully');
       }
 
       // Calculate carbon saved
       final carbonSaved = _isVegetarian ? 1.2 : 0.0;
 
+      debugPrint('📋 Creating meal post document...');
+      // Safely parse numeric values
+      final cookTime = int.tryParse(_cookTimeController.text.trim()) ?? 0;
+      final calories = int.tryParse(_caloriesController.text.trim()) ?? 0;
+      final protein = int.tryParse(_proteinController.text.trim()) ?? 0;
+
       // Create meal post with verified user data
       final mealPost = MealPost(
-        id: '',
+        id: '',  // This will be set by Firestore
         userId: currentUser.uid,
         userName: userName,
-        userAvatarUrl: userAvatarUrl,
-        title: _titleController.text,
+        userAvatarUrl: userAvatarUrl ?? '',  // Ensure non-null value
+        title: _titleController.text.trim(),
         photoUrls: photoUrls,
         mealType: _selectedMealType,
-        cookTime: int.tryParse(_cookTimeController.text) ?? 0,
-        calories: int.tryParse(_caloriesController.text) ?? 0,
-        protein: int.tryParse(_proteinController.text) ?? 0,
+        cookTime: cookTime,
+        calories: calories,
+        protein: protein,
         isVegetarian: _isVegetarian,
         carbonSaved: carbonSaved,
         isPublic: _isPublic,
         createdAt: DateTime.now(),
         caption: '',
-        description: _descriptionController.text,
-        ingredients: _ingredientsController.text,
-        instructions: _instructionsController.text,
+        description: _descriptionController.text.trim(),
+        ingredients: _ingredientsController.text.trim(),
+        instructions: _instructionsController.text.trim(),
         likes: 0,
         comments: 0,
         isLiked: false,
         likesCount: 0,
         commentsCount: 0,
-        likedBy: [],
+        likedBy: const [],  // Initialize as empty list
       );
 
+      debugPrint('📤 Uploading meal post to Firestore...');
       // Create the post document
-      await FirebaseFirestore.instance
+      final docRef = await FirebaseFirestore.instance
           .collection('meal_posts')
           .add(mealPost.toFirestore());
+      
+      debugPrint('✅ Meal post created successfully with ID: ${docRef.id}');
 
       if (mounted) {
         Navigator.pop(context);
@@ -1239,7 +1400,9 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error creating post: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         setState(() => _isLoading = false);
         HapticFeedback.vibrate();
@@ -1249,6 +1412,10 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -1303,28 +1470,165 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         // Detect food in the image
         final detectionResults = await _visionService.detectFood(croppedImage);
         
-        setState(() {
-          _selectedPhotos.add(croppedImage);
-          
-          // Auto-fill description with detected items if it's empty
-          final sortedEntries = detectionResults.entries
-              .where((entry) => entry.value > 0)
-              .toList()
-              ..sort((a, b) => b.value.compareTo(a.value));
+        if (mounted) {
+          // Show preview dialog with labels
+          final shouldUseImage = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => Dialog(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Image
+                          Image.file(
+                            croppedImage,
+                            fit: BoxFit.contain,
+                          ),
+                          // Labels overlay with gradient background
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.7),
+                                  Colors.transparent,
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.7),
+                                ],
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Detected Items:',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    shadows: [
+                                      Shadow(
+                                        offset: Offset(0, 1),
+                                        blurRadius: 3.0,
+                                        color: Colors.black,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: () {
+                                    final sortedEntries = detectionResults.entries
+                                        .where((entry) => entry.value > 0)
+                                        .toList()
+                                      ..sort((a, b) => b.value.compareTo(a.value));
 
-          final topFiveEntries = sortedEntries.take(5).toList();
-          final topItems = topFiveEntries.map((e) => e.key).toList();
-          
-          _descriptionController.text = _generateCleverDescription({
-            'detectedIngredients': topItems,
-          });
-        });
-        
-        HapticFeedback.lightImpact();
+                                    final topFiveEntries = sortedEntries.take(5).toList();
+                                    
+                                    return topFiveEntries.map<Widget>((e) => Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: Colors.white.withOpacity(0.2),
+                                            width: 0.5,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            shadows: [
+                                              Shadow(
+                                                offset: Offset(0, 1),
+                                                blurRadius: 3.0,
+                                                color: Colors.black,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    )).toList();
+                                  }(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context, false);
+                            },
+                            child: const Text('Retake'),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context, true);
+                            },
+                            child: const Text('Use This Image'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ) ?? false;
 
-        // Analyze photos if this is the first one
-        if (_selectedPhotos.length == 1) {
-          await _analyzePhotos();
+          if (shouldUseImage) {
+            setState(() {
+              _selectedPhotos.add(croppedImage);
+              _originalPhotos.add(originalFile);
+              
+              // Auto-fill description with detected items
+              final sortedEntries = detectionResults.entries
+                  .where((entry) => entry.value > 0)
+                  .toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+
+              final topFiveEntries = sortedEntries.take(5).toList();
+              final topItems = topFiveEntries.map((e) => e.key).toList();
+              
+              _descriptionController.text = _generateCleverDescription({
+                'detectedIngredients': topItems,
+              });
+            });
+            
+            HapticFeedback.lightImpact();
+
+            // Analyze photos if this is the first one
+            if (_selectedPhotos.length == 1) {
+              await _analyzePhotos();
+            }
+          }
         }
       }
     } catch (e) {
