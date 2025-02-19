@@ -7,6 +7,20 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 
+class FoodLabel {
+  final String text;
+  final double confidence;
+  Offset position;
+  bool isPlaced;
+
+  FoodLabel({
+    required this.text,
+    required this.confidence,
+    this.position = Offset.zero,
+    this.isPlaced = false,
+  });
+}
+
 class FoodDetectionScreen extends StatefulWidget {
   const FoodDetectionScreen({super.key});
 
@@ -18,9 +32,11 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
   final _visionService = VisionService.instance;
   final _imagePicker = ImagePicker();
   File? _selectedImage;
-  Map<String, double>? _detectionResults;
+  List<FoodLabel> _detectionResults = [];
   bool _isProcessing = false;
   String? _error;
+  FoodLabel? _selectedLabel;
+  final GlobalKey _imageKey = GlobalKey();
 
   @override
   void initState() {
@@ -62,6 +78,41 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
     }
   }
 
+  void _handleImageTap(TapDownDetails details) {
+    if (_selectedLabel == null || _selectedLabel!.isPlaced) return;
+
+    final RenderBox box = _imageKey.currentContext!.findRenderObject() as RenderBox;
+    final Offset localPosition = box.globalToLocal(details.globalPosition);
+    final Size size = box.size;
+
+    // Convert to relative coordinates (0-1)
+    final double relativeX = localPosition.dx / size.width;
+    final double relativeY = localPosition.dy / size.height;
+
+    setState(() {
+      _selectedLabel!.position = Offset(relativeX, relativeY);
+      _selectedLabel!.isPlaced = true;
+      _selectedLabel = null;
+    });
+  }
+
+  Future<void> _processDetectionResults(Map<String, double> results) async {
+    final labels = results.entries
+        .where((entry) => entry.value > 0)
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    setState(() {
+      _detectionResults = labels
+          .take(5)
+          .map((e) => FoodLabel(
+                text: e.key,
+                confidence: e.value,
+              ))
+          .toList();
+    });
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     try {
       final pickedFile = await _imagePicker.pickImage(
@@ -101,18 +152,14 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
           // After editing, analyze the image
           setState(() {
             _selectedImage = File(croppedFile.path);
-            _detectionResults = null;
+            _detectionResults = [];
             _error = null;
             _isProcessing = true;
           });
 
           try {
             final results = await _visionService.detectFood(_selectedImage!);
-            
-            setState(() {
-              _detectionResults = results;
-              _isProcessing = false;
-            });
+            await _processDetectionResults(results);
 
             if (mounted) {
               // Show preview dialog with labels
@@ -174,10 +221,10 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: () {
-                                        final sortedEntries = results.entries
-                                            .where((entry) => entry.value > 0)
+                                        final sortedEntries = _detectionResults
+                                            .where((entry) => entry.confidence > 0)
                                             .toList()
-                                          ..sort((a, b) => b.value.compareTo(a.value));
+                                          ..sort((a, b) => b.confidence.compareTo(a.confidence));
 
                                         final topFiveEntries = sortedEntries.take(5).toList();
                                         
@@ -197,7 +244,7 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
                                               ),
                                             ),
                                             child: Text(
-                                              '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
+                                              '${e.text} (${(e.confidence * 100).toStringAsFixed(1)}%)',
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 16,
@@ -229,7 +276,7 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
                                 onPressed: () {
                                   setState(() {
                                     _selectedImage = null;
-                                    _detectionResults = null;
+                                    _detectionResults = [];
                                   });
                                   Navigator.pop(context);
                                 },
@@ -276,13 +323,13 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
 
     try {
       final results = await _visionService.detectFood(_selectedImage!);
-      setState(() {
-        _detectionResults = results;
-        _isProcessing = false;
-      });
+      await _processDetectionResults(results);
     } catch (e) {
       setState(() {
         _error = 'Failed to detect food: $e';
+      });
+    } finally {
+      setState(() {
         _isProcessing = false;
       });
     }
@@ -318,99 +365,92 @@ class _FoodDetectionScreenState extends State<FoodDetectionScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Image
-                      Image.file(
-                        _selectedImage!,
-                        fit: BoxFit.cover,
-                      ),
-                      // Labels overlay with gradient background
-                      if (_detectionResults != null && _detectionResults!.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withOpacity(0.7),
-                                Colors.transparent,
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.7),
-                              ],
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Detected Items:',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [
-                                    Shadow(
-                                      offset: Offset(0, 1),
-                                      blurRadius: 3.0,
-                                      color: Colors.black,
-                                    ),
-                                  ],
+                  child: GestureDetector(
+                    onTapDown: _handleImageTap,
+                    child: Stack(
+                      key: _imageKey,
+                      fit: StackFit.expand,
+                      children: [
+                        // Image
+                        Image.file(
+                          _selectedImage!,
+                          fit: BoxFit.cover,
+                        ),
+                        // Labels
+                        if (_detectionResults.isNotEmpty)
+                          ...(_detectionResults.map((label) {
+                            if (!label.isPlaced) return const SizedBox.shrink();
+                            
+                            return Positioned(
+                              left: label.position.dx * MediaQuery.of(context).size.width,
+                              top: label.position.dy * MediaQuery.of(context).size.height,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${label.text} (${(label.confidence * 100).toStringAsFixed(1)}%)',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: () {
-                                  final sortedEntries = _detectionResults!.entries
-                                      .where((entry) => entry.value > 0)
-                                      .toList()
-                                    ..sort((a, b) => b.value.compareTo(a.value));
-
-                                  final topFiveEntries = sortedEntries.take(5).toList();
-                                  
-                                  return topFiveEntries.map<Widget>((e) => Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 4),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.6),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: Colors.white.withOpacity(0.2),
-                                          width: 0.5,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          shadows: [
-                                            Shadow(
-                                              offset: Offset(0, 1),
-                                              blurRadius: 3.0,
-                                              color: Colors.black,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  )).toList();
-                                }(),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
+                            );
+                          }).toList()),
+                      ],
+                    ),
                   ),
                 ),
               ),
+              
+              // Unplaced labels
+              if (_detectionResults.any((label) => !label.isPlaced))
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tap a label, then tap on the image to place it:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _detectionResults
+                            .where((label) => !label.isPlaced)
+                            .map((label) => ChoiceChip(
+                                  label: Text(
+                                    label.text,
+                                    style: TextStyle(
+                                      color: _selectedLabel == label
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                  selected: _selectedLabel == label,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      _selectedLabel = selected ? label : null;
+                                    });
+                                  },
+                                ))
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                ),
             ],
             
             Padding(
