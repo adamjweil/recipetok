@@ -133,6 +133,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         .map((snapshot) {
           if (!snapshot.exists) {
             debugPrint('❌ No user document found for ID: $profileUserId');
+            // Sign out and redirect to welcome screen
+            _signOutAndRedirect();
             throw Exception('User not found');
           }
           final data = snapshot.data() as Map<String, dynamic>? ?? {};
@@ -144,6 +146,25 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           // Instead of returning a missing document, we'll propagate the error
           throw error;
         });
+  }
+
+  Future<void> _signOutAndRedirect() async {
+    try {
+      await GoogleSignIn().signOut(); // Sign out of Google first if using Google Sign In
+      await FirebaseAuth.instance.signOut(); // Then sign out of Firebase
+      
+      if (mounted) {
+        // Clear navigation stack and return to welcome screen
+        Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+      }
+    } catch (e) {
+      debugPrint('Error during sign out: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error signing out: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   Widget _buildProfileStats(Map<String, dynamic> userData) {

@@ -89,6 +89,12 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
         .doc(userId)
         .get()
         .then((snapshot) {
+          if (!snapshot.exists) {
+            // Remove from cache if user doesn't exist
+            _userCache.remove(userId);
+            _userDataCache.remove(userId);
+            return snapshot;
+          }
           // Cache the user data
           _userDataCache[userId] = snapshot.data() as Map<String, dynamic>;
           return snapshot;
@@ -115,778 +121,787 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    // Try to get cached user data first
-    final cachedUserData = _userDataCache[widget.post.userId];
-    
-    return Material(
-      color: Colors.transparent,
-      child: GestureDetector(
-        onTap: _showExpandedView,
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) => setState(() => _isPressed = false),
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeInOut,
-          transform: Matrix4.identity()..scale(_isPressed ? 0.98 : 1.0),
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            color: _isPressed 
-              ? Theme.of(context).cardColor.withOpacity(0.95)
-              : Theme.of(context).cardColor,
-            elevation: _isPressed ? 1 : 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User info section (if showing)
-                if (widget.showUserInfo)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: cachedUserData != null
-                        ? _buildUserInfo(context, cachedUserData)
-                        : FutureBuilder<DocumentSnapshot>(
-                            future: _getUserData(widget.post.userId),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const UserListItemSkeleton();
-                              }
+    return FutureBuilder<DocumentSnapshot>(
+      future: _getUserData(widget.post.userId),
+      builder: (context, snapshot) {
+        // Don't show the post if the user doesn't exist
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox.shrink();
+        }
 
-                              final userData = snapshot.data!.data() as Map<String, dynamic>;
-                              return _buildUserInfo(context, userData);
-                            },
-                          ),
-                  ),
+        // Try to get cached user data first
+        final cachedUserData = _userDataCache[widget.post.userId];
+        
+        return Material(
+          color: Colors.transparent,
+          child: GestureDetector(
+            onTap: _showExpandedView,
+            onTapDown: (_) => setState(() => _isPressed = true),
+            onTapUp: (_) => setState(() => _isPressed = false),
+            onTapCancel: () => setState(() => _isPressed = false),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeInOut,
+              transform: Matrix4.identity()..scale(_isPressed ? 0.98 : 1.0),
+              child: Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                color: _isPressed 
+                  ? Theme.of(context).cardColor.withOpacity(0.95)
+                  : Theme.of(context).cardColor,
+                elevation: _isPressed ? 1 : 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // User info section (if showing)
+                    if (widget.showUserInfo)
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: cachedUserData != null
+                            ? _buildUserInfo(context, cachedUserData)
+                            : FutureBuilder<DocumentSnapshot>(
+                                future: _getUserData(widget.post.userId),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const UserListItemSkeleton();
+                                  }
 
-                // Image and Description Row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.post.photoUrls.isNotEmpty && widget.post.photoUrls.first.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Stack(
-                            children: [
-                              SizedBox(
-                                width: 120,
-                                height: 120,
-                                child: Hero(
-                                  tag: 'post_image_${widget.post.id}',
-                                  child: CustomCacheManager.buildCachedImage(
-                                    url: widget.post.photoUrls.first,
+                                  final userData = snapshot.data!.data() as Map<String, dynamic>;
+                                  return _buildUserInfo(context, userData);
+                                },
+                              ),
+                      ),
+
+                    // Image and Description Row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (widget.post.photoUrls.isNotEmpty && widget.post.photoUrls.first.isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Stack(
+                                children: [
+                                  SizedBox(
                                     width: 120,
                                     height: 120,
-                                  ),
-                                ),
-                              ),
-                              // Add camera icon
-                              if (widget.post.photoUrls.length > 1)
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Icon(
-                                      Icons.photo_library,
-                                      color: Colors.white,
-                                      size: 16,
+                                    child: Hero(
+                                      tag: 'post_image_${widget.post.id}',
+                                      child: CustomCacheManager.buildCachedImage(
+                                        url: widget.post.photoUrls.first,
+                                        width: 120,
+                                        height: 120,
+                                      ),
                                     ),
                                   ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(width: 12),
-                      // Title and Description
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.post.title,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                                  if (widget.post.photoUrls.length > 1)
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Icon(
+                                          Icons.photo_library,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            if (widget.post.description != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.post.description!,
-                                style: const TextStyle(fontSize: 13),
-                                maxLines: 6,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        ),
+                          const SizedBox(width: 12),
+                          // Title and Description
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.post.title,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (widget.post.description != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.post.description!,
+                                    style: const TextStyle(fontSize: 13),
+                                    maxLines: 6,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // Update the full-width interaction row
-                IgnorePointer(
-                  ignoring: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        // Like and Comment buttons on the left
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                    // Update the full-width interaction row
+                    IgnorePointer(
+                      ignoring: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                              child: LikeButton(
-                                postId: widget.post.id,
-                                userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                                onLikeToggle: _toggleLike,
-                              ),
+                            // Like and Comment buttons on the left
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                                  child: LikeButton(
+                                    postId: widget.post.id,
+                                    userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                                    onLikeToggle: _toggleLike,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => CommentScreen(post: widget.post),
+                                        ),
+                                      );
+                                    },
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.chat_bubble_outline,
+                                          color: Colors.grey[600],
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        StreamBuilder<QuerySnapshot>(
+                                          stream: _getCommentsStream(widget.post.id),
+                                          builder: (context, snapshot) {
+                                            final commentCount = snapshot.data?.docs.length ?? 0;
+                                            return Text(
+                                              '$commentCount',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 12,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(width: 12),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => CommentScreen(post: widget.post),
-                                    ),
+                            // Likes avatars and count
+                            Expanded(
+                              child: StreamBuilder<DocumentSnapshot>(
+                                stream: _getPostStream(widget.post.id),
+                                initialData: null,
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const SizedBox();
+                                  }
+                                  
+                                  final postData = snapshot.data!.data() as Map<String, dynamic>?;
+                                  if (postData == null) return const SizedBox();
+                                  
+                                  final likedBy = List<String>.from(postData['likedBy'] ?? []);
+                                  final totalLikes = likedBy.length;
+                                  
+                                  if (totalLikes == 0) return const SizedBox();
+
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Overlapping Avatars
+                                      if (likedBy.isNotEmpty)
+                                        ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 60),
+                                          child: SizedBox(
+                                            width: min(likedBy.take(3).length * 20.0, 60.0),
+                                            height: 24,
+                                            child: Stack(
+                                              children: likedBy.take(3).map((userId) {
+                                                final index = likedBy.indexOf(userId);
+                                                return Positioned(
+                                                  left: index * 12.0,
+                                                  child: FutureBuilder<DocumentSnapshot>(
+                                                    future: _getUserData(userId),
+                                                    builder: (context, userSnapshot) {
+                                                      if (!userSnapshot.hasData) {
+                                                        return Container(
+                                                          decoration: BoxDecoration(
+                                                            shape: BoxShape.circle,
+                                                            border: Border.all(
+                                                              color: Colors.white,
+                                                              width: 1.5,
+                                                            ),
+                                                          ),
+                                                          child: const CircleAvatar(
+                                                            radius: 9,
+                                                            backgroundColor: Colors.grey,
+                                                          ),
+                                                        );
+                                                      }
+
+                                                      final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
+                                                      return Container(
+                                                        decoration: BoxDecoration(
+                                                          shape: BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: Colors.white,
+                                                            width: 1.5,
+                                                          ),
+                                                        ),
+                                                        child: CircleAvatar(
+                                                          radius: 9,
+                                                          backgroundColor: Colors.grey[200],
+                                                          backgroundImage: (userData?['avatarUrl'] != null && 
+                                                              userData!['avatarUrl'].toString().isNotEmpty &&
+                                                              CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                                              ? CachedNetworkImageProvider(userData['avatarUrl'])
+                                                              : null,
+                                                          child: (userData?['avatarUrl'] == null || 
+                                                              userData!['avatarUrl'].toString().isEmpty ||
+                                                              !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                                              ? Icon(Icons.person, size: 11, color: Colors.grey[400])
+                                                              : null,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: totalLikes <= 2
+                                          ? FutureBuilder<List<String>>(
+                                              future: Future.wait(
+                                                likedBy.take(2).map((userId) async {
+                                                  final userDoc = await _getUserData(userId);
+                                                  final fullName = (userDoc.data() as Map<String, dynamic>?)?['displayName'] ?? 'Unknown';
+                                                  return fullName.split(' ')[0];
+                                                }),
+                                              ),
+                                              builder: (context, snapshot) {
+                                                if (!snapshot.hasData) {
+                                                  return Text(
+                                                    '$totalLikes gave props',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  );
+                                                }
+
+                                                final names = snapshot.data!;
+                                                if (names.isEmpty) {
+                                                  return const SizedBox();
+                                                } else if (names.length == 1) {
+                                                  return Text(
+                                                    '${names[0]} gave props',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  );
+                                                } else {
+                                                  return Text(
+                                                    '${names[0]} and ${names[1]} gave props',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  );
+                                                }
+                                              },
+                                            )
+                                          : Text(
+                                              '$totalLikes gave props',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey[600],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                      ),
+                                    ],
                                   );
                                 },
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.chat_bubble_outline,
-                                      color: Colors.grey[600],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    StreamBuilder<QuerySnapshot>(
-                                      stream: _getCommentsStream(widget.post.id),
-                                      builder: (context, snapshot) {
-                                        final commentCount = snapshot.data?.docs.length ?? 0;
-                                        return Text(
-                                          '$commentCount',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
-                        // Likes avatars and count
-                        Expanded(
-                          child: StreamBuilder<DocumentSnapshot>(
-                            stream: _getPostStream(widget.post.id),
-                            initialData: null,
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const SizedBox();
-                              }
-                              
-                              final postData = snapshot.data!.data() as Map<String, dynamic>?;
-                              if (postData == null) return const SizedBox();
-                              
-                              final likedBy = List<String>.from(postData['likedBy'] ?? []);
-                              final totalLikes = likedBy.length;
-                              
-                              if (totalLikes == 0) return const SizedBox();
-
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Overlapping Avatars
-                                  if (likedBy.isNotEmpty)
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(maxWidth: 60),
-                                      child: SizedBox(
-                                        width: min(likedBy.take(3).length * 20.0, 60.0),
-                                        height: 24,
-                                        child: Stack(
-                                          children: likedBy.take(3).map((userId) {
-                                            final index = likedBy.indexOf(userId);
-                                            return Positioned(
-                                              left: index * 12.0,
-                                              child: FutureBuilder<DocumentSnapshot>(
-                                                future: _getUserData(userId),
-                                                builder: (context, userSnapshot) {
-                                                  if (!userSnapshot.hasData) {
-                                                    return Container(
-                                                      decoration: BoxDecoration(
-                                                        shape: BoxShape.circle,
-                                                        border: Border.all(
-                                                          color: Colors.white,
-                                                          width: 1.5,
-                                                        ),
-                                                      ),
-                                                      child: const CircleAvatar(
-                                                        radius: 9,
-                                                        backgroundColor: Colors.grey,
-                                                      ),
-                                                    );
-                                                  }
-
-                                                  final userData = userSnapshot.data?.data() as Map<String, dynamic>?;
-                                                  return Container(
-                                                    decoration: BoxDecoration(
-                                                      shape: BoxShape.circle,
-                                                      border: Border.all(
-                                                        color: Colors.white,
-                                                        width: 1.5,
-                                                      ),
-                                                    ),
-                                                    child: CircleAvatar(
-                                                      radius: 9,
-                                                      backgroundColor: Colors.grey[200],
-                                                      backgroundImage: (userData?['avatarUrl'] != null && 
-                                                          userData!['avatarUrl'].toString().isNotEmpty &&
-                                                          CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
-                                                          ? CachedNetworkImageProvider(userData['avatarUrl'])
-                                                          : null,
-                                                      child: (userData?['avatarUrl'] == null || 
-                                                          userData!['avatarUrl'].toString().isEmpty ||
-                                                          !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
-                                                          ? Icon(Icons.person, size: 11, color: Colors.grey[400])
-                                                          : null,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                      ),
-                                    ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: totalLikes <= 2
-                                      ? FutureBuilder<List<String>>(
-                                          future: Future.wait(
-                                            likedBy.take(2).map((userId) async {
-                                              final userDoc = await _getUserData(userId);
-                                              final fullName = (userDoc.data() as Map<String, dynamic>?)?['displayName'] ?? 'Unknown';
-                                              return fullName.split(' ')[0];
-                                            }),
-                                          ),
-                                          builder: (context, snapshot) {
-                                            if (!snapshot.hasData) {
-                                              return Text(
-                                                '$totalLikes gave props',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey[600],
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              );
-                                            }
-
-                                            final names = snapshot.data!;
-                                            if (names.isEmpty) {
-                                              return const SizedBox();
-                                            } else if (names.length == 1) {
-                                              return Text(
-                                                '${names[0]} gave props',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey[600],
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              );
-                                            } else {
-                                              return Text(
-                                                '${names[0]} and ${names[1]} gave props',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey[600],
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              );
-                                            }
-                                          },
-                                        )
-                                      : Text(
-                                          '$totalLikes gave props',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey[600],
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                        // Share button
-                        IconButton(
-                          icon: Icon(
-                            Icons.share_outlined,
-                            color: Colors.grey[600],
-                            size: 18,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () {
-                            Share.share(
-                              'Check out this meal post: ${widget.post.description}',
-                              subject: 'Check out this meal post!',
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Add this after the image section to show comments when expanded
-                if (_isExpanded) ...[
-                  AnimatedBuilder(
-                    animation: _expandAnimation,
-                    builder: (context, child) {
-                      return SizeTransition(
-                        sizeFactor: _expandAnimation,
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 16),
-                            // Recipe Details Section
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    offset: const Offset(0, 2),
-                                    blurRadius: 6,
-                                  ),
-                                ],
+                            // Share button
+                            IconButton(
+                              icon: Icon(
+                                Icons.share_outlined,
+                                color: Colors.grey[600],
+                                size: 18,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Title and Share Row
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          widget.post.title,
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.share_outlined),
-                                        onPressed: () {
-                                          Share.share(
-                                            'Check out this recipe: ${widget.post.title}\n\n${widget.post.description}',
-                                            subject: widget.post.title,
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  
-                                  // Quick Stats Row
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                    children: [
-                                      _buildStatItem(
-                                        icon: Icons.timer_outlined,
-                                        value: '${widget.post.cookTime}',
-                                        label: 'minutes',
-                                      ),
-                                      Container(
-                                        height: 30,
-                                        width: 1,
-                                        color: Colors.grey[300],
-                                      ),
-                                      _buildStatItem(
-                                        icon: Icons.local_fire_department_outlined,
-                                        value: '${widget.post.calories}',
-                                        label: 'calories',
-                                      ),
-                                      Container(
-                                        height: 30,
-                                        width: 1,
-                                        color: Colors.grey[300],
-                                      ),
-                                      _buildStatItem(
-                                        icon: Icons.fitness_center_outlined,
-                                        value: '${widget.post.protein}g',
-                                        label: 'protein',
-                                      ),
-                                    ],
-                                  ),
-                                  
-                                  // Tags Row (Vegetarian, Meal Type)
-                                  if (widget.post.isVegetarian) ...[
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.green[50],
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.eco_outlined,
-                                                size: 16,
-                                                color: Colors.green[700],
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'Vegetarian',
-                                                style: TextStyle(
-                                                  color: Colors.green[700],
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).primaryColor.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                _getMealTypeIcon(widget.post.mealType),
-                                                size: 16,
-                                                color: Theme.of(context).primaryColor,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                _getMealTypeString(widget.post.mealType).toUpperCase(),
-                                                style: TextStyle(
-                                                  color: Theme.of(context).primaryColor,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                  
-                                  // Expandable Recipe Details
-                                  if ((widget.post.ingredients?.isNotEmpty ?? false) || (widget.post.instructions?.isNotEmpty ?? false)) ...[
-                                    const SizedBox(height: 16),
-                                    ExpansionTile(
-                                      title: const Text(
-                                        'Recipe Details',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      children: [
-                                        if (widget.post.ingredients?.isNotEmpty ?? false)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 16,
-                                              right: 16,
-                                              bottom: 16,
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    const Text(
-                                                      'Ingredients',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.w600,
-                                                        fontSize: 15,
-                                                      ),
-                                                    ),
-                                                    const Spacer(),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.copy_outlined, size: 20),
-                                                      onPressed: () {
-                                                        if (widget.post.ingredients != null) {
-                                                          Clipboard.setData(ClipboardData(
-                                                            text: widget.post.ingredients!,
-                                                          ));
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            const SnackBar(
-                                                              content: Text('Ingredients copied to clipboard'),
-                                                              duration: Duration(seconds: 2),
-                                                            ),
-                                                          );
-                                                        }
-                                                      },
-                                                      tooltip: 'Copy ingredients',
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  widget.post.ingredients ?? '',
-                                                  style: const TextStyle(height: 1.5),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        if (widget.post.instructions?.isNotEmpty ?? false)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 16,
-                                              right: 16,
-                                              bottom: 16,
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    const Text(
-                                                      'Instructions',
-                                                      style: TextStyle(
-                                                        fontWeight: FontWeight.w600,
-                                                        fontSize: 15,
-                                                      ),
-                                                    ),
-                                                    const Spacer(),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.copy_outlined, size: 20),
-                                                      onPressed: () {
-                                                        if (widget.post.instructions != null) {
-                                                          Clipboard.setData(ClipboardData(
-                                                            text: widget.post.instructions!,
-                                                          ));
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            const SnackBar(
-                                                              content: Text('Instructions copied to clipboard'),
-                                                              duration: Duration(seconds: 2),
-                                                            ),
-                                                          );
-                                                        }
-                                                      },
-                                                      tooltip: 'Copy instructions',
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 12),
-                                                if (widget.post.instructions != null) ...[
-                                                  ...widget.post.instructions!
-                                                      .split('\n')
-                                                      .where((step) => step.trim().isNotEmpty)
-                                                      .toList()
-                                                      .asMap()
-                                                      .entries
-                                                      .map((entry) {
-                                                    final index = entry.key;
-                                                    final step = entry.value.trim();
-                                                    return Padding(
-                                                      padding: const EdgeInsets.only(bottom: 16),
-                                                      child: Row(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Container(
-                                                            width: 24,
-                                                            height: 24,
-                                                            margin: const EdgeInsets.only(right: 12),
-                                                            decoration: BoxDecoration(
-                                                              color: Theme.of(context).primaryColor.withOpacity(0.1),
-                                                              borderRadius: BorderRadius.circular(12),
-                                                            ),
-                                                            child: Center(
-                                                              child: Text(
-                                                                '${index + 1}',
-                                                                style: TextStyle(
-                                                                  color: Theme.of(context).primaryColor,
-                                                                  fontWeight: FontWeight.bold,
-                                                                  fontSize: 12,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          Expanded(
-                                                            child: Text(
-                                                              step,
-                                                              style: const TextStyle(
-                                                                height: 1.5,
-                                                                fontSize: 14,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                  }).toList(),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Comments section
-                            StreamBuilder<QuerySnapshot>(
-                              stream: _getCommentsStream(widget.post.id),
-                              builder: (context, snapshot) {
-                                if (!snapshot.hasData) {
-                                  return const Center(child: CircularProgressIndicator());
-                                }
-
-                                final comments = snapshot.data!.docs;
-                                return Column(
-                                  children: [
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: comments.length,
-                                      itemBuilder: (context, index) {
-                                        final comment = comments[index].data() as Map<String, dynamic>;
-                                        return FutureBuilder<DocumentSnapshot>(
-                                          future: FirebaseFirestore.instance
-                                              .collection('users')
-                                              .doc(comment['userId'])
-                                              .get(),
-                                          builder: (context, userSnapshot) {
-                                            if (!userSnapshot.hasData) {
-                                              return const SizedBox();
-                                            }
-
-                                            final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                                            return Padding(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 8,
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  CircleAvatar(
-                                                    radius: 16,
-                                                    backgroundColor: Colors.grey[200],
-                                                    backgroundImage: (userData['avatarUrl'] != null && 
-                                                        userData['avatarUrl'].toString().isNotEmpty && 
-                                                        CustomCacheManager.isValidImageUrl(userData['avatarUrl'])) 
-                                                        ? CachedNetworkImageProvider(userData['avatarUrl'])
-                                                        : null,
-                                                    child: (userData['avatarUrl'] == null || 
-                                                        userData['avatarUrl'].toString().isEmpty ||
-                                                        !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
-                                                        ? Icon(Icons.person, size: 16, color: Colors.grey[400])
-                                                        : null,
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text(
-                                                          userData['displayName'] ?? 'Unknown',
-                                                          style: const TextStyle(
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 15,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 4),
-                                                        Text(
-                                                          comment['text'] ?? '',
-                                                          style: const TextStyle(fontSize: 15),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                    // Comment input field
-                                    Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: TextField(
-                                              controller: _commentController,
-                                              decoration: InputDecoration(
-                                                hintText: 'Add a comment...',
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(24),
-                                                  borderSide: BorderSide.none,
-                                                ),
-                                                filled: true,
-                                                fillColor: Colors.grey[100],
-                                                contentPadding: const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 8,
-                                                ),
-                                              ),
-                                              onSubmitted: (_) => _sendComment(),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          IconButton(
-                                            icon: const Icon(Icons.send),
-                                            color: Theme.of(context).primaryColor,
-                                            onPressed: _sendComment,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () {
+                                Share.share(
+                                  'Check out this meal post: ${widget.post.description}',
+                                  subject: 'Check out this meal post!',
                                 );
                               },
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
-                ],
-              ],
+                      ),
+                    ),
+
+                    // Add this after the image section to show comments when expanded
+                    if (_isExpanded) ...[
+                      AnimatedBuilder(
+                        animation: _expandAnimation,
+                        builder: (context, child) {
+                          return SizeTransition(
+                            sizeFactor: _expandAnimation,
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 16),
+                                // Recipe Details Section
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        offset: const Offset(0, 2),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Title and Share Row
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              widget.post.title,
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.share_outlined),
+                                            onPressed: () {
+                                              Share.share(
+                                                'Check out this recipe: ${widget.post.title}\n\n${widget.post.description}',
+                                                subject: widget.post.title,
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      
+                                      // Quick Stats Row
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                        children: [
+                                          _buildStatItem(
+                                            icon: Icons.timer_outlined,
+                                            value: '${widget.post.cookTime}',
+                                            label: 'minutes',
+                                          ),
+                                          Container(
+                                            height: 30,
+                                            width: 1,
+                                            color: Colors.grey[300],
+                                          ),
+                                          _buildStatItem(
+                                            icon: Icons.local_fire_department_outlined,
+                                            value: '${widget.post.calories}',
+                                            label: 'calories',
+                                          ),
+                                          Container(
+                                            height: 30,
+                                            width: 1,
+                                            color: Colors.grey[300],
+                                          ),
+                                          _buildStatItem(
+                                            icon: Icons.fitness_center_outlined,
+                                            value: '${widget.post.protein}g',
+                                            label: 'protein',
+                                          ),
+                                        ],
+                                      ),
+                                      
+                                      // Tags Row (Vegetarian, Meal Type)
+                                      if (widget.post.isVegetarian) ...[
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green[50],
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.eco_outlined,
+                                                    size: 16,
+                                                    color: Colors.green[700],
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Vegetarian',
+                                                    style: TextStyle(
+                                                      color: Colors.green[700],
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    _getMealTypeIcon(widget.post.mealType),
+                                                    size: 16,
+                                                    color: Theme.of(context).primaryColor,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    _getMealTypeString(widget.post.mealType).toUpperCase(),
+                                                    style: TextStyle(
+                                                      color: Theme.of(context).primaryColor,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      
+                                      // Expandable Recipe Details
+                                      if ((widget.post.ingredients?.isNotEmpty ?? false) || (widget.post.instructions?.isNotEmpty ?? false)) ...[
+                                        const SizedBox(height: 16),
+                                        ExpansionTile(
+                                          title: const Text(
+                                            'Recipe Details',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          children: [
+                                            if (widget.post.ingredients?.isNotEmpty ?? false)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 16,
+                                                  right: 16,
+                                                  bottom: 16,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        const Text(
+                                                          'Ingredients',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 15,
+                                                          ),
+                                                        ),
+                                                        const Spacer(),
+                                                        IconButton(
+                                                          icon: const Icon(Icons.copy_outlined, size: 20),
+                                                          onPressed: () {
+                                                            if (widget.post.ingredients != null) {
+                                                              Clipboard.setData(ClipboardData(
+                                                                text: widget.post.ingredients!,
+                                                              ));
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                const SnackBar(
+                                                                  content: Text('Ingredients copied to clipboard'),
+                                                                  duration: Duration(seconds: 2),
+                                                                ),
+                                                              );
+                                                            }
+                                                          },
+                                                          tooltip: 'Copy ingredients',
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    Text(
+                                                      widget.post.ingredients ?? '',
+                                                      style: const TextStyle(height: 1.5),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (widget.post.instructions?.isNotEmpty ?? false)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 16,
+                                                  right: 16,
+                                                  bottom: 16,
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        const Text(
+                                                          'Instructions',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 15,
+                                                          ),
+                                                        ),
+                                                        const Spacer(),
+                                                        IconButton(
+                                                          icon: const Icon(Icons.copy_outlined, size: 20),
+                                                          onPressed: () {
+                                                            if (widget.post.instructions != null) {
+                                                              Clipboard.setData(ClipboardData(
+                                                                text: widget.post.instructions!,
+                                                              ));
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                const SnackBar(
+                                                                  content: Text('Instructions copied to clipboard'),
+                                                                  duration: Duration(seconds: 2),
+                                                                ),
+                                                              );
+                                                            }
+                                                          },
+                                                          tooltip: 'Copy instructions',
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    if (widget.post.instructions != null) ...[
+                                                      ...widget.post.instructions!
+                                                          .split('\n')
+                                                          .where((step) => step.trim().isNotEmpty)
+                                                          .toList()
+                                                          .asMap()
+                                                          .entries
+                                                          .map((entry) {
+                                                        final index = entry.key;
+                                                        final step = entry.value.trim();
+                                                        return Padding(
+                                                          padding: const EdgeInsets.only(bottom: 16),
+                                                          child: Row(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Container(
+                                                                width: 24,
+                                                                height: 24,
+                                                                margin: const EdgeInsets.only(right: 12),
+                                                                decoration: BoxDecoration(
+                                                                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                                                  borderRadius: BorderRadius.circular(12),
+                                                                ),
+                                                                child: Center(
+                                                                  child: Text(
+                                                                    '${index + 1}',
+                                                                    style: TextStyle(
+                                                                      color: Theme.of(context).primaryColor,
+                                                                      fontWeight: FontWeight.bold,
+                                                                      fontSize: 12,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  step,
+                                                                  style: const TextStyle(
+                                                                    height: 1.5,
+                                                                    fontSize: 14,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        );
+                                                      }).toList(),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Comments section
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: _getCommentsStream(widget.post.id),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData) {
+                                      return const Center(child: CircularProgressIndicator());
+                                    }
+
+                                    final comments = snapshot.data!.docs;
+                                    return Column(
+                                      children: [
+                                        ListView.builder(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: comments.length,
+                                          itemBuilder: (context, index) {
+                                            final comment = comments[index].data() as Map<String, dynamic>;
+                                            return FutureBuilder<DocumentSnapshot>(
+                                              future: FirebaseFirestore.instance
+                                                  .collection('users')
+                                                  .doc(comment['userId'])
+                                                  .get(),
+                                              builder: (context, userSnapshot) {
+                                                if (!userSnapshot.hasData) {
+                                                  return const SizedBox();
+                                                }
+
+                                                final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                                                return Padding(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 8,
+                                                  ),
+                                                  child: Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      CircleAvatar(
+                                                        radius: 16,
+                                                        backgroundColor: Colors.grey[200],
+                                                        backgroundImage: (userData['avatarUrl'] != null && 
+                                                            userData['avatarUrl'].toString().isNotEmpty && 
+                                                            CustomCacheManager.isValidImageUrl(userData['avatarUrl'])) 
+                                                            ? CachedNetworkImageProvider(userData['avatarUrl'])
+                                                            : null,
+                                                        child: (userData['avatarUrl'] == null || 
+                                                            userData['avatarUrl'].toString().isEmpty ||
+                                                            !CustomCacheManager.isValidImageUrl(userData['avatarUrl']))
+                                                            ? Icon(Icons.person, size: 16, color: Colors.grey[400])
+                                                            : null,
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(
+                                                              userData['displayName'] ?? 'Unknown',
+                                                              style: const TextStyle(
+                                                                fontWeight: FontWeight.bold,
+                                                                fontSize: 15,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              comment['text'] ?? '',
+                                                              style: const TextStyle(fontSize: 15),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            );
+                                          },
+                                        ),
+                                        // Comment input field
+                                        Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: _commentController,
+                                                  decoration: InputDecoration(
+                                                    hintText: 'Add a comment...',
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(24),
+                                                      borderSide: BorderSide.none,
+                                                    ),
+                                                    filled: true,
+                                                    fillColor: Colors.grey[100],
+                                                    contentPadding: const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 8,
+                                                    ),
+                                                  ),
+                                                  onSubmitted: (_) => _sendComment(),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                icon: const Icon(Icons.send),
+                                                color: Theme.of(context).primaryColor,
+                                                onPressed: _sendComment,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

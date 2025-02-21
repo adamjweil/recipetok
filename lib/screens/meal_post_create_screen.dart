@@ -1255,11 +1255,24 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   }
 
   Future<void> _createPost() async {
-    if (!_formKey.currentState!.validate() || _selectedPhotos.isEmpty) {
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('❌ Form validation failed');
       HapticFeedback.vibrate();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in all required fields and add at least one photo'),
+          content: Text('Please fill in all required fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedPhotos.isEmpty) {
+      debugPrint('❌ No photos selected');
+      HapticFeedback.vibrate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one photo'),
           backgroundColor: Colors.red,
         ),
       );
@@ -1273,13 +1286,15 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       debugPrint('🚀 Starting meal post creation...');
       
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw Exception('User not logged in');
+      if (currentUser == null) {
+        throw Exception('User not logged in');
+      }
       debugPrint('👤 Current user ID: ${currentUser.uid}');
 
       // Get user data with better error handling
       String userName = 'Anonymous';
-      String? userAvatarUrl = 'assets/images/default_avatar.png';
-
+      String? userAvatarUrl;
+      
       try {
         debugPrint('📝 Fetching user data...');
         final userDoc = await FirebaseFirestore.instance
@@ -1290,7 +1305,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         if (userDoc.exists) {
           final userData = userDoc.data() ?? {};
           userName = userData['displayName'] ?? currentUser.displayName ?? 'Anonymous';
-          userAvatarUrl = userData['avatarUrl'] ?? userAvatarUrl;
+          userAvatarUrl = userData['avatarUrl'];
           debugPrint('✅ User data fetched: $userName');
         } else {
           debugPrint('⚠️ User document not found, creating new one...');
@@ -1300,7 +1315,6 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
               .set({
                 'displayName': currentUser.displayName ?? 'Anonymous',
                 'email': currentUser.email,
-                'avatarUrl': userAvatarUrl,
                 'createdAt': FieldValue.serverTimestamp(),
               });
         }
@@ -1312,38 +1326,39 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       // Upload photos with progress tracking
       debugPrint('📸 Starting photo upload...');
       final List<String> photoUrls = [];
+      
       for (var i = 0; i < _selectedPhotos.length; i++) {
         final photo = _selectedPhotos[i];
         
         debugPrint('📤 Uploading photo ${i + 1} of ${_selectedPhotos.length}...');
         
-        // Update loading state with progress
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Uploading photo ${i + 1} of ${_selectedPhotos.length}...'),
-              duration: const Duration(seconds: 1),
-            ),
+        try {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('meal_posts/${currentUser.uid}')
+              .child('${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+          
+          // Compress image before uploading
+          final compressedImage = await _compressImage(photo);
+          
+          // Upload with metadata
+          final metadata = SettableMetadata(
+            contentType: 'image/jpeg',
+            customMetadata: {'uploaded_by': currentUser.uid},
           );
+          
+          await ref.putFile(compressedImage, metadata);
+          final url = await ref.getDownloadURL();
+          photoUrls.add(url);
+          debugPrint('✅ Photo ${i + 1} uploaded successfully: $url');
+        } catch (e) {
+          debugPrint('❌ Error uploading photo ${i + 1}: $e');
+          throw Exception('Failed to upload photo ${i + 1}');
         }
+      }
 
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('meal_posts/${currentUser.uid}')
-            .child('${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
-        
-        // Compress image before uploading
-        final compressedImage = await _compressImage(photo);
-        
-        // Upload with metadata
-        final metadata = SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {'uploaded_by': currentUser.uid},
-        );
-        await ref.putFile(compressedImage, metadata);
-        final url = await ref.getDownloadURL();
-        photoUrls.add(url);
-        debugPrint('✅ Photo ${i + 1} uploaded successfully');
+      if (photoUrls.isEmpty) {
+        throw Exception('No photos were successfully uploaded');
       }
 
       // Calculate carbon saved
@@ -1360,7 +1375,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         id: '',  // This will be set by Firestore
         userId: currentUser.uid,
         userName: userName,
-        userAvatarUrl: userAvatarUrl ?? '',  // Ensure non-null value
+        userAvatarUrl: userAvatarUrl,
         title: _titleController.text.trim(),
         photoUrls: photoUrls,
         mealType: _selectedMealType,
@@ -1371,7 +1386,6 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         carbonSaved: carbonSaved,
         isPublic: _isPublic,
         createdAt: DateTime.now(),
-        caption: '',
         description: _descriptionController.text.trim(),
         ingredients: _ingredientsController.text.trim(),
         instructions: _instructionsController.text.trim(),
@@ -1380,7 +1394,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         isLiked: false,
         likesCount: 0,
         commentsCount: 0,
-        likedBy: const [],  // Initialize as empty list
+        likedBy: const [],
       );
 
       debugPrint('📤 Uploading meal post to Firestore...');
@@ -1408,7 +1422,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         HapticFeedback.vibrate();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error creating post: $e'),
+            content: Text('Error creating post: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );

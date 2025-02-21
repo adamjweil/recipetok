@@ -17,6 +17,7 @@ import 'dart:math';
 import '../widgets/notification_dropdown.dart';
 import './profile_screen.dart';
 import './main_navigation_screen.dart';
+import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,6 +57,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   bool _isLoadingFriends = false;
   DocumentSnapshot? _lastGlobalDocument;
   DocumentSnapshot? _lastFriendsDocument;
+
+  // Add this variable at the top of the class with other instance variables
+  DateTime _animationStartTime = DateTime.now();
+  Timer? _animationTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -237,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     _pageController.dispose();
     _friendsScrollController.dispose();
     _globalScrollController.dispose();
+    _animationTimer?.cancel();
     super.dispose();
   }
 
@@ -247,11 +253,26 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(36),
         child: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.logout, size: 20),
+            onPressed: () async {
+              try {
+                await FirebaseAuth.instance.signOut();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error signing out: $e')),
+                  );
+                }
+              }
+            },
+          ),
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 height: 32,
+                margin: const EdgeInsets.only(bottom: 3),
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(8),
@@ -294,6 +315,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     final isLoading = _isGlobalFeed ? _isLoadingGlobal : _isLoadingFriends;
 
     if (posts.isEmpty && !isLoading) {
+      if (!_isGlobalFeed) {
+        // Show recommended users in friends tab when empty
+        return SingleChildScrollView(
+          key: const ValueKey('empty_friends_feed'),
+          child: _buildRecommendedUsers(),
+        );
+      }
+      
       return Center(
         key: ValueKey('empty_${_isGlobalFeed ? 'global' : 'friends'}_feed'),
         child: Column(
@@ -416,64 +445,91 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   // Update the method to get recommended users with better metrics
   Future<List<Map<String, dynamic>>> _getRecommendedUsers() async {
     try {
-      // Get current user's food preferences
-      final currentUser = await FirebaseFirestore.instance
+      debugPrint('[RecUsers] Step 1: Starting to fetch recommended users...');
+      
+      final currentUserFuture = FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
           .get();
-      final userPreferences = List<String>.from(currentUser.data()?['foodPreferences'] ?? []);
 
-      // Query all potential users to recommend
+      debugPrint('[RecUsers] Step 2: Querying potential users...');
       final usersQuery = await FirebaseFirestore.instance
           .collection('users')
           .where('uid', isNotEqualTo: currentUserId)
+          .orderBy('uid')
+          .limit(10)
           .get();
 
-      // Calculate activity score for each user
-      List<Map<String, dynamic>> rankedUsers = [];
+      debugPrint('[RecUsers] Step 3: Found ${usersQuery.docs.length} potential users');
+
+      if (usersQuery.docs.isEmpty) {
+        debugPrint('[RecUsers] No users found to recommend');
+        return [];
+      }
+
+      final currentUser = await currentUserFuture;
+      debugPrint('[RecUsers] Step 4: Got current user data');
       
-      for (var userDoc in usersQuery.docs) {
-        final userData = userDoc.data();
-        final userFoodPrefs = List<String>.from(userData['foodPreferences'] ?? []);
-        
-        // Calculate matching preferences score
-        final matchingPreferences = userPreferences.where((pref) => userFoodPrefs.contains(pref)).length;
-        
-        // Get user's posts for activity metrics
-        final posts = await FirebaseFirestore.instance
+      if (!currentUser.exists) {
+        debugPrint('[RecUsers] Current user document not found');
+        return [];
+      }
+
+      final userPreferences = List<String>.from(currentUser.data()?['foodPreferences'] ?? []);
+      debugPrint('[RecUsers] Step 5: User has ${userPreferences.length} food preferences');
+
+      debugPrint('[RecUsers] Step 6: Starting to fetch recent posts for users...');
+      final userPostQueries = usersQuery.docs.map((userDoc) {
+        return FirebaseFirestore.instance
             .collection('meal_posts')
             .where('userId', isEqualTo: userDoc.id)
             .orderBy('createdAt', descending: true)
+            .limit(3)
             .get();
+      }).toList();
 
-        // Calculate activity metrics
+      final postsResults = await Future.wait(userPostQueries);
+      debugPrint('[RecUsers] Step 7: Fetched posts for all users');
+
+      // Process results and calculate scores
+      List<Map<String, dynamic>> rankedUsers = [];
+      
+      for (var i = 0; i < usersQuery.docs.length; i++) {
+        final userDoc = usersQuery.docs[i];
+        final userData = userDoc.data();
+        final userPosts = postsResults[i].docs;
+        final userFoodPrefs = List<String>.from(userData['foodPreferences'] ?? []);
+        
+        // Calculate matching preferences
+        final matchingPreferences = userPreferences
+            .where((pref) => userFoodPrefs.contains(pref))
+            .length;
+
+        // Calculate engagement metrics from the recent posts only
         double totalLikes = 0;
         double totalComments = 0;
-        final recentPosts = posts.docs.take(3).toList();  // Get 3 most recent posts
         
-        for (var post in posts.docs) {
+        for (var post in userPosts) {
           final postData = post.data();
           totalLikes += (postData['likes'] as num?)?.toDouble() ?? 0;
-          // Get comment count
-          final comments = await post.reference.collection('comments').count().get();
-          totalComments += comments.count?.toDouble() ?? 0;
+          totalComments += (postData['commentCount'] as num?)?.toDouble() ?? 0;
         }
 
-        // Calculate activity score (convert to int for final score)
-        final activityScore = (posts.docs.length * 10) +  // Each post worth 10 points
-            (totalLikes * 2).toInt() +                    // Each like worth 2 points
-            (totalComments * 3).toInt() +                 // Each comment worth 3 points
-            (matchingPreferences * 15);                   // Each matching preference worth 15 points
+        // Simplified scoring system that's faster to calculate
+        final activityScore = (userPosts.length * 10) +  // Recent posts worth 10 points each
+            (totalLikes * 2).toInt() +                   // Likes worth 2 points
+            (totalComments * 3).toInt() +                // Comments worth 3 points
+            (matchingPreferences * 15);                  // Matching preferences worth 15 points
 
         rankedUsers.add({
           'userData': userData,
           'activityScore': activityScore,
           'matchingPreferences': matchingPreferences,
-          'recentPosts': recentPosts,
+          'recentPosts': userPosts,
           'stats': {
-            'posts': posts.docs.length,
-            'avgLikes': posts.docs.isEmpty ? 0.0 : totalLikes / posts.docs.length,
-            'avgComments': posts.docs.isEmpty ? 0.0 : totalComments / posts.docs.length,
+            'posts': userPosts.length,
+            'avgLikes': userPosts.isEmpty ? 0.0 : totalLikes / userPosts.length,
+            'avgComments': userPosts.isEmpty ? 0.0 : totalComments / userPosts.length,
           },
           'userId': userDoc.id,
         });
@@ -481,9 +537,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       // Sort by activity score and take top 3
       rankedUsers.sort((a, b) => b['activityScore'].compareTo(a['activityScore']));
-      return rankedUsers.take(3).toList();
-    } catch (e) {
+      final recommendations = rankedUsers.take(3).toList();
+      debugPrint('Returning ${recommendations.length} recommended users');
+      return recommendations;
+    } catch (e, stackTrace) {
       debugPrint('Error getting recommended users: $e');
+      debugPrint('Stack trace: $stackTrace');
       return [];
     }
   }
@@ -493,140 +552,121 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _getRecommendedUsers(),
       builder: (context, snapshot) {
+        // Add error handling
+        if (snapshot.hasError) {
+          _animationTimer?.cancel();
+          debugPrint('Error loading recommendations: ${snapshot.error}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading recommendations',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _animationStartTime = DateTime.now();
+                      _startAnimationTimer();
+                    });
+                  },
+                  child: const Text('Tap to retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Show loading state with animation
         if (!snapshot.hasData) {
+          if (_animationTimer == null) {
+            _animationStartTime = DateTime.now();
+            _startAnimationTimer();
+          }
+          
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              // Welcome text with animation
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 2500),
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: StreamBuilder<DocumentSnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(currentUserId)
-                                  .snapshots(),
-                              builder: (context, userSnapshot) {
-                                if (userSnapshot.hasData) {
-                                  final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
-                                  final firstName = userData['firstName'] as String? ?? 'there';
-                                  return Text(
-                                    'Welcome, $firstName! 👋',
-                                    style: const TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  );
-                                }
-                                return const Text(
-                                  'Welcome! 👋',
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+              // Welcome text
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(currentUserId)
+                    .snapshots(),
+                builder: (context, userSnapshot) {
+                  if (userSnapshot.hasData) {
+                    final userData = userSnapshot.data?.data() as Map<String, dynamic>? ?? {};
+                    final firstName = userData['firstName'] as String? ?? 'there';
+                    return Text(
+                      'Welcome, $firstName! 👋',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
                       ),
+                      textAlign: TextAlign.center,
+                    );
+                  }
+                  return const Text(
+                    'Welcome! 👋',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
                     ),
+                    textAlign: TextAlign.center,
                   );
                 },
               ),
               const SizedBox(height: 40),
-              // Cooking pot animation with even longer duration
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 3000), // Increased from 2500
-                builder: (context, value, child) {
-                  return Transform.scale(
-                    scale: value,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.soup_kitchen,
-                            size: 60,
-                            color: Colors.black54,
-                          ),
-                        ),
-                        SizedBox(
-                          width: 140,
-                          height: 140,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 4,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).primaryColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 40),
-              // Animated loading text with even longer fade-in
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 2500), // Increased from 2000
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Column(
-                      children: [
-                        Text(
-                          'Cooking up your personalized recommendations',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Based on your food preferences and interests',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              // Loading steps with even longer staggered animation
+              // Loading animation steps
               ..._buildLoadingSteps(context),
             ],
           );
         }
 
-        final recommendedUsers = snapshot.data!;
+        // Cancel timer when data is loaded
+        _animationTimer?.cancel();
+        _animationTimer = null;
 
+        final recommendedUsers = snapshot.data!;
+        
+        // Handle empty recommendations
+        if (recommendedUsers.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.group_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No recommendations available yet',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Check back later for personalized recommendations',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Show recommendations
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,10 +769,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                               child: CircleAvatar(
                                 radius: 32,
                                 backgroundColor: Colors.white,
-                                backgroundImage: userData['avatarUrl'] != null
+                                backgroundImage: userData['avatarUrl'] != null && 
+                                               userData['avatarUrl'].toString().isNotEmpty && 
+                                               Uri.tryParse(userData['avatarUrl'])?.hasScheme == true
                                     ? NetworkImage(userData['avatarUrl'])
                                     : null,
-                                child: userData['avatarUrl'] == null
+                                child: userData['avatarUrl'] == null || 
+                                       userData['avatarUrl'].toString().isEmpty ||
+                                       Uri.tryParse(userData['avatarUrl'])?.hasScheme != true
                                     ? Icon(Icons.person, 
                                         size: 32, 
                                         color: Theme.of(context).primaryColor)
@@ -832,6 +876,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           child: Row(
                             children: recentPosts.map((post) {
                               final postData = post.data() as Map<String, dynamic>;
+                              final photoUrl = postData['photoUrls']?[0] as String?;
+                              
+                              // Validate the photo URL
+                              final isValidUrl = photoUrl != null && 
+                                               photoUrl.isNotEmpty && 
+                                               Uri.tryParse(photoUrl)?.hasScheme == true;
+                              
                               return Expanded(
                                 child: Container(
                                   margin: const EdgeInsets.only(right: 6),
@@ -847,10 +898,27 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      postData['photoUrls'][0],
-                                      fit: BoxFit.cover,
-                                    ),
+                                    child: isValidUrl
+                                      ? Image.network(
+                                          photoUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: Colors.grey[200],
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                color: Colors.grey[400],
+                                              ),
+                                            );
+                                          },
+                                        )
+                                      : Container(
+                                          color: Colors.grey[200],
+                                          child: Icon(
+                                            Icons.image_not_supported,
+                                            color: Colors.grey[400],
+                                          ),
+                                        ),
                                   ),
                                 ),
                               );
@@ -1003,6 +1071,14 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 });
 
                 await _initializeFollowingUsers();
+                // Clear and reload friends feed after following users
+                if (mounted) {
+                  setState(() {
+                    _feedCache['friends'] = [];
+                    _lastFriendsDocument = null;
+                  });
+                  await _loadFriendsFeed();
+                }
               }
             } else {
               if (mounted) {
@@ -1108,65 +1184,71 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       {'icon': Icons.thumb_up_outlined, 'text': 'Calculating engagement scores'},
     ];
 
-    return steps.asMap().entries.map((entry) {
-      final index = entry.key;
-      final step = entry.value;
+    final totalDuration = 3500; // Total animation duration in milliseconds
+    final stepDuration = (totalDuration / steps.length).round();
+    final elapsed = DateTime.now().difference(_animationStartTime).inMilliseconds;
+    
+    // Stop animation if we've exceeded total duration
+    if (elapsed >= totalDuration) {
+      _animationTimer?.cancel();
+      _animationTimer = null;
+    }
+
+    return List.generate(steps.length, (index) {
+      final step = steps[index];
+      final stepStartTime = index * stepDuration;
+      final shouldShow = elapsed > stepStartTime;
+      final stepProgress = shouldShow ? 
+          min(1.0, (elapsed - stepStartTime) / stepDuration) : 0.0;
       
-      return TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: Duration(milliseconds: 2500 + (index * 1000)), // Increased base duration and delay between steps
-        builder: (context, value, child) {
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, 20 * (1 - value)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
-                child: Row(
+      return AnimatedOpacity(
+        opacity: shouldShow ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  step['icon'] as IconData,
+                  size: 20,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        step['icon'] as IconData,
-                        size: 20,
-                        color: Theme.of(context).primaryColor,
+                    Text(
+                      step['text'] as String,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            step['text'] as String,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(
-                            value: value,
-                            backgroundColor: Colors.grey[200],
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).primaryColor,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 4),
+                    if (shouldShow) LinearProgressIndicator(
+                      value: stepProgress,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).primaryColor,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       );
-    }).toList();
+    });
   }
 
   Future<void> _prefetchFeeds() async {
@@ -1197,22 +1279,33 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       final snapshot = await query.get();
       if (snapshot.docs.isNotEmpty) {
-        _lastFriendsDocument = snapshot.docs.last;
-        final posts = snapshot.docs.map((doc) => MealPost.fromFirestore(doc)).toList();
-        _feedCache['friends']?.addAll(posts);
-        
-        // Prefetch images with URL validation
-        for (var post in posts) {
-          if (post.userAvatarUrl != null && 
-              post.userAvatarUrl!.isNotEmpty && 
-              Uri.tryParse(post.userAvatarUrl!)?.hasAbsolutePath == true) {
-            unawaited(CustomCacheManager.instance.getSingleFile(post.userAvatarUrl!));
-          }
-          for (var url in post.photoUrls) {
-            if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
-              unawaited(CustomCacheManager.instance.getSingleFile(url));
+        // Check if each post's user exists before adding to feed
+        final validPosts = <MealPost>[];
+        for (var doc in snapshot.docs) {
+          final post = MealPost.fromFirestore(doc);
+          final userDoc = await _firestore.collection('users').doc(post.userId).get();
+          if (userDoc.exists) {
+            validPosts.add(post);
+            
+            // Prefetch images with URL validation
+            final userData = userDoc.data();
+            final avatarUrl = userData?['avatarUrl'] as String?;
+            if (avatarUrl != null && 
+                avatarUrl.isNotEmpty && 
+                Uri.tryParse(avatarUrl)?.hasAbsolutePath == true) {
+              unawaited(CustomCacheManager.instance.getSingleFile(avatarUrl));
+            }
+            for (var url in post.photoUrls) {
+              if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
+                unawaited(CustomCacheManager.instance.getSingleFile(url));
+              }
             }
           }
+        }
+        
+        if (validPosts.isNotEmpty) {
+          _lastFriendsDocument = snapshot.docs.last;
+          _feedCache['friends']?.addAll(validPosts);
         }
       }
     } catch (e) {
@@ -1244,27 +1337,36 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       final snapshot = await query.get();
       if (snapshot.docs.isNotEmpty) {
-        _lastGlobalDocument = snapshot.docs.last;
-        final posts = snapshot.docs.map((doc) => MealPost.fromFirestore(doc)).toList();
-        
-        if (_lastGlobalDocument == null) {
-          _feedCache['global'] = [];
-        }
-        
-        _feedCache['global']!.addAll(posts);
-        
-        // Prefetch images with URL validation
-        for (var post in posts) {
-          if (post.userAvatarUrl != null && 
-              post.userAvatarUrl!.isNotEmpty && 
-              Uri.tryParse(post.userAvatarUrl!)?.hasAbsolutePath == true) {
-            unawaited(CustomCacheManager.instance.getSingleFile(post.userAvatarUrl!));
-          }
-          for (var url in post.photoUrls) {
-            if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
-              unawaited(CustomCacheManager.instance.getSingleFile(url));
+        // Check if each post's user exists before adding to feed
+        final validPosts = <MealPost>[];
+        for (var doc in snapshot.docs) {
+          final post = MealPost.fromFirestore(doc);
+          final userDoc = await _firestore.collection('users').doc(post.userId).get();
+          if (userDoc.exists) {
+            validPosts.add(post);
+            
+            // Prefetch images with URL validation
+            final userData = userDoc.data();
+            final avatarUrl = userData?['avatarUrl'] as String?;
+            if (avatarUrl != null && 
+                avatarUrl.isNotEmpty && 
+                Uri.tryParse(avatarUrl)?.hasAbsolutePath == true) {
+              unawaited(CustomCacheManager.instance.getSingleFile(avatarUrl));
+            }
+            for (var url in post.photoUrls) {
+              if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
+                unawaited(CustomCacheManager.instance.getSingleFile(url));
+              }
             }
           }
+        }
+        
+        if (validPosts.isNotEmpty) {
+          _lastGlobalDocument = snapshot.docs.last;
+          if (_lastGlobalDocument == null) {
+            _feedCache['global'] = [];
+          }
+          _feedCache['global']!.addAll(validPosts);
         }
       }
     } catch (e) {
@@ -1321,6 +1423,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         ),
       ),
     );
+  }
+
+  // Add this method to start the animation timer
+  void _startAnimationTimer() {
+    _animationTimer?.cancel();
+    _animationTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (mounted) {
+        setState(() {
+          // This empty setState will trigger a rebuild to update the animation
+        });
+      }
+    });
   }
 }
 

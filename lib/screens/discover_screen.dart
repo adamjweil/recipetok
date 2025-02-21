@@ -465,7 +465,25 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       );
     }
 
-    if (_videos.isEmpty) {
+    // Filter out videos without valid thumbnails
+    print('Total videos before filtering: ${_videos.length}');
+    
+    final validVideos = _videos.where((video) {
+      final videoData = video.data() as Map<String, dynamic>;
+      final thumbnailUrl = videoData['thumbnailUrl'] as String?;
+      final isValid = thumbnailUrl != null && thumbnailUrl.isNotEmpty;
+      
+      if (!isValid) {
+        print('Invalid video thumbnail: ${video.id}');
+        print('Thumbnail URL: $thumbnailUrl');
+      }
+      
+      return isValid;
+    }).toList();
+
+    print('Valid videos after filtering: ${validVideos.length}');
+
+    if (validVideos.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -494,12 +512,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       crossAxisCount: 3,
       mainAxisSpacing: 1,
       crossAxisSpacing: 1,
-      itemCount: _videos.length + (_isLoadingMore ? 1 : 0),
-      cacheExtent: 2000, // Cache more items for smoother scrolling
+      itemCount: validVideos.length + (_isLoadingMore ? 1 : 0),
+      cacheExtent: 2000,
       addAutomaticKeepAlives: true,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
-        if (index >= _videos.length) {
+        if (index >= validVideos.length) {
           return Container(
             height: 120,
             child: Center(
@@ -515,18 +533,20 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           );
         }
 
-        final video = _videos[index];
-        final bool isDoubleHeight = index == 2 || // Rows 1-2 right
-                                   index == 5 || // Rows 3-4 left
-                                   index == 12 || // Rows 4-5 right
-                                   index == 16 || // Rows 6-7 middle
-                                   index == 21;  // Rows 7-8 right
+        final video = validVideos[index];
+        // Double height videos should alternate between right and left columns
+        final bool isDoubleHeight = index == 2 || // First one - right column (row 1-2)
+                                   index == 5 || // Second one - left column (row 2-3)
+                                   index == 13;  // Third one - right column (row 5-6)
         
         final bool shouldAutoplay = isDoubleHeight;
         
         return RepaintBoundary(
           child: Container(
-            height: isDoubleHeight ? 241.5 : 120,
+            height: isDoubleHeight ? 241 : 120, // Adjusted from 241.5 to 241 for perfect alignment
+            decoration: BoxDecoration(
+              color: Colors.black,
+            ),
             child: ClipRRect(
               child: _VideoPreviewCard(
                 key: ValueKey('video-${video.id}'),
@@ -562,6 +582,17 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
   VideoPlayerController? _controller;
   bool _isVisible = false;
   bool _isDisposed = false;
+  double? _aspectRatio;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-calculate aspect ratio from video metadata if available
+    final videoData = widget.video.data() as Map<String, dynamic>;
+    if (videoData.containsKey('aspectRatio')) {
+      _aspectRatio = videoData['aspectRatio'].toDouble();
+    }
+  }
 
   @override
   void dispose() {
@@ -584,6 +615,7 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
       }
       
       if (_controller != null) {
+        _aspectRatio = _controller!.value.aspectRatio;
         _controller!
           ..setLooping(true)
           ..setVolume(0.0)
@@ -628,6 +660,7 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
   @override
   Widget build(BuildContext context) {
     final videoData = widget.video.data() as Map<String, dynamic>;
+    final double containerHeight = widget.shouldAutoplay ? 241 : 120; // Adjusted here too
 
     return VisibilityDetector(
       key: Key('video-${widget.video.id}'),
@@ -671,13 +704,19 @@ class _VideoPreviewCardState extends State<_VideoPreviewCard> {
           );
         },
         child: Container(
+          height: containerHeight,
           child: Stack(
             fit: StackFit.expand,
             children: [
               if (widget.shouldAutoplay && _controller?.value.isInitialized == true)
-                AspectRatio(
-                  aspectRatio: _controller!.value.aspectRatio,
-                  child: VideoPlayer(_controller!),
+                FittedBox(
+                  fit: BoxFit.cover,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox(
+                    width: _controller!.value.size.width,
+                    height: _controller!.value.size.height,
+                    child: VideoPlayer(_controller!),
+                  ),
                 )
               else
                 CachedNetworkImage(
