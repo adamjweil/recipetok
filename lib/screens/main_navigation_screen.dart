@@ -43,10 +43,8 @@ class MainNavigationScreen extends StatefulWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildNavItem(context, 0, Icons.home, 'Home', selectedIndex == 0, onTap),
-            _buildNavItem(context, 1, Icons.play_circle_outline, 'Videos', selectedIndex == 1, onTap),
             _buildAddButton(context, onTap),
-            _buildNavItem(context, 3, Icons.search, 'Discover', selectedIndex == 3, onTap),
-            _buildNavItem(context, 4, Icons.person, 'Profile', selectedIndex == 4, onTap),
+            _buildNavItem(context, 2, Icons.person, 'Profile', selectedIndex == 2, onTap),
           ],
         ),
       ),
@@ -90,7 +88,7 @@ class MainNavigationScreen extends StatefulWidget {
 
   static Widget _buildAddButton(BuildContext context, Function(int) onTap) {
     return InkWell(
-      onTap: () => onTap(2),
+      onTap: () => onTap(1),
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -139,25 +137,25 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<Widget> get _screens => [
     const HomeScreen(),      // index 0
-    VideoScreen(
-      initialVideo: widget.initialVideo,
-      showBackButton: widget.showBackButton,
-    ),     // index 1
-    Container(),            // index 2 (placeholder for center button)
-    const DiscoverScreen(),  // index 3 - replaced UsersScreen
+    Container(),            // index 1 (placeholder for center button)
     ProfileScreen(
       userId: _currentUserId,
-      showBackButton: false,  // Set showBackButton to false
-    ),   // index 4
+      showBackButton: false,
+    ),   // index 2
   ];
 
   void _onItemTapped(int index) {
-    if (index == 2) {
-      _showCreateOptions();
+    if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MealPostCreateScreen(),
+        ),
+      );
     } else {
       setState(() {
         _selectedIndex = index;
-        if (index == 4) {
+        if (index == 2) {
           _currentUserId = null; // Reset to current user's profile when profile tab is tapped
         }
       });
@@ -246,7 +244,7 @@ class MainNavigationScreenState extends State<MainNavigationScreen> {
 
   void navigateToUserProfile(String userId) {
     setState(() {
-      _selectedIndex = 4;  // Switch to profile tab
+      _selectedIndex = 2;  // Switch to profile tab
       _currentUserId = userId;  // Set the user ID
     });
   }

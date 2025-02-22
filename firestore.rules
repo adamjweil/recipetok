@@ -23,7 +23,7 @@ service cloud.firestore {
         isOwner(userId) || 
         (
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['followers', 'following'])
+            .hasOnly(['followers', 'following', 'searchName'])
         )
       );
       allow delete: if isSignedIn() && isOwner(userId);

@@ -18,6 +18,7 @@ import '../widgets/notification_dropdown.dart';
 import './profile_screen.dart';
 import './main_navigation_screen.dart';
 import 'dart:async';
+import './search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -268,17 +269,14 @@ class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMix
         preferredSize: const Size.fromHeight(36),
         child: AppBar(
           leading: IconButton(
-            icon: const Icon(Icons.logout, size: 20),
-            onPressed: () async {
-              try {
-                await FirebaseAuth.instance.signOut();
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error signing out: $e')),
-                  );
-                }
-              }
+            icon: const Icon(Icons.search, size: 20),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SearchScreen(),
+                ),
+              );
             },
           ),
           title: Row(

@@ -38,6 +38,7 @@ import '../widgets/recipe_modal.dart';
 import '../models/recipe.dart';
 import '../widgets/group_details_modal.dart';
 import '../services/recipe_service.dart';
+import './photo_viewer_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -105,7 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
 
     _tabController = TabController(
-      length: isCurrentUserProfile ? 4 : 2,
+      length: 2,  // Changed to 2 tabs
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
@@ -704,54 +705,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       indicatorColor: Colors.black,
                       unselectedLabelColor: Colors.grey,
                       labelColor: Colors.black,
-                      tabs: [
-                        const Tab(icon: Icon(Icons.restaurant)),
-                        const Tab(icon: Icon(Icons.grid_on)),
-                        if (isCurrentUserProfile) ...[
-                          const Tab(icon: Icon(Icons.collections_bookmark)),
-                          StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('videos')
-                                .where('tryLaterBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              final count = snapshot.data?.docs.length ?? 0;
-                              return Tab(
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    const Icon(Icons.watch_later_outlined),
-                                    if (count > 0)
-                                      Positioned(
-                                        right: -4,
-                                        top: -2,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(context).primaryColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 14,
-                                            minHeight: 14,
-                                          ),
-                                          child: Text(
-                                            count.toString(),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                      tabs: const [
+                        Tab(icon: Icon(Icons.restaurant_menu)),
+                        Tab(icon: Icon(Icons.grid_on)),
                       ],
                     ),
                   ),
@@ -763,11 +719,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               controller: _tabController,
               children: [
                 _buildMealPostsTab(),
-                _buildVideosGrid(),
-                if (isCurrentUserProfile) ...[
-                  _buildBookmarkedVideosGrid(),
-                  _buildTryLaterGrid(),
-                ],
+                _buildVideosTab(),
               ],
             ),
           );
@@ -1424,175 +1376,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildEmptyVideosState() {
-    return Center(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Colors.grey[300]!,
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Share Your Recipe Videos!',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
-                        textAlign: TextAlign.left,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 1200),
-                      curve: Curves.elasticOut,
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: value,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.asset(
-                              'assets/images/sample_video.jpg',
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                
-                // Description
-                Text(
-                  'Share your cooking process with the community - our AI makes it effortless!',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                
-                // Steps with colorful icons
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildAnimatedStep(
-                        icon: Icons.videocam_outlined,
-                        iconColor: const Color(0xFF4CAF50), // Green
-                        backgroundColor: const Color(0xFFE8F5E9),
-                        title: 'Record your cooking process',
-                        description: 'Show others how to make your delicious dish',
-                        index: 0,
-                      ),
-                      _buildAnimatedStep(
-                        icon: Icons.auto_awesome,
-                        iconColor: const Color(0xFF2196F3), // Blue
-                        backgroundColor: const Color(0xFFE3F2FD),
-                        title: 'AI enhances your video',
-                        description: 'Auto-detects ingredients, adds recipe & subtitles',
-                        index: 1,
-                      ),
-                      _buildAnimatedStep(
-                        icon: Icons.check_circle_outline,
-                        iconColor: const Color(0xFF9C27B0), // Purple
-                        backgroundColor: const Color(0xFFF3E5F5),
-                        title: 'Review and share',
-                        description: 'Confirm the details and inspire others',
-                        index: 2,
-                        isLast: true,
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Create Video Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const VideoUploadScreen(),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Theme.of(context).primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Theme.of(context).primaryColor),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.videocam, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Share Your First Video',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideosGrid() {
+  Widget _buildVideosTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('videos')
+          .collection('meal_posts')
           .where('userId', isEqualTo: profileUserId)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          debugPrint('❌ Error loading videos: ${snapshot.error}');
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
@@ -1600,20 +1392,16 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           return const Center(child: CircularProgressIndicator());
         }
 
-        final videos = snapshot.data?.docs ?? [];
-        debugPrint('📊 Loaded ${videos.length} videos');
-
-        if (videos.isEmpty && isCurrentUserProfile) {
-          return _buildEmptyVideosState();
-        } else if (videos.isEmpty) {
+        final posts = snapshot.data?.docs ?? [];
+        if (posts.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.videocam_off, size: 64, color: Colors.grey[400]),
+                Icon(Icons.restaurant, size: 64, color: Colors.grey[400]),
                 const SizedBox(height: 16),
                 Text(
-                  'No videos yet',
+                  'No meal posts yet',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ],
@@ -1621,111 +1409,48 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           );
         }
 
-        // Sort videos to show pinned ones first
-        final sortedVideos = [...videos];
-        sortedVideos.sort((a, b) {
-          final isPinnedA = (a.data() as Map<String, dynamic>)['isPinned'] ?? false;
-          final isPinnedB = (b.data() as Map<String, dynamic>)['isPinned'] ?? false;
-          if (isPinnedA && !isPinnedB) return -1;
-          if (!isPinnedA && isPinnedB) return 1;
-          return 0;
-        });
-
         return GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 1,
             mainAxisSpacing: 1,
-            childAspectRatio: 0.8,
+            childAspectRatio: 1.0,
           ),
-          itemCount: sortedVideos.length,
+          itemCount: posts.length,
           itemBuilder: (context, index) {
-            final videoData = sortedVideos[index].data() as Map<String, dynamic>;
-            final videoId = sortedVideos[index].id;
-            final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-            
+            final postData = posts[index].data() as Map<String, dynamic>;
+            final List<String> photoUrls = postData['photoUrls'] != null 
+                ? List<String>.from(postData['photoUrls'])
+                : [postData['imageUrl'] as String? ?? ''];
+            final String postId = posts[index].id;
+
             return GestureDetector(
               onTap: () {
-                final video = Video.fromMap(videoId, videoData);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => MainNavigationScreen(
-                      initialIndex: 1, // Videos tab
-                      initialVideo: video,
-                      showBackButton: true,
+                    builder: (context) => PhotoViewerScreen(
+                      photoUrls: photoUrls,
+                      initialIndex: 0,
+                      postId: postId,
                     ),
                   ),
                 );
               },
-              onLongPressStart: (LongPressStartDetails details) {
-                _handleVideoLongPress(
-                  context,
-                  videoData,
-                  videoId,
-                  details.globalPosition,
-                );
-              },
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (thumbnailUrl == null || thumbnailUrl.isEmpty)
-                    Container(
-                      color: Colors.grey[200],
-                      child: const Center(child: Icon(Icons.video_library)),
-                    )
-                  else
-                    CachedNetworkImage(
-                      imageUrl: thumbnailUrl,
-                      fit: BoxFit.cover,
-                      cacheManager: CustomCacheManager.instance,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) {
-                        debugPrint('❌ Image loading error for video $videoId: $error');
-                        return Container(
-                          color: Colors.grey[200],
-                          child: const Center(child: Icon(Icons.error)),
-                        );
-                      },
-                    ),
-                  // Add video icon overlay
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Icon(
-                      Icons.video_collection_rounded,
-                      color: Colors.white.withOpacity(0.85),
-                      size: 14,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withOpacity(0.6),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
+              child: Hero(
+                tag: 'photo_${postId}_0',
+                child: CachedNetworkImage(
+                  imageUrl: photoUrls.first,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(child: CircularProgressIndicator()),
                   ),
-                  // Show pin indicator if video is pinned
-                  if (videoData['isPinned'] == true)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Icon(
-                        Icons.push_pin,
-                        color: Colors.white,
-                        size: 20,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 3,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(child: Icon(Icons.error)),
+                  ),
+                ),
               ),
             );
           },
@@ -1734,215 +1459,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildBookmarkedVideosGrid() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('videos')
-          .where('bookmarkedBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20.0),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-        
-        final videos = snapshot.data?.docs ?? [];
-        
-        return CustomScrollView(
-          slivers: [
-            // Add VideoGroupsSection at the top
-            const VideoGroupsSection(),
-            
-            // Only show video grid if there are videos
-            if (videos.isNotEmpty)
-              SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 1,
-                  mainAxisSpacing: 1,
-                  childAspectRatio: 0.8,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final videoData = videos[index].data() as Map<String, dynamic>;
-                    final videoId = videos[index].id;
-                    final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-
-                    return GestureDetector(
-                      onTap: () {
-                        final video = Video.fromMap(videoId, videoData);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MainNavigationScreen(
-                              initialIndex: 1, // Videos tab
-                              initialVideo: video,
-                              showBackButton: true,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (thumbnailUrl == null || thumbnailUrl.isEmpty)
-                            Container(
-                              color: Colors.grey[200],
-                              child: const Center(child: Icon(Icons.video_library)),
-                            )
-                          else
-                            CachedNetworkImage(
-                              imageUrl: thumbnailUrl,
-                              fit: BoxFit.cover,
-                              cacheManager: CustomCacheManager.instance,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[200],
-                                child: const Center(child: CircularProgressIndicator()),
-                              ),
-                              errorWidget: (context, url, error) {
-                                debugPrint('❌ Image loading error for video $videoId: $error');
-                                return Container(
-                                  color: Colors.grey[200],
-                                  child: const Center(child: Icon(Icons.error)),
-                                );
-                              },
-                            ),
-                          // Add video icon overlay
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: Icon(
-                              Icons.video_collection_rounded,
-                              color: Colors.white.withOpacity(0.85),
-                              size: 14,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black.withOpacity(0.6),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  childCount: videos.length,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTryLaterGrid() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('videos')
-          .where('tryLaterBy', arrayContains: FirebaseAuth.instance.currentUser?.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          debugPrint('❌ Error loading Try Later videos: ${snapshot.error}');
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        final videos = snapshot.data?.docs ?? [];
-        debugPrint('📊 Loaded ${videos.length} Try Later videos');
-
-        if (videos.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.watch_later_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No videos saved for later',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Use a SingleChildScrollView to allow scrolling within the tab
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              GridView.builder(
-                shrinkWrap: true, // Important!
-                physics: const NeverScrollableScrollPhysics(), // Important!
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 1,
-                  mainAxisSpacing: 1,
-                  childAspectRatio: 0.8,
-                ),
-                itemCount: videos.length,
-                itemBuilder: (context, index) {
-                  final videoData = videos[index].data() as Map<String, dynamic>;
-                  final videoId = videos[index].id;
-                  final thumbnailUrl = videoData['thumbnailUrl'] as String?;
-
-                  if (thumbnailUrl == null || thumbnailUrl.isEmpty) {
-                    return Container(
-                      color: Colors.grey[200],
-                      child: const Center(child: Icon(Icons.video_library)),
-                    );
-                  }
-
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoPlayerScreen(
-                            video: Video.fromMap(
-                              videoId,
-                              videoData,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    child: CachedNetworkImage(
-                      imageUrl: thumbnailUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.grey[200],
-                        child: const Center(child: Icon(Icons.error)),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  // Helper method to convert string to MealType enum
+  MealType getMealType(String? type) {
+    switch (type?.toLowerCase()) {
+      case 'breakfast':
+        return MealType.breakfast;
+      case 'lunch':
+        return MealType.lunch;
+      case 'dinner':
+        return MealType.dinner;
+      case 'snack':
+        return MealType.snack;
+      default:
+        return MealType.breakfast;
+    }
   }
 
   String _getTimeAgo(DateTime createdAt) {
