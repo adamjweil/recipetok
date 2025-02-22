@@ -23,10 +23,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  HomeScreenState createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
+class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -48,19 +48,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   DateTime? _firstCountdownStartTime;
 
   // Add new variables for feed filtering
-  bool _isGlobalFeed = false;
-  final Map<String, List<MealPost>> _feedCache = {
-    'friends': [],
-    'global': [],
-  };
-  bool _isLoadingGlobal = false;
-  bool _isLoadingFriends = false;
-  DocumentSnapshot? _lastGlobalDocument;
-  DocumentSnapshot? _lastFriendsDocument;
+  bool isGlobalFeed = false;
+  Map<String, List<MealPost>> feedCache = {};
+  bool isLoadingGlobal = false;
+  bool isLoadingFriends = false;
+  DocumentSnapshot? lastGlobalDocument;
+  DocumentSnapshot? lastFriendsDocument;
 
   // Add this variable at the top of the class with other instance variables
-  DateTime _animationStartTime = DateTime.now();
-  Timer? _animationTimer;
+  DateTime animationStartTime = DateTime.now();
+  Timer? animationTimer;
+
+  // Add these new variables
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+  bool _isRefreshing = false;
+
+  late final AnimationController _animationController;
+  late final Animation<double> _fadeAnimation;
 
   @override
   bool get wantKeepAlive => true;
@@ -68,10 +72,19 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _animationController.forward();
     
     // Initialize feed cache
-    _feedCache['friends'] = [];
-    _feedCache['global'] = [];
+    feedCache['friends'] = [];
+    feedCache['global'] = [];
     
     // Add scroll listeners for both controllers
     _friendsScrollController.addListener(() {
@@ -79,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           _friendsScrollController.position.maxScrollExtent * 0.8 && 
           !_isLoadingMore &&
           _hasMorePosts && 
-          !_isGlobalFeed) {
+          !isGlobalFeed) {
         _loadMorePosts();
       }
     });
@@ -89,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           _globalScrollController.position.maxScrollExtent * 0.8 && 
           !_isLoadingMore &&
           _hasMorePosts && 
-          _isGlobalFeed) {
+          isGlobalFeed) {
         _loadMorePosts();
       }
     });
@@ -98,8 +111,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     _initializeFollowingUsers().then((_) {
       // Then load feeds only after we have the following users list
       if (mounted) {
-        _loadFriendsFeed();
-        _loadGlobalFeed();
+        loadFriendsFeed();
+        loadGlobalFeed();
       }
     });
 
@@ -242,7 +255,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     _pageController.dispose();
     _friendsScrollController.dispose();
     _globalScrollController.dispose();
-    _animationTimer?.cancel();
+    animationTimer?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -283,12 +297,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     _buildFeedToggleButton(
                       icon: Icons.group,
                       label: 'Friends',
-                      isSelected: !_isGlobalFeed,
+                      isSelected: !isGlobalFeed,
                     ),
                     _buildFeedToggleButton(
                       icon: Icons.public,
                       label: 'Global',
-                      isSelected: _isGlobalFeed,
+                      isSelected: isGlobalFeed,
                     ),
                   ],
                 ),
@@ -303,92 +317,110 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           toolbarHeight: 36,
         ),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _buildFeedContent(),
+      body: RefreshIndicator(
+        key: _refreshIndicatorKey,
+        onRefresh: _refreshFeed,
+        displacement: 20,
+        strokeWidth: 3,
+        color: Theme.of(context).primaryColor,
+        backgroundColor: Colors.white,
+        child: CustomScrollView(
+          controller: !isGlobalFeed ? _friendsScrollController : _globalScrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverFadeTransition(
+              opacity: _fadeAnimation,
+              sliver: _buildFeedContent(),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildFeedContent() {
-    final posts = _feedCache[_isGlobalFeed ? 'global' : 'friends'] ?? [];
-    final isLoading = _isGlobalFeed ? _isLoadingGlobal : _isLoadingFriends;
+    final posts = feedCache[isGlobalFeed ? 'global' : 'friends'] ?? [];
+    final isLoading = isGlobalFeed ? isLoadingGlobal : isLoadingFriends;
 
     if (posts.isEmpty && !isLoading) {
-      if (!_isGlobalFeed) {
+      if (!isGlobalFeed) {
         // Show recommended users in friends tab when empty
-        return SingleChildScrollView(
+        return SliverToBoxAdapter(
           key: const ValueKey('empty_friends_feed'),
           child: _buildRecommendedUsers(),
         );
       }
       
-      return Center(
-        key: ValueKey('empty_${_isGlobalFeed ? 'global' : 'friends'}_feed'),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _isGlobalFeed ? Icons.public_off : Icons.group_off,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _isGlobalFeed
-                  ? 'No posts in the global feed yet'
-                  : 'No posts from friends yet',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+      return SliverToBoxAdapter(
+        key: ValueKey('empty_${isGlobalFeed ? 'global' : 'friends'}_feed'),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isGlobalFeed ? Icons.public_off : Icons.group_off,
+                size: 64,
+                color: Colors.grey[400],
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isGlobalFeed
-                  ? 'Be the first to share something!'
-                  : 'Follow more users or create a post!',
-              style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 14,
+              const SizedBox(height: 16),
+              Text(
+                isGlobalFeed
+                    ? 'No posts in the global feed yet'
+                    : 'No posts from friends yet',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                isGlobalFeed
+                    ? 'Be the first to share something!'
+                    : 'Follow more users or create a post!',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return ListView.builder(
-      key: ValueKey('feed_${_isGlobalFeed ? 'global' : 'friends'}'),
-      padding: const EdgeInsets.fromLTRB(16, 5, 16, 0),
-      itemCount: posts.length + (isLoading ? 1 : 0),
-      controller: _isGlobalFeed ? _globalScrollController : _friendsScrollController,
-      addAutomaticKeepAlives: true,
-      addRepaintBoundaries: true,
-      cacheExtent: 3000.0,
-      itemBuilder: (context, index) {
-        if (index == posts.length) {
-          if (isLoading) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: CircularProgressIndicator()),
-            );
+    return SliverList(
+      key: ValueKey('feed_${isGlobalFeed ? 'global' : 'friends'}'),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index == posts.length) {
+            if (isLoading) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return const SizedBox.shrink();
           }
-          return const SizedBox.shrink();
-        }
 
-        final post = posts[index];
-        return KeyedSubtree(
-          key: ValueKey(post.id),
-          child: RepaintBoundary(
-            child: MealPostWrapper(
-              post: post,
-              showUserInfo: true,
+          final post = posts[index];
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 5, 16, 0),
+            child: KeyedSubtree(
+              key: ValueKey(post.id),
+              child: RepaintBoundary(
+                child: MealPostWrapper(
+                  post: post,
+                  showUserInfo: true,
+                ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+        childCount: posts.length + (isLoading ? 1 : 0),
+        addAutomaticKeepAlives: true,
+        addRepaintBoundaries: true,
+      ),
     );
   }
 
@@ -554,7 +586,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       builder: (context, snapshot) {
         // Add error handling
         if (snapshot.hasError) {
-          _animationTimer?.cancel();
+          animationTimer?.cancel();
           debugPrint('Error loading recommendations: ${snapshot.error}');
           return Center(
             child: Column(
@@ -573,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 TextButton(
                   onPressed: () {
                     setState(() {
-                      _animationStartTime = DateTime.now();
+                      animationStartTime = DateTime.now();
                       _startAnimationTimer();
                     });
                   },
@@ -586,8 +618,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
         // Show loading state with animation
         if (!snapshot.hasData) {
-          if (_animationTimer == null) {
-            _animationStartTime = DateTime.now();
+          if (animationTimer == null) {
+            animationStartTime = DateTime.now();
             _startAnimationTimer();
           }
           
@@ -632,8 +664,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         }
 
         // Cancel timer when data is loaded
-        _animationTimer?.cancel();
-        _animationTimer = null;
+        animationTimer?.cancel();
+        animationTimer = null;
 
         final recommendedUsers = snapshot.data!;
         
@@ -1074,10 +1106,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                 // Clear and reload friends feed after following users
                 if (mounted) {
                   setState(() {
-                    _feedCache['friends'] = [];
-                    _lastFriendsDocument = null;
+                    feedCache['friends'] = [];
+                    lastFriendsDocument = null;
                   });
-                  await _loadFriendsFeed();
+                  loadFriendsFeed();
                 }
               }
             } else {
@@ -1186,12 +1218,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
     final totalDuration = 3500; // Total animation duration in milliseconds
     final stepDuration = (totalDuration / steps.length).round();
-    final elapsed = DateTime.now().difference(_animationStartTime).inMilliseconds;
+    final elapsed = DateTime.now().difference(animationStartTime).inMilliseconds;
     
     // Stop animation if we've exceeded total duration
     if (elapsed >= totalDuration) {
-      _animationTimer?.cancel();
-      _animationTimer = null;
+      animationTimer?.cancel();
+      animationTimer = null;
     }
 
     return List.generate(steps.length, (index) {
@@ -1253,137 +1285,123 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   Future<void> _prefetchFeeds() async {
     // Prefetch both feeds in the background
-    _loadFriendsFeed();
-    _loadGlobalFeed();
+    loadFriendsFeed();
+    loadGlobalFeed();
   }
 
-  Future<void> _loadFriendsFeed() async {
-    if (_isLoadingFriends) return;
-    setState(() => _isLoadingFriends = true);
-
+  Future<void> loadFriendsFeed() async {
+    if (isLoadingFriends && !_isRefreshing) return;
+    
+    setState(() => isLoadingFriends = true);
+    
     try {
-      final query = _lastFriendsDocument == null
-          ? _firestore
-              .collection('meal_posts')
-              .where('userId', whereIn: followingUsers)
-              .where('isPublic', isEqualTo: true)
-              .orderBy('createdAt', descending: true)
-              .limit(_postsPerBatch)
-          : _firestore
-              .collection('meal_posts')
-              .where('userId', whereIn: followingUsers)
-              .where('isPublic', isEqualTo: true)
-              .orderBy('createdAt', descending: true)
-              .startAfterDocument(_lastFriendsDocument!)
-              .limit(_postsPerBatch);
-
-      final snapshot = await query.get();
-      if (snapshot.docs.isNotEmpty) {
-        // Check if each post's user exists before adding to feed
-        final validPosts = <MealPost>[];
-        for (var doc in snapshot.docs) {
-          final post = MealPost.fromFirestore(doc);
-          final userDoc = await _firestore.collection('users').doc(post.userId).get();
-          if (userDoc.exists) {
-            validPosts.add(post);
-            
-            // Prefetch images with URL validation
-            final userData = userDoc.data();
-            final avatarUrl = userData?['avatarUrl'] as String?;
-            if (avatarUrl != null && 
-                avatarUrl.isNotEmpty && 
-                Uri.tryParse(avatarUrl)?.hasAbsolutePath == true) {
-              unawaited(CustomCacheManager.instance.getSingleFile(avatarUrl));
-            }
-            for (var url in post.photoUrls) {
-              if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
-                unawaited(CustomCacheManager.instance.getSingleFile(url));
-              }
-            }
-          }
-        }
-        
-        if (validPosts.isNotEmpty) {
-          _lastFriendsDocument = snapshot.docs.last;
-          _feedCache['friends']?.addAll(validPosts);
-        }
+      // Get current user's following list
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      
+      final following = List<String>.from(userDoc.data()?['following'] ?? []);
+      following.add(currentUserId); // Include user's own posts
+      
+      Query query = _firestore
+          .collection('meal_posts')
+          .where('userId', whereIn: following.isEmpty ? [currentUserId] : following)
+          .orderBy('createdAt', descending: true)
+          .limit(_postsPerBatch);
+      
+      if (lastFriendsDocument != null && !_isRefreshing) {
+        query = query.startAfterDocument(lastFriendsDocument!);
       }
+      
+      final snapshot = await query.get();
+      
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _hasMorePosts = false;
+          isLoadingFriends = false;
+        });
+        return;
+      }
+      
+      final posts = snapshot.docs
+          .map((doc) => MealPost.fromFirestore(doc))
+          .toList();
+      
+      setState(() {
+        if (_isRefreshing) {
+          feedCache['friends'] = posts;
+        } else {
+          feedCache['friends'] = [...feedCache['friends']!, ...posts];
+        }
+        lastFriendsDocument = snapshot.docs.last;
+        _hasMorePosts = snapshot.docs.length == _postsPerBatch;
+        isLoadingFriends = false;
+      });
     } catch (e) {
       debugPrint('Error loading friends feed: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingFriends = false);
+      setState(() => isLoadingFriends = false);
+      rethrow;
     }
   }
 
-  Future<void> _loadGlobalFeed() async {
-    if (_isLoadingGlobal) return;
-    setState(() => _isLoadingGlobal = true);
-
+  Future<void> loadGlobalFeed() async {
+    if (isLoadingGlobal && !_isRefreshing) return;
+    
+    setState(() => isLoadingGlobal = true);
+    
     try {
-      const globalBatchSize = 20;
-
-      final query = _lastGlobalDocument == null
-          ? _firestore
-              .collection('meal_posts')
-              .where('isPublic', isEqualTo: true)
-              .orderBy('createdAt', descending: true)
-              .limit(globalBatchSize)
-          : _firestore
-              .collection('meal_posts')
-              .where('isPublic', isEqualTo: true)
-              .orderBy('createdAt', descending: true)
-              .startAfterDocument(_lastGlobalDocument!)
-              .limit(globalBatchSize);
-
-      final snapshot = await query.get();
-      if (snapshot.docs.isNotEmpty) {
-        // Check if each post's user exists before adding to feed
-        final validPosts = <MealPost>[];
-        for (var doc in snapshot.docs) {
-          final post = MealPost.fromFirestore(doc);
-          final userDoc = await _firestore.collection('users').doc(post.userId).get();
-          if (userDoc.exists) {
-            validPosts.add(post);
-            
-            // Prefetch images with URL validation
-            final userData = userDoc.data();
-            final avatarUrl = userData?['avatarUrl'] as String?;
-            if (avatarUrl != null && 
-                avatarUrl.isNotEmpty && 
-                Uri.tryParse(avatarUrl)?.hasAbsolutePath == true) {
-              unawaited(CustomCacheManager.instance.getSingleFile(avatarUrl));
-            }
-            for (var url in post.photoUrls) {
-              if (url.isNotEmpty && Uri.tryParse(url)?.hasAbsolutePath == true) {
-                unawaited(CustomCacheManager.instance.getSingleFile(url));
-              }
-            }
-          }
-        }
-        
-        if (validPosts.isNotEmpty) {
-          _lastGlobalDocument = snapshot.docs.last;
-          if (_lastGlobalDocument == null) {
-            _feedCache['global'] = [];
-          }
-          _feedCache['global']!.addAll(validPosts);
-        }
+      Query query = _firestore
+          .collection('meal_posts')
+          .where('isPublic', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(_postsPerBatch);
+      
+      if (lastGlobalDocument != null && !_isRefreshing) {
+        query = query.startAfterDocument(lastGlobalDocument!);
       }
+      
+      final snapshot = await query.get();
+      
+      if (snapshot.docs.isEmpty) {
+        setState(() {
+          _hasMorePosts = false;
+          isLoadingGlobal = false;
+        });
+        return;
+      }
+      
+      final posts = snapshot.docs
+          .map((doc) => MealPost.fromFirestore(doc))
+          .toList();
+      
+      setState(() {
+        if (_isRefreshing) {
+          feedCache['global'] = posts;
+        } else {
+          feedCache['global'] = [...feedCache['global']!, ...posts];
+        }
+        lastGlobalDocument = snapshot.docs.last;
+        _hasMorePosts = snapshot.docs.length == _postsPerBatch;
+        isLoadingGlobal = false;
+      });
     } catch (e) {
       debugPrint('Error loading global feed: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingGlobal = false);
+      setState(() => isLoadingGlobal = false);
+      rethrow;
     }
   }
 
   void _toggleFeedType() {
     setState(() {
-      _isGlobalFeed = !_isGlobalFeed;
+      isGlobalFeed = !isGlobalFeed;
+      _animationController.reset();
+      _animationController.forward();
       // Load more posts if needed
-      if (_isGlobalFeed && (_feedCache['global'] == null || _feedCache['global']!.isEmpty)) {
-        _loadGlobalFeed();
-      } else if (!_isGlobalFeed && (_feedCache['friends'] == null || _feedCache['friends']!.isEmpty)) {
-        _loadFriendsFeed();
+      if (isGlobalFeed && (feedCache['global'] == null || feedCache['global']!.isEmpty)) {
+        loadGlobalFeed();
+      } else if (!isGlobalFeed && (feedCache['friends'] == null || feedCache['friends']!.isEmpty)) {
+        loadFriendsFeed();
       }
     });
   }
@@ -1427,14 +1445,31 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   // Add this method to start the animation timer
   void _startAnimationTimer() {
-    _animationTimer?.cancel();
-    _animationTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    animationTimer?.cancel();
+    animationTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (mounted) {
         setState(() {
           // This empty setState will trigger a rebuild to update the animation
         });
       }
     });
+  }
+
+  Future<void> _refreshFeed() async {
+    setState(() {
+      feedCache['friends'] = [];
+      feedCache['global'] = [];
+      lastFriendsDocument = null;
+      lastGlobalDocument = null;
+      isLoadingFriends = false;
+      isLoadingGlobal = false;
+    });
+
+    // Reload both feeds
+    await Future.wait([
+      loadFriendsFeed(),
+      loadGlobalFeed(),
+    ]);
   }
 }
 
@@ -1580,9 +1615,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
