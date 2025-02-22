@@ -54,6 +54,7 @@ class MealPost {
   final int likesCount;
   final int commentsCount;
   final List<String> likedBy;
+  final double mealScore;
 
   MealPost({
     required this.id,
@@ -81,6 +82,7 @@ class MealPost {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.likedBy = const [],
+    this.mealScore = 0.0,
   }) {
     photoUrls.removeWhere((url) => !CustomCacheManager.isValidImageUrl(url));
   }
@@ -125,6 +127,7 @@ class MealPost {
       likesCount: data['likesCount']?.toInt() ?? 0,
       commentsCount: data['commentsCount']?.toInt() ?? 0,
       likedBy: List<String>.from(data['likedBy'] ?? []),
+      mealScore: (data['mealScore'] ?? 0.0).toDouble(),
     );
   }
 
@@ -154,6 +157,7 @@ class MealPost {
       'likesCount': likesCount,
       'commentsCount': commentsCount,
       'likedBy': likedBy,
+      'mealScore': mealScore,
     };
   }
 } 

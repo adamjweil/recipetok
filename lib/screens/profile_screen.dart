@@ -1412,6 +1412,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               comments: 0,
               isLiked: likesList.contains(currentUserId),
               isPublic: postData['isPublic'] ?? true,
+              mealScore: double.parse(postData['mealScore']?.toString() ?? '0.0'),
             );
             
             return MealPostWrapper(

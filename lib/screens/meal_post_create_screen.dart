@@ -20,6 +20,7 @@ import '../widgets/ai_suggestion_field.dart';
 import '../services/ai_service.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../services/vision_service.dart';
+import '../screens/home_screen.dart';
 
 class MealPostCreateScreen extends StatefulWidget {
   const MealPostCreateScreen({super.key});
@@ -843,6 +844,47 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       appBar: AppBar(
         title: const Text('Meal Post'),
         elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: _isLoading ? null : _createPost,
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Theme.of(context).primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: _isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).primaryColor,
+                      ),
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.share, size: 18),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Share',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -911,13 +953,42 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.check),
-                                label: const Text('Share Recipe'),
+                              child: ElevatedButton(
                                 onPressed: _isLoading ? null : _createPost,
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(vertical: 16),
                                 ),
+                                child: _isLoading
+                                  ? Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              Theme.of(context).colorScheme.onPrimary,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Sharing...',
+                                          style: TextStyle(
+                                            color: Theme.of(context).colorScheme.onPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.share),
+                                        SizedBox(width: 8),
+                                        Text('Share'),
+                                      ],
+                                    ),
                               ),
                             ),
                           ],
@@ -1370,6 +1441,19 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       final calories = int.tryParse(_caloriesController.text.trim()) ?? 0;
       final protein = int.tryParse(_proteinController.text.trim()) ?? 0;
 
+      // Calculate meal score
+      debugPrint('🎯 Calculating meal score...');
+      final mealScore = await _aiService.calculateMealScore(
+        detectedIngredients: _confidenceLevels,
+        calories: calories,
+        protein: protein,
+        isVegetarian: _isVegetarian,
+        cookTime: cookTime,
+        ingredients: _ingredientsController.text.trim(),
+        instructions: _instructionsController.text.trim(),
+      );
+      debugPrint('✅ Meal score calculated: $mealScore');
+
       // Create meal post with verified user data
       final mealPost = MealPost(
         id: '',  // This will be set by Firestore
@@ -1395,6 +1479,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         likesCount: 0,
         commentsCount: 0,
         likedBy: const [],
+        mealScore: mealScore, // Add meal score to the post
       );
 
       debugPrint('📤 Uploading meal post to Firestore...');
@@ -1407,6 +1492,19 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
       if (mounted) {
         Navigator.pop(context);
+        // Clear feed caches to force a refresh
+        final homeScreenState = context.findAncestorStateOfType<HomeScreenState>();
+        if (homeScreenState != null) {
+          homeScreenState.setState(() {
+            homeScreenState.feedCache['friends'] = [];
+            homeScreenState.feedCache['global'] = [];
+            homeScreenState.lastFriendsDocument = null;
+            homeScreenState.lastGlobalDocument = null;
+          });
+          // Reload both feeds
+          homeScreenState.loadFriendsFeed();
+          homeScreenState.loadGlobalFeed();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Recipe shared successfully!'),

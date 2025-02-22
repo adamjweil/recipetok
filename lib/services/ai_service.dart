@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
 import '../models/meal_post.dart';
 import './google_vision_service.dart';
+import 'dart:math';
 
 class VideoInfo {
   final Duration duration;
@@ -249,5 +250,76 @@ Do not include any markdown formatting, code blocks, or additional text. Return 
       default:
         return MealType.snack;
     }
+  }
+
+  Future<double> calculateMealScore({
+    required Map<String, dynamic> detectedIngredients,
+    required int calories,
+    required int protein,
+    required bool isVegetarian,
+    required int cookTime,
+    String? ingredients,
+    String? instructions,
+  }) async {
+    double score = 5.0; // Start with a base score of 5
+
+    // 1. Nutritional Balance (±1.5 points)
+    if (calories > 0) {
+      // Ideal range: 300-800 calories per meal
+      if (calories >= 300 && calories <= 800) {
+        score += 1.5;
+      } else if (calories > 800) {
+        score += 0.5;
+      } else if (calories < 300) {
+        score += 0.75;
+      }
+    }
+
+    // 2. Protein Content (±1.0 points)
+    if (protein > 0) {
+      // Ideal range: 15-30g protein per meal
+      if (protein >= 15 && protein <= 30) {
+        score += 1.0;
+      } else if (protein > 30) {
+        score += 0.5;
+      } else if (protein > 0) {
+        score += protein / 30.0;
+      }
+    }
+
+    // 3. Ingredient Variety (±1.0 points)
+    if (detectedIngredients.isNotEmpty) {
+      int uniqueIngredients = detectedIngredients.length;
+      if (uniqueIngredients >= 5) {
+        score += 1.0;
+      } else {
+        score += (uniqueIngredients * 0.2); // 0.2 points per ingredient
+      }
+    }
+
+    // 4. Recipe Completeness (±0.75 points)
+    if (ingredients?.isNotEmpty ?? false) score += 0.375;
+    if (instructions?.isNotEmpty ?? false) score += 0.375;
+
+    // 5. Preparation Efficiency (±0.5 points)
+    if (cookTime > 0) {
+      // Ideal range: 15-45 minutes
+      if (cookTime >= 15 && cookTime <= 45) {
+        score += 0.5;
+      } else if (cookTime < 15) {
+        score += 0.25; // Quick meals get a small bonus
+      }
+    }
+
+    // 6. Sustainability Bonus (+0.25 points)
+    if (isVegetarian) {
+      score += 0.25;
+    }
+
+    // Add some randomness to make scores more varied (±0.5)
+    score += (Random().nextDouble() - 0.5);
+
+    // Ensure score is between 1 and 10
+    return score.clamp(1.0, 10.0);
   }
 } 

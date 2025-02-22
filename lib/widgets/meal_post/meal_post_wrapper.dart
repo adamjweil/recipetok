@@ -20,6 +20,7 @@ import '../../screens/main_navigation_screen.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import '../meal_score_overlay.dart';
 
 class MealPostWrapper extends StatefulWidget {
   final MealPost post;
@@ -211,6 +212,15 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                         ),
                                       ),
                                     ),
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 8,
+                                    child: MealScoreOverlay(
+                                      score: widget.post.mealScore,
+                                      size: 40,
+                                      showLabel: false,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1210,11 +1220,21 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (FirebaseAuth.instance.currentUser?.uid == widget.post.userId)
-                      IconButton(
-                        icon: const Icon(Icons.more_vert),
-                        onPressed: () => _showOptionsMenu(context),
-                      ),
+                    Row(
+                      children: [
+                        MealScoreOverlay(
+                          score: widget.post.mealScore,
+                          size: 50,
+                          showLabel: true,
+                        ),
+                        const SizedBox(width: 8),
+                        if (FirebaseAuth.instance.currentUser?.uid == widget.post.userId)
+                          IconButton(
+                            icon: const Icon(Icons.more_vert),
+                            onPressed: () => _showOptionsMenu(context),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
