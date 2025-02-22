@@ -6,6 +6,7 @@ import 'dart:ui';
 import '../../utils/custom_cache_manager.dart';
 import '../../screens/profile_screen.dart';
 import '../../models/meal_post.dart';
+import '../../models/meal_score.dart';
 import 'expandable_meal_post.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
@@ -21,6 +22,8 @@ import 'package:shimmer/shimmer.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../meal_score_overlay.dart';
+import '../../screens/meal_score_screen.dart';
+import '../../services/meal_score_service.dart';
 
 class MealPostWrapper extends StatefulWidget {
   final MealPost post;
@@ -46,6 +49,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
   late final Animation<double> _expandAnimation;
   bool _isExpanded = false;
   bool _isPressed = false;
+  bool _isAnalyzing = false;
 
   final TextEditingController _commentController = TextEditingController();
   final PageController _pageController = PageController();
@@ -213,13 +217,9 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                       ),
                                     ),
                                   Positioned(
-                                    bottom: 8,
+                                    top: 8,
                                     right: 8,
-                                    child: MealScoreOverlay(
-                                      score: widget.post.mealScore,
-                                      size: 40,
-                                      showLabel: false,
-                                    ),
+                                    child: _buildMealScoreOverlay(),
                                   ),
                                 ],
                               ),
@@ -1226,6 +1226,85 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                           score: widget.post.mealScore,
                           size: 50,
                           showLabel: true,
+                          isLoading: _isAnalyzing,
+                          onTap: () async {
+                            if (_isAnalyzing) return;
+                            
+                            setState(() => _isAnalyzing = true);
+                            
+                            try {
+                              // First try to use the stored analysis if it exists
+                              final postDoc = await FirebaseFirestore.instance
+                                  .collection('meal_posts')
+                                  .doc(widget.post.id)
+                                  .get();
+                              
+                              final storedAnalysis = postDoc.data()?['analysis'] as Map<String, dynamic>?;
+                              
+                              MealScore? mealScore;
+                              if (storedAnalysis != null) {
+                                // Use stored analysis
+                                mealScore = MealScore.fromMap(storedAnalysis);
+                              } else {
+                                // Generate new analysis
+                                mealScore = await MealScoreService().analyzeMeal(
+                                  widget.post.photoUrls.first,
+                                  {
+                                    'protein': widget.post.protein,
+                                    'cookTime': widget.post.cookTime.toString(),
+                                    'calories': widget.post.calories,
+                                    'isVegetarian': widget.post.isVegetarian,
+                                    'ingredients': widget.post.ingredients,
+                                    'instructions': widget.post.instructions,
+                                  },
+                                );
+
+                                // Store the analysis and update the meal score
+                                await FirebaseFirestore.instance
+                                    .collection('meal_posts')
+                                    .doc(widget.post.id)
+                                    .update({
+                                      'analysis': mealScore.toMap(),
+                                      'mealScore': mealScore.overallScore,
+                                    });
+                              }
+
+                              if (!mounted) return;
+
+                              // Reset loading state before navigation
+                              setState(() => _isAnalyzing = false);
+
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MealScoreScreen(
+                                    mealScore: mealScore ?? const MealScore(
+                                      overallScore: 0.0,
+                                      presentationScore: 0.0,
+                                      photoQualityScore: 0.0,
+                                      nutritionScore: 0.0,
+                                      creativityScore: 0.0,
+                                      technicalScore: 0.0,
+                                      aiCritique: '',
+                                      strengths: [],
+                                      improvements: [],
+                                    ),
+                                    imageUrl: widget.post.photoUrls.first,
+                                  ),
+                                ),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error analyzing meal: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              // Reset loading state on error
+                              setState(() => _isAnalyzing = false);
+                            }
+                          },
                         ),
                         const SizedBox(width: 8),
                         if (FirebaseAuth.instance.currentUser?.uid == widget.post.userId)
@@ -1862,5 +1941,105 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
         );
       }
     }
+  }
+
+  Widget _buildMealScoreOverlay() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('meal_posts')
+          .doc(widget.post.id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox();
+        }
+
+        final postData = snapshot.data!.data() as Map<String, dynamic>?;
+        final currentScore = (postData?['mealScore'] ?? 0.0).toDouble();
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () async {
+            if (_isAnalyzing) return;
+            
+            setState(() => _isAnalyzing = true);
+            
+            try {
+              // First try to use the stored analysis if it exists
+              final storedAnalysis = postData?['analysis'] as Map<String, dynamic>?;
+              
+              MealScore? mealScore;
+              if (storedAnalysis != null) {
+                // Use stored analysis
+                mealScore = MealScore.fromMap(storedAnalysis);
+              } else {
+                // Generate new analysis
+                mealScore = await MealScoreService().analyzeMeal(
+                  widget.post.photoUrls.first,
+                  {
+                    'protein': widget.post.protein,
+                    'cookTime': widget.post.cookTime.toString(),
+                    'calories': widget.post.calories,
+                    'isVegetarian': widget.post.isVegetarian,
+                    'ingredients': widget.post.ingredients,
+                    'instructions': widget.post.instructions,
+                  },
+                );
+
+                // Store the analysis and update the meal score
+                await FirebaseFirestore.instance
+                    .collection('meal_posts')
+                    .doc(widget.post.id)
+                    .update({
+                      'analysis': mealScore.toMap(),
+                      'mealScore': mealScore.overallScore,
+                    });
+              }
+
+              if (!mounted) return;
+
+              // Reset loading state before navigation
+              setState(() => _isAnalyzing = false);
+
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MealScoreScreen(
+                    mealScore: mealScore ?? const MealScore(
+                      overallScore: 0.0,
+                      presentationScore: 0.0,
+                      photoQualityScore: 0.0,
+                      nutritionScore: 0.0,
+                      creativityScore: 0.0,
+                      technicalScore: 0.0,
+                      aiCritique: '',
+                      strengths: [],
+                      improvements: [],
+                    ),
+                    imageUrl: widget.post.photoUrls.first,
+                  ),
+                ),
+              );
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error analyzing meal: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              // Reset loading state on error
+              setState(() => _isAnalyzing = false);
+            }
+          },
+          child: MealScoreOverlay(
+            score: currentScore,
+            size: 40,
+            showLabel: false,
+            isLoading: _isAnalyzing,
+          ),
+        );
+      },
+    );
   }
 } 
