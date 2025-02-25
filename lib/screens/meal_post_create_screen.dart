@@ -21,6 +21,11 @@ import '../services/ai_service.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../services/vision_service.dart';
 import '../screens/home_screen.dart';
+import '../services/replicate_service.dart';
+import '../widgets/image_enhancement_preview.dart';
+import 'package:image/image.dart' as img;
+import '../models/food_detection.dart';
+import 'package:http/http.dart' as http;
 
 class MealPostCreateScreen extends StatefulWidget {
   const MealPostCreateScreen({super.key});
@@ -85,6 +90,8 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     "Slay & Filet Sunday 🔪",
     "Sweet & Savage Sunday 😈"
   ];
+
+  final _replicateService = ReplicateService.instance;
 
   String _generateFoodPun() {
     final dayOfWeek = DateTime.now().weekday;
@@ -358,136 +365,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           
           if (mounted) {
             // Show preview dialog with labels
-            final shouldUseImage = await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => Dialog(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.9,
-                    maxHeight: MediaQuery.of(context).size.height * 0.8,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // Image
-                            Image.file(
-                              croppedImage,
-                              fit: BoxFit.contain,
-                            ),
-                            // Labels overlay with gradient background
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withOpacity(0.7),
-                                    Colors.transparent,
-                                    Colors.transparent,
-                                    Colors.black.withOpacity(0.7),
-                                  ],
-                                ),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Detected Items:',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      shadows: [
-                                        Shadow(
-                                          offset: Offset(0, 1),
-                                          blurRadius: 3.0,
-                                          color: Colors.black,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: () {
-                                      final sortedEntries = detectionResults.entries
-                                          .where((entry) => entry.value > 0)
-                                          .toList()
-                                        ..sort((a, b) => b.value.compareTo(a.value));
-
-                                      final topFiveEntries = sortedEntries.take(5).toList();
-                                      
-                                      return topFiveEntries.map<Widget>((e) => Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 4),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.6),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(0.2),
-                                              width: 0.5,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              shadows: [
-                                                Shadow(
-                                                  offset: Offset(0, 1),
-                                                  blurRadius: 3.0,
-                                                  color: Colors.black,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      )).toList();
-                                    }(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pop(context, false);
-                              },
-                              child: const Text('Skip'),
-                            ),
-                            const SizedBox(width: 16),
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.pop(context, true);
-                              },
-                              child: const Text('Use This Image'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ) ?? false;
+            final shouldUseImage = await _showPreviewDialog(croppedImage, detectionResults) ?? false;
 
             if (shouldUseImage) {
               setState(() {
@@ -527,227 +405,37 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
     }
   }
 
-  Future<void> _showMediaPicker() async {
-    HapticFeedback.mediumImpact();
+  Future<bool?> _showPreviewDialog(File imageFile, Map<String, double> detectionResults) async {
+    // Replace Roboflow detection with Replicate enhancement
+    String? enhancedImageUrl;
+    String? error;
     
-    final bool isSimulator = !kIsWeb && Platform.isIOS && !Platform.isAndroid;
-    
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 250,  // Increased height to accommodate all options
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.camera_alt, color: Colors.blue),
-                    title: const Text('Take Photo'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _captureImage();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.photo_library, color: Colors.green),
-                    title: const Text('Choose from Gallery'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _pickImage();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.image, color: Colors.orange),
-                    title: const Text('Use Sample Image'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _loadSampleImage();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
+    try {
+      enhancedImageUrl = await _replicateService.enhanceFoodImage(imageFile);
+    } catch (e) {
+      error = e.toString();
+      debugPrint('Error enhancing image: $e');
+    }
+
+    if (!mounted) return false;
+
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => ImageEnhancementPreview(
+          originalImage: imageFile,
+          enhancedImageUrl: enhancedImageUrl,
+          isLoading: enhancedImageUrl == null && error == null,
+          error: error,
+          onAccept: () => Navigator.pop(context, true),
+          onReject: () => Navigator.pop(context, false),
+          onRetry: () async {
+            Navigator.pop(context);
+            await _showPreviewDialog(imageFile, detectionResults);
+          },
         ),
       ),
     );
-  }
-
-  Future<void> _loadSampleImage() async {
-    try {
-      // Load the sample image from assets
-      final byteData = await rootBundle.load('assets/images/sample_salad.jpg');
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/sample_salad.jpg');
-      await tempFile.writeAsBytes(byteData.buffer.asUint8List());
-
-      // Initialize Vision service and detect food
-      final _visionService = VisionService.instance;
-      await _visionService.initialize();
-      final detectionResults = await _visionService.detectFood(tempFile);
-
-      if (mounted) {
-        // Show preview dialog with labels
-        await showDialog(
-          context: context,
-          builder: (context) => Dialog(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.9,
-                maxHeight: MediaQuery.of(context).size.height * 0.8,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: Stack(
-                        children: [
-                          // Image
-                          Container(
-                            width: double.infinity,
-                            height: double.infinity,
-                            child: Image.file(
-                              tempFile,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          // Labels overlay
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.7),
-                                  Colors.transparent,
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.7),
-                                ],
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Detected Items:',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: () {
-                                    final sortedEntries = detectionResults.entries
-                                        .where((entry) => entry.value > 0)
-                                        .toList()
-                                        ..sort((a, b) => b.value.compareTo(a.value));
-
-                                    final topFiveEntries = sortedEntries.take(5).toList();
-                                    
-                                    return topFiveEntries.map<Widget>((e) => Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 4),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.6),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    )).toList();
-                                  }(),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _selectedPhotos.add(tempFile);
-                                _originalPhotos.add(tempFile);
-                              });
-                              Navigator.pop(context);
-                              
-                              // Auto-fill description with detected items
-                              final sortedEntries = detectionResults.entries
-                                  .where((entry) => entry.value > 0)
-                                  .toList()
-                                  ..sort((a, b) => b.value.compareTo(a.value));
-
-                              final topFiveEntries = sortedEntries.take(5).toList();
-                              
-                              final topItems = topFiveEntries.map((e) => e.key).toList();
-                              
-                              _descriptionController.text = _generateCleverDescription({
-                                'detectedIngredients': topItems,
-                              });
-                              
-                              // Analyze the sample image for additional details
-                              _analyzePhotos();
-                            },
-                            child: const Text('Use This Image'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load sample image: $e')),
-        );
-      }
-    }
   }
 
   Widget _buildMediaSection() {
@@ -760,25 +448,39 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Photos (${_selectedPhotos.length}/$MAX_PHOTOS)',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  'Photos (${_selectedPhotos.length}/$MAX_PHOTOS)',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (_selectedPhotos.isNotEmpty)
-                TextButton.icon(
-                  icon: const Icon(Icons.add_photo_alternate),
-                  label: const Text('Add More'),
-                  onPressed: _selectedPhotos.length < MAX_PHOTOS ? _showMediaPicker : null,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.auto_awesome),
+                      onPressed: () => _enhanceSelectedPhoto(),
+                      tooltip: 'Enhance',
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.add_photo_alternate),
+                      onPressed: _selectedPhotos.length < MAX_PHOTOS ? _pickImage : null,
+                      tooltip: 'Add More',
+                    ),
+                  ],
                 ),
             ],
           ),
           const SizedBox(height: 8),
           if (_selectedPhotos.isEmpty)
             InkWell(
-              onTap: _showMediaPicker,
+              onTap: _pickImage,
               child: Container(
                 width: double.infinity,
                 height: 200,
@@ -816,22 +518,48 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
               ),
             )
           else
-            MediaPreview(
-              photos: _selectedPhotos,
-              onDelete: (index) {
-                setState(() => _selectedPhotos.removeAt(index));
-                HapticFeedback.lightImpact();
-              },
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (oldIndex < newIndex) {
-                    newIndex -= 1;
-                  }
-                  final item = _selectedPhotos.removeAt(oldIndex);
-                  _selectedPhotos.insert(newIndex, item);
-                });
-                HapticFeedback.mediumImpact();
-              },
+            SizedBox(
+              height: 200,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _selectedPhotos.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            _selectedPhotos[index],
+                            height: 200,
+                            width: 200,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: IconButton(
+                            icon: const Icon(Icons.close),
+                            color: Colors.white,
+                            onPressed: () => _removePhoto(index),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: IconButton(
+                            icon: const Icon(Icons.auto_awesome),
+                            color: Colors.white,
+                            onPressed: () => _enhanceSelectedPhoto(index),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
         ],
       ),
@@ -1584,136 +1312,7 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
         
         if (mounted) {
           // Show preview dialog with labels
-          final shouldUseImage = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => Dialog(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.9,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // Image
-                          Image.file(
-                            croppedImage,
-                            fit: BoxFit.contain,
-                          ),
-                          // Labels overlay with gradient background
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withOpacity(0.7),
-                                  Colors.transparent,
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.7),
-                                ],
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Detected Items:',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: [
-                                      Shadow(
-                                        offset: Offset(0, 1),
-                                        blurRadius: 3.0,
-                                        color: Colors.black,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: () {
-                                    final sortedEntries = detectionResults.entries
-                                        .where((entry) => entry.value > 0)
-                                        .toList()
-                                      ..sort((a, b) => b.value.compareTo(a.value));
-
-                                    final topFiveEntries = sortedEntries.take(5).toList();
-                                    
-                                    return topFiveEntries.map<Widget>((e) => Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 4),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.6),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: Colors.white.withOpacity(0.2),
-                                            width: 0.5,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${e.key} (${(e.value * 100).toStringAsFixed(1)}%)',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            shadows: [
-                                              Shadow(
-                                                offset: Offset(0, 1),
-                                                blurRadius: 3.0,
-                                                color: Colors.black,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    )).toList();
-                                  }(),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context, false);
-                            },
-                            child: const Text('Retake'),
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(context, true);
-                            },
-                            child: const Text('Use This Image'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ) ?? false;
+          final shouldUseImage = await _showPreviewDialog(croppedImage, detectionResults) ?? false;
 
           if (shouldUseImage) {
             setState(() {
@@ -1755,9 +1354,15 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
   Future<File> _compressImage(File file) async {
     try {
       final bytes = await file.readAsBytes();
-      final image = await decodeImageFromList(bytes);
+      final image = img.decodeImage(bytes);
       
-      // If image is already small enough, return original
+      // Handle null case
+      if (image == null) {
+        debugPrint('Warning: Could not decode image, returning original file');
+        return file;
+      }
+
+      // Now we can safely access width and height since we've checked for null
       if (image.width <= 1920 && image.height <= 1920) {
         return file;
       }
@@ -1782,6 +1387,70 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
       debugPrint('Error compressing image: $e');
       return file; // Return original if compression fails
     }
+  }
+
+  Future<void> _enhanceSelectedPhoto([int? index]) async {
+    if (_selectedPhotos.isEmpty) return;
+    
+    final photoIndex = index ?? 0;
+    if (photoIndex >= _selectedPhotos.length) return;
+
+    final imageFile = _selectedPhotos[photoIndex];
+    
+    try {
+      setState(() => _isLoading = true);
+      
+      // Show preview dialog with enhancement
+      final shouldUseEnhanced = await _showPreviewDialog(
+        imageFile,
+        {}, // Empty detection results since we're not using them
+      );
+
+      if (shouldUseEnhanced == true && mounted) {
+        // Download enhanced image
+        final enhancedUrl = await _replicateService.enhanceFoodImage(imageFile);
+        if (enhancedUrl != null) {
+          final response = await http.get(Uri.parse(enhancedUrl));
+          final bytes = response.bodyBytes;
+          
+          // Save enhanced image
+          final tempDir = await getTemporaryDirectory();
+          final enhancedFile = File(
+            '${tempDir.path}/enhanced_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          );
+          await enhancedFile.writeAsBytes(bytes);
+
+          // Replace original with enhanced
+          setState(() {
+            _selectedPhotos[photoIndex] = enhancedFile;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Photo enhanced successfully!')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error enhancing photo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error enhancing photo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() {
+      _selectedPhotos.removeAt(index);
+      _originalPhotos.removeAt(index);
+    });
   }
 }
 

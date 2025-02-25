@@ -57,11 +57,11 @@
 	<key>NSCachesDirectory</key>
 	<string>We temporarily store images in the cache to improve app performance and reduce data usage. These cached images are automatically cleared when storage space is needed.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>We use your camera to let you record cooking videos and share your recipes with other users. The videos you create will be stored in the app and can be shared on your profile.</string>
+	<string>We need access to your camera to capture food photos for analysis</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We save your recorded recipe videos to your photo library so you can access them later and share them through other apps. You can delete these videos from your library at any time.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Access to your photo library allows you to select existing videos to create recipe tutorials. You can choose which videos to share, and they will only be uploaded when you explicitly choose to post them.</string>
+	<string>We need access to your photos to analyze food images</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
