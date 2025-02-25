@@ -6,5 +6,10 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:recipetok.app</string>
+		<string>applinks:recipetok.page.link</string>
+	</array>
 </dict>
 </plist>

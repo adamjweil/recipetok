@@ -24,6 +24,7 @@ import 'package:flutter/services.dart';
 import '../meal_score_overlay.dart';
 import '../../screens/meal_score_screen.dart';
 import '../../services/meal_score_service.dart';
+import '../../services/meal_sharing_service.dart';
 
 class MealPostWrapper extends StatefulWidget {
   final MealPost post;
@@ -54,6 +55,8 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
   final TextEditingController _commentController = TextEditingController();
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  final MealSharingService _sharingService = MealSharingService();
 
   @override
   void initState() {
@@ -467,12 +470,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                               ),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              onPressed: () {
-                                Share.share(
-                                  'Check out this meal post: ${widget.post.description}',
-                                  subject: 'Check out this meal post!',
-                                );
-                              },
+                              onPressed: () => _sharingService.shareMealPost(context, widget.post),
                             ),
                           ],
                         ),
@@ -519,12 +517,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                                           ),
                                           IconButton(
                                             icon: const Icon(Icons.share_outlined),
-                                            onPressed: () {
-                                              Share.share(
-                                                'Check out this recipe: ${widget.post.title}\n\n${widget.post.description}',
-                                                subject: widget.post.title,
-                                              );
-                                            },
+                                            onPressed: () => _sharingService.shareMealPost(context, widget.post),
                                           ),
                                         ],
                                       ),
@@ -1400,12 +1393,7 @@ class _MealPostWrapperState extends State<MealPostWrapper> with SingleTickerProv
                         ),
                         IconButton(
                           icon: const Icon(Icons.share_outlined),
-                          onPressed: () {
-                            Share.share(
-                              'Check out this recipe: ${widget.post.title}\n\n${widget.post.description}',
-                              subject: widget.post.title,
-                            );
-                          },
+                          onPressed: () => _sharingService.shareMealPost(context, widget.post),
                         ),
                       ],
                     ),

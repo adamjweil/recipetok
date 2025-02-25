@@ -1288,105 +1288,64 @@ class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMix
   }
 
   Future<void> loadFriendsFeed() async {
-    if (isLoadingFriends && !_isRefreshing) return;
-    
+    if (isLoadingFriends) return;
     setState(() => isLoadingFriends = true);
-    
+
     try {
-      // Get current user's following list
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .get();
-      
-      final following = List<String>.from(userDoc.data()?['following'] ?? []);
-      following.add(currentUserId); // Include user's own posts
-      
-      Query query = _firestore
+      final querySnapshot = await _firestore
           .collection('meal_posts')
-          .where('userId', whereIn: following.isEmpty ? [currentUserId] : following)
+          .where('userId', whereIn: followingUsers)
           .orderBy('createdAt', descending: true)
-          .limit(_postsPerBatch);
-      
-      if (lastFriendsDocument != null && !_isRefreshing) {
-        query = query.startAfterDocument(lastFriendsDocument!);
-      }
-      
-      final snapshot = await query.get();
-      
-      if (snapshot.docs.isEmpty) {
-        setState(() {
-          _hasMorePosts = false;
-          isLoadingFriends = false;
-        });
-        return;
-      }
-      
-      final posts = snapshot.docs
+          .limit(_postsPerBatch)
+          .get();
+
+      final posts = querySnapshot.docs
           .map((doc) => MealPost.fromFirestore(doc))
           .toList();
-      
+
       setState(() {
-        if (_isRefreshing) {
-          feedCache['friends'] = posts;
-        } else {
-          feedCache['friends'] = [...feedCache['friends']!, ...posts];
-        }
-        lastFriendsDocument = snapshot.docs.last;
-        _hasMorePosts = snapshot.docs.length == _postsPerBatch;
+        feedCache['friends'] = posts;
+        lastFriendsDocument = querySnapshot.docs.last;
         isLoadingFriends = false;
       });
     } catch (e) {
-      debugPrint('Error loading friends feed: $e');
       setState(() => isLoadingFriends = false);
-      rethrow;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading feed: ${e.toString()}')),
+        );
+      }
     }
   }
 
   Future<void> loadGlobalFeed() async {
-    if (isLoadingGlobal && !_isRefreshing) return;
-    
+    if (isLoadingGlobal) return;
     setState(() => isLoadingGlobal = true);
-    
+
     try {
-      Query query = _firestore
+      final querySnapshot = await _firestore
           .collection('meal_posts')
           .where('isPublic', isEqualTo: true)
           .orderBy('createdAt', descending: true)
-          .limit(_postsPerBatch);
-      
-      if (lastGlobalDocument != null && !_isRefreshing) {
-        query = query.startAfterDocument(lastGlobalDocument!);
-      }
-      
-      final snapshot = await query.get();
-      
-      if (snapshot.docs.isEmpty) {
-        setState(() {
-          _hasMorePosts = false;
-          isLoadingGlobal = false;
-        });
-        return;
-      }
-      
-      final posts = snapshot.docs
+          .limit(_postsPerBatch)
+          .get();
+
+      final posts = querySnapshot.docs
           .map((doc) => MealPost.fromFirestore(doc))
           .toList();
-      
+
       setState(() {
-        if (_isRefreshing) {
-          feedCache['global'] = posts;
-        } else {
-          feedCache['global'] = [...feedCache['global']!, ...posts];
-        }
-        lastGlobalDocument = snapshot.docs.last;
-        _hasMorePosts = snapshot.docs.length == _postsPerBatch;
+        feedCache['global'] = posts;
+        lastGlobalDocument = querySnapshot.docs.last;
         isLoadingGlobal = false;
       });
     } catch (e) {
-      debugPrint('Error loading global feed: $e');
       setState(() => isLoadingGlobal = false);
-      rethrow;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading feed: ${e.toString()}')),
+        );
+      }
     }
   }
 

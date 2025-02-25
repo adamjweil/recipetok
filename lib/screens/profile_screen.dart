@@ -1346,25 +1346,30 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             }
             
             final mealPost = MealPost(
-              userId: postData['userId'] ?? '',
+              id: posts[index].id,
+              userId: currentUserId,
               userName: postData['userName'] ?? '',
+              userAvatarUrl: postData['avatarUrl'],
               title: postData['title'] ?? '',
               description: postData['description'] ?? '',
-              imageUrl: postData['imageUrl'] ?? '',
+              photoUrls: List<String>.from(postData['photoUrls'] ?? []),
               createdAt: (postData['createdAt'] as Timestamp).toDate(),
               likes: likesList.length,
-              id: posts[index].id,
-              photoUrls: List<String>.from(postData['photoUrls'] ?? []),
-              mealType: getMealType(postData['mealType'] as String?),
+              comments: 0,
+              likedBy: likesList,
+              isVegetarian: postData['isVegetarian'] ?? false,
+              ingredients: postData['ingredients'] ?? [],
+              instructions: postData['instructions'] ?? '',
               cookTime: postData['cookTime'] ?? '',
               calories: int.parse(postData['calories']?.toString() ?? '0'),
               protein: int.parse(postData['protein']?.toString() ?? '0'),
-              isVegetarian: postData['isVegetarian'] ?? false,
+              mealType: getMealType(postData['mealType'] as String?),
+              mealScore: double.parse(postData['mealScore']?.toString() ?? '0.0'),
               carbonSaved: double.parse(postData['carbonSaved']?.toString() ?? '0'),
-              comments: 0,
               isLiked: likesList.contains(currentUserId),
               isPublic: postData['isPublic'] ?? true,
-              mealScore: double.parse(postData['mealScore']?.toString() ?? '0.0'),
+              likesCount: likesList.length,
+              commentsCount: 0,
             );
             
             return MealPostWrapper(

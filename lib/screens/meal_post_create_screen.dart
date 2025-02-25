@@ -1484,11 +1484,11 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
 
       debugPrint('📤 Uploading meal post to Firestore...');
       // Create the post document
-      final docRef = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('meal_posts')
-          .add(mealPost.toFirestore());
+          .add(mealPost.toMap());
       
-      debugPrint('✅ Meal post created successfully with ID: ${docRef.id}');
+      debugPrint('✅ Meal post created successfully');
 
       if (mounted) {
         Navigator.pop(context);

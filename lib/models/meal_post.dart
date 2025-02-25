@@ -38,25 +38,25 @@ class MealPost {
   final String title;
   final String? description;
   final List<String> photoUrls;
+  final DateTime createdAt;
+  final int likes;
+  final int comments;
+  final List<String> likedBy;
+  final bool isVegetarian;
   final String? ingredients;
   final String? instructions;
-  final MealType mealType;
   final int cookTime;
   final int calories;
   final int protein;
-  final bool isVegetarian;
+  final MealType mealType;
+  final double mealScore;
   final double carbonSaved;
-  final int likes;
-  final int comments;
   final bool isLiked;
   final bool isPublic;
-  final DateTime createdAt;
   final int likesCount;
   final int commentsCount;
-  final List<String> likedBy;
-  final double mealScore;
 
-  MealPost({
+  const MealPost({
     required this.id,
     required this.userId,
     required this.userName,
@@ -66,72 +66,65 @@ class MealPost {
     required this.title,
     this.description,
     required this.photoUrls,
+    required this.createdAt,
+    required this.likes,
+    required this.comments,
+    required this.likedBy,
+    required this.isVegetarian,
     this.ingredients,
     this.instructions,
-    required this.mealType,
     required this.cookTime,
     required this.calories,
     required this.protein,
-    required this.isVegetarian,
+    required this.mealType,
+    required this.mealScore,
     required this.carbonSaved,
-    required this.likes,
-    required this.comments,
     required this.isLiked,
     required this.isPublic,
-    required this.createdAt,
-    this.likesCount = 0,
-    this.commentsCount = 0,
-    this.likedBy = const [],
-    this.mealScore = 0.0,
-  }) {
-    photoUrls.removeWhere((url) => !CustomCacheManager.isValidImageUrl(url));
-  }
+    required this.likesCount,
+    required this.commentsCount,
+  });
 
-  factory MealPost.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+  factory MealPost.fromMap(Map<String, dynamic> map, String id) {
     List<String> photoUrls = [];
-    if (data['photoUrls'] != null) {
-      photoUrls = (data['photoUrls'] as List)
+    if (map['photoUrls'] != null) {
+      photoUrls = (map['photoUrls'] as List)
           .map((url) => url.toString())
           .where((url) => CustomCacheManager.isValidImageUrl(url))
           .toList();
     }
 
     return MealPost(
-      id: doc.id,
-      userId: data['userId'] ?? '',
-      userName: data['userName'] ?? '',
-      userAvatarUrl: data['userAvatarUrl'],
-      imageUrl: data['imageUrl'],
-      caption: data['caption'],
-      title: data['title'] ?? '',
-      description: data['description'],
+      id: id,
+      userId: map['userId'] ?? '',
+      userName: map['userName'] ?? '',
+      userAvatarUrl: map['userAvatarUrl'],
+      imageUrl: map['imageUrl'],
+      caption: map['caption'],
+      title: map['title'] ?? '',
+      description: map['description'],
       photoUrls: photoUrls,
-      ingredients: data['ingredients'],
-      instructions: data['instructions'],
-      mealType: MealType.values.firstWhere(
-        (e) => e.toString().split('.').last == (data['mealType'] as String?)?.toLowerCase(),
-        orElse: () => MealType.snack,
-      ),
-      cookTime: data['cookTime']?.toInt() ?? 0,
-      calories: data['calories']?.toInt() ?? 0,
-      protein: data['protein']?.toInt() ?? 0,
-      isVegetarian: data['isVegetarian'] ?? false,
-      carbonSaved: (data['carbonSaved'] ?? 0).toDouble(),
-      likes: data['likes']?.toInt() ?? 0,
-      comments: data['comments']?.toInt() ?? 0,
-      isLiked: data['isLiked'] ?? false,
-      isPublic: data['isPublic'] ?? true,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      likesCount: data['likesCount']?.toInt() ?? 0,
-      commentsCount: data['commentsCount']?.toInt() ?? 0,
-      likedBy: List<String>.from(data['likedBy'] ?? []),
-      mealScore: (data['mealScore'] ?? 0.0).toDouble(),
+      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      likes: map['likes']?.toInt() ?? 0,
+      comments: map['comments']?.toInt() ?? 0,
+      likedBy: List<String>.from(map['likedBy'] ?? []),
+      isVegetarian: map['isVegetarian'] ?? false,
+      ingredients: map['ingredients'],
+      instructions: map['instructions'],
+      cookTime: map['cookTime']?.toInt() ?? 0,
+      calories: map['calories']?.toInt() ?? 0,
+      protein: map['protein']?.toInt() ?? 0,
+      mealType: _parseMealType(map['mealType'] ?? 'breakfast'),
+      mealScore: (map['mealScore'] ?? 0.0).toDouble(),
+      carbonSaved: (map['carbonSaved'] ?? 0.0).toDouble(),
+      isLiked: map['isLiked'] ?? false,
+      isPublic: map['isPublic'] ?? true,
+      likesCount: map['likesCount']?.toInt() ?? 0,
+      commentsCount: map['commentsCount']?.toInt() ?? 0,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
       'userId': userId,
       'userName': userName,
@@ -141,23 +134,105 @@ class MealPost {
       'title': title,
       'description': description,
       'photoUrls': photoUrls,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'likes': likes,
+      'comments': comments,
+      'likedBy': likedBy,
+      'isVegetarian': isVegetarian,
       'ingredients': ingredients,
       'instructions': instructions,
-      'mealType': mealType.toString().split('.').last,
       'cookTime': cookTime,
       'calories': calories,
       'protein': protein,
-      'isVegetarian': isVegetarian,
+      'mealType': mealType.toString().split('.').last,
+      'mealScore': mealScore,
       'carbonSaved': carbonSaved,
-      'likes': likes,
-      'comments': comments,
       'isLiked': isLiked,
       'isPublic': isPublic,
-      'createdAt': Timestamp.fromDate(createdAt),
       'likesCount': likesCount,
       'commentsCount': commentsCount,
-      'likedBy': likedBy,
-      'mealScore': mealScore,
     };
+  }
+
+  static MealType _parseMealType(String type) {
+    switch (type.toLowerCase()) {
+      case 'breakfast':
+        return MealType.breakfast;
+      case 'lunch':
+        return MealType.lunch;
+      case 'dinner':
+        return MealType.dinner;
+      case 'snack':
+        return MealType.snack;
+      default:
+        return MealType.breakfast;
+    }
+  }
+
+  MealPost copyWith({
+    String? id,
+    String? userId,
+    String? userName,
+    String? userAvatarUrl,
+    String? imageUrl,
+    String? caption,
+    String? title,
+    String? description,
+    List<String>? photoUrls,
+    DateTime? createdAt,
+    int? likes,
+    int? comments,
+    List<String>? likedBy,
+    bool? isVegetarian,
+    String? ingredients,
+    String? instructions,
+    int? cookTime,
+    int? calories,
+    int? protein,
+    MealType? mealType,
+    double? mealScore,
+    double? carbonSaved,
+    bool? isLiked,
+    bool? isPublic,
+    int? likesCount,
+    int? commentsCount,
+  }) {
+    return MealPost(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      userName: userName ?? this.userName,
+      userAvatarUrl: userAvatarUrl ?? this.userAvatarUrl,
+      imageUrl: imageUrl ?? this.imageUrl,
+      caption: caption ?? this.caption,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      photoUrls: photoUrls ?? this.photoUrls,
+      createdAt: createdAt ?? this.createdAt,
+      likes: likes ?? this.likes,
+      comments: comments ?? this.comments,
+      likedBy: likedBy ?? this.likedBy,
+      isVegetarian: isVegetarian ?? this.isVegetarian,
+      ingredients: ingredients ?? this.ingredients,
+      instructions: instructions ?? this.instructions,
+      cookTime: cookTime ?? this.cookTime,
+      calories: calories ?? this.calories,
+      protein: protein ?? this.protein,
+      mealType: mealType ?? this.mealType,
+      mealScore: mealScore ?? this.mealScore,
+      carbonSaved: carbonSaved ?? this.carbonSaved,
+      isLiked: isLiked ?? this.isLiked,
+      isPublic: isPublic ?? this.isPublic,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+    );
+  }
+
+  factory MealPost.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return MealPost.fromMap(data, doc.id);
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return toMap();
   }
 } 

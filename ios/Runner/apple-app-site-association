@@ -1,0 +1,15 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "YOUR_TEAM_ID.com.recipetok.app",
+                "paths": [
+                    "/meal/*",
+                    "/user/*",
+                    "/share/*"
+                ]
+            }
+        ]
+    }
+} 
