@@ -32,6 +32,16 @@
 				<string>com.googleusercontent.apps.655435823575-1qmnor8p06cv7f528ifcnofhuuq8o1fo</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.recipetok.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>recipetok</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
@@ -80,6 +90,27 @@
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>sms</string>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>whatsapp</string>
+		<string>instagram</string>
+		<string>twitter</string>
+		<string>fb</string>
+		<string>fbapi</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to save meal preview cards to your photo library when sharing.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need access to save meal preview cards to your photo library when sharing.</string>
+	<key>FirebaseDynamicLinksCustomDomains</key>
+	<array>
+		<string>https://recipetok.page.link</string>
 	</array>
 </dict>
 </plist>

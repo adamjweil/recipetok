@@ -985,6 +985,9 @@ PODS:
   - Firebase/Database (10.25.0):
     - Firebase/CoreOnly
     - FirebaseDatabase (~> 10.25.0)
+  - Firebase/DynamicLinks (10.25.0):
+    - Firebase/CoreOnly
+    - FirebaseDynamicLinks (~> 10.25.0)
   - Firebase/Firestore (10.25.0):
     - Firebase/CoreOnly
     - FirebaseFirestore (~> 10.25.0)
@@ -1000,6 +1003,10 @@ PODS:
     - Flutter
   - firebase_database (10.5.7):
     - Firebase/Database (= 10.25.0)
+    - firebase_core
+    - Flutter
+  - firebase_dynamic_links (5.5.7):
+    - Firebase/DynamicLinks (= 10.25.0)
     - firebase_core
     - Flutter
   - firebase_storage (11.7.7):
@@ -1047,6 +1054,8 @@ PODS:
     - FirebaseSharedSwift (~> 10.0)
     - GoogleUtilities/UserDefaults (~> 7.13)
     - leveldb-library (~> 1.22)
+  - FirebaseDynamicLinks (10.25.0):
+    - FirebaseCore (~> 10.0)
   - FirebaseFirestore (10.25.0):
     - FirebaseCore (~> 10.0)
     - FirebaseCoreExtension (~> 10.0)
@@ -1305,6 +1314,7 @@ DEPENDENCIES:
   - firebase_auth (from `.symlinks/plugins/firebase_auth/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_database (from `.symlinks/plugins/firebase_database/ios`)
+  - firebase_dynamic_links (from `.symlinks/plugins/firebase_dynamic_links/ios`)
   - firebase_storage (from `.symlinks/plugins/firebase_storage/ios`)
   - Flutter (from `Flutter`)
   - flutter_facebook_auth (from `.symlinks/plugins/flutter_facebook_auth/ios`)
@@ -1342,6 +1352,7 @@ SPEC REPOS:
     - FirebaseCoreExtension
     - FirebaseCoreInternal
     - FirebaseDatabase
+    - FirebaseDynamicLinks
     - FirebaseFirestore
     - FirebaseFirestoreInternal
     - FirebaseInstallations
@@ -1375,6 +1386,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/firebase_core/ios"
   firebase_database:
     :path: ".symlinks/plugins/firebase_database/ios"
+  firebase_dynamic_links:
+    :path: ".symlinks/plugins/firebase_dynamic_links/ios"
   firebase_storage:
     :path: ".symlinks/plugins/firebase_storage/ios"
   Flutter:
@@ -1426,6 +1439,7 @@ SPEC CHECKSUMS:
   firebase_auth: f17bd6bfc0bc3d83c6df9dc3829e5b6fee10b147
   firebase_core: 3b49a055ff54114cae400581c13671fe53936c36
   firebase_database: b1bc9d2ebfb494ec460b22bd2270270aa5f76fa5
+  firebase_dynamic_links: 45048877c9412fefdb6af18bcbef7656be2989f1
   firebase_storage: c2cdb0dddf51417d2322bf6a204d19dd0009a7f3
   FirebaseAnalytics: ec00fe8b93b41dc6fe4a28784b8e51da0647a248
   FirebaseAppCheckInterop: 6a1757cfd4067d8e00fccd14fcc1b8fd78cfac07
@@ -1435,6 +1449,7 @@ SPEC CHECKSUMS:
   FirebaseCoreExtension: 705ca5b14bf71d2564a0ddc677df1fc86ffa600f
   FirebaseCoreInternal: df84dd300b561c27d5571684f389bf60b0a5c934
   FirebaseDatabase: faa489a42f5f868d23a55dd442d6e2099348458e
+  FirebaseDynamicLinks: 12c9f5b643943e0565ed28080373f89cbcb914a3
   FirebaseFirestore: 977ccc27a3caa5d68279f209c3b0450f85b9dc5f
   FirebaseFirestoreInternal: 04b8afa77b4e5b84e86ab5ad985193e9573239fa
   FirebaseInstallations: 913cf60d0400ebd5d6b63a28b290372ab44590dd
