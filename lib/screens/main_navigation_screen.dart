@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:recipetok/screens/profile_screen.dart';
 import 'package:recipetok/screens/video_screen.dart';
 import 'package:recipetok/screens/home_screen.dart';
-import 'package:recipetok/screens/discover_screen.dart';
 import 'package:recipetok/screens/video_upload_screen.dart';
 import 'package:recipetok/screens/meal_post_create_screen.dart';
 import 'package:recipetok/models/video.dart';
