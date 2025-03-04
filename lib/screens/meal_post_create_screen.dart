@@ -1103,7 +1103,13 @@ class _MealPostCreateScreenState extends State<MealPostCreateScreen> {
             
         if (userDoc.exists) {
           final userData = userDoc.data() ?? {};
-          userName = userData['displayName'] ?? currentUser.displayName ?? 'Anonymous';
+          // Use firstName and lastName instead of displayName
+          final firstName = userData['firstName'] ?? '';
+          final lastName = userData['lastName'] ?? '';
+          userName = '$firstName $lastName'.trim();
+          if (userName.isEmpty) {
+            userName = userData['displayName'] ?? currentUser.displayName ?? 'Anonymous';
+          }
           userAvatarUrl = userData['avatarUrl'];
           debugPrint('✅ User data fetched: $userName');
         } else {

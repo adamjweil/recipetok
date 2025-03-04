@@ -105,6 +105,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       return;
     }
 
+    // Repair user document if needed
+    _repairUserDocument();
+
     _tabController = TabController(
       length: 2,  // Changed to 2 tabs
       vsync: this,
@@ -1574,6 +1577,137 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         );
       },
     );
+  }
+
+  Future<void> _repairUserDocument() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      debugPrint('🔍 Checking user documents for: ${currentUser.email}');
+
+      // First, try to find any existing documents with the same email
+      final existingUserQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: currentUser.email)
+          .get();
+
+      // Get the current user document
+      final currentUserDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (existingUserQuery.docs.isNotEmpty) {
+        debugPrint('📝 Found ${existingUserQuery.docs.length} existing user documents with the same email');
+        
+        // Find the document with the most followers/following (likely the main account)
+        DocumentSnapshot? mainAccount;
+        int maxConnections = -1;
+
+        for (final doc in existingUserQuery.docs) {
+          final userData = doc.data() as Map<String, dynamic>;
+          final followers = (userData['followers'] as List?)?.length ?? 0;
+          final following = (userData['following'] as List?)?.length ?? 0;
+          final totalConnections = followers + following;
+
+          debugPrint('👤 User document ${doc.id}: $followers followers, $following following');
+
+          if (totalConnections > maxConnections) {
+            maxConnections = totalConnections;
+            mainAccount = doc;
+          }
+        }
+
+        if (mainAccount != null && mainAccount.id != currentUser.uid) {
+          debugPrint('🔄 Found main account with more connections. Merging data...');
+          final mainData = mainAccount.data() as Map<String, dynamic>;
+
+          // Merge the followers and following lists
+          final followers = List<String>.from(mainData['followers'] ?? []);
+          final following = List<String>.from(mainData['following'] ?? []);
+
+          // Update the current user document with the merged data
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .set({
+            'followers': followers,
+            'following': following,
+            'uid': currentUser.uid,
+            'email': currentUser.email,
+            'firstName': mainData['firstName'],
+            'lastName': mainData['lastName'],
+            'displayName': mainData['displayName'] ?? currentUser.displayName,
+            'avatarUrl': mainData['avatarUrl'] ?? currentUser.photoURL,
+            'bio': mainData['bio'],
+            'foodPreferences': mainData['foodPreferences'] ?? [],
+            'createdAt': mainData['createdAt'] ?? FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          // Update all followers' documents to point to the new UID
+          for (final followerId in followers) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(followerId)
+                .update({
+              'following': FieldValue.arrayRemove([mainAccount.id]),
+              'following': FieldValue.arrayUnion([currentUser.uid])
+            });
+          }
+
+          // Update all following users' documents
+          for (final followingId in following) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(followingId)
+                .update({
+              'followers': FieldValue.arrayRemove([mainAccount.id]),
+              'followers': FieldValue.arrayUnion([currentUser.uid])
+            });
+          }
+
+          debugPrint('✅ Successfully merged user data from previous account');
+        }
+      } else if (!currentUserDoc.exists) {
+        debugPrint('⚠️ No existing user documents found, creating new one...');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .set({
+          'followers': [],
+          'following': [],
+          'uid': currentUser.uid,
+          'email': currentUser.email,
+          'displayName': currentUser.displayName,
+          'avatarUrl': currentUser.photoURL,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Ensure current document has proper structure
+      if (currentUserDoc.exists) {
+        final userData = currentUserDoc.data() as Map<String, dynamic>;
+        final updates = <String, dynamic>{};
+
+        if (!userData.containsKey('followers') || !(userData['followers'] is List)) {
+          updates['followers'] = [];
+        }
+        if (!userData.containsKey('following') || !(userData['following'] is List)) {
+          updates['following'] = [];
+        }
+
+        if (updates.isNotEmpty) {
+          debugPrint('🔧 Repairing current user document structure...');
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .update(updates);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error repairing user document: $e');
+    }
   }
 }
 
