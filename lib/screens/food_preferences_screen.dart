@@ -97,11 +97,12 @@ class _FoodPreferencesScreenState extends State<FoodPreferencesScreen> {
               const SizedBox(height: 32),
               Expanded(
                 child: GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 2.5,
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 2.2,
                   ),
                   itemCount: _foodTypes.length,
                   itemBuilder: (context, index) {
@@ -122,25 +123,29 @@ class _FoodPreferencesScreenState extends State<FoodPreferencesScreen> {
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: isSelected ? Theme.of(context).primaryColor : Colors.grey[300]!,
-                            width: 2,
+                            width: 1.5,
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                           color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : Colors.transparent,
                         ),
-                        child: Row(
+                        child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               foodType['icon'],
                               color: isSelected ? Theme.of(context).primaryColor : Colors.grey[600],
+                              size: 20,
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(height: 4),
                             Text(
                               foodType['name'],
                               style: TextStyle(
                                 color: isSelected ? Theme.of(context).primaryColor : Colors.grey[800],
                                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
                               ),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

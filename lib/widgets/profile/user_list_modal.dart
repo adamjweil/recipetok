@@ -125,6 +125,9 @@ class UserListModal extends StatelessWidget {
   }
 
   Stream<List<DocumentSnapshot>> _getValidUsers() {
+    if (userIds.isEmpty) {
+      return Stream.value([]);  // Return empty stream if no userIds
+    }
     return FirebaseFirestore.instance
         .collection('users')
         .where(FieldPath.documentId, whereIn: userIds)

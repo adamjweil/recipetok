@@ -67,6 +67,9 @@ class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMix
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
 
+  // Add this variable at the top of the class with other instance variables
+  Future<List<Map<String, dynamic>>>? _recommendedUsersFuture;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -475,104 +478,50 @@ class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMix
   // Update the method to get recommended users with better metrics
   Future<List<Map<String, dynamic>>> _getRecommendedUsers() async {
     try {
-      debugPrint('[RecUsers] Step 1: Starting to fetch recommended users...');
-      
-      final currentUserFuture = FirebaseFirestore.instance
+      final adamDoc = await FirebaseFirestore.instance
           .collection('users')
-          .doc(currentUserId)
+          .where('email', isEqualTo: 'adamjweil@gmail.com')
+          .limit(1)
           .get();
 
-      debugPrint('[RecUsers] Step 2: Querying potential users...');
-      final usersQuery = await FirebaseFirestore.instance
-          .collection('users')
-          .where('uid', isNotEqualTo: currentUserId)
-          .orderBy('uid')
-          .limit(10)
-          .get();
-
-      debugPrint('[RecUsers] Step 3: Found ${usersQuery.docs.length} potential users');
-
-      if (usersQuery.docs.isEmpty) {
-        debugPrint('[RecUsers] No users found to recommend');
+      if (adamDoc.docs.isEmpty) {
+        debugPrint('Adam\'s account not found');
         return [];
       }
 
-      final currentUser = await currentUserFuture;
-      debugPrint('[RecUsers] Step 4: Got current user data');
-      
-      if (!currentUser.exists) {
-        debugPrint('[RecUsers] Current user document not found');
-        return [];
+      final adamData = adamDoc.docs.first.data();
+      final adamId = adamDoc.docs.first.id;
+
+      // Get Adam's recent posts
+      final recentPosts = await FirebaseFirestore.instance
+          .collection('meal_posts')
+          .where('userId', isEqualTo: adamId)
+          .orderBy('createdAt', descending: true)
+          .limit(3)
+          .get();
+
+      // Calculate basic stats
+      double totalLikes = 0;
+      double totalComments = 0;
+      for (var post in recentPosts.docs) {
+        totalLikes += (post.data()['likes'] as num?)?.toDouble() ?? 0;
+        totalComments += (post.data()['commentCount'] as num?)?.toDouble() ?? 0;
       }
 
-      final userPreferences = List<String>.from(currentUser.data()?['foodPreferences'] ?? []);
-      debugPrint('[RecUsers] Step 5: User has ${userPreferences.length} food preferences');
-
-      debugPrint('[RecUsers] Step 6: Starting to fetch recent posts for users...');
-      final userPostQueries = usersQuery.docs.map((userDoc) {
-        return FirebaseFirestore.instance
-            .collection('meal_posts')
-            .where('userId', isEqualTo: userDoc.id)
-            .orderBy('createdAt', descending: true)
-            .limit(3)
-            .get();
-      }).toList();
-
-      final postsResults = await Future.wait(userPostQueries);
-      debugPrint('[RecUsers] Step 7: Fetched posts for all users');
-
-      // Process results and calculate scores
-      List<Map<String, dynamic>> rankedUsers = [];
-      
-      for (var i = 0; i < usersQuery.docs.length; i++) {
-        final userDoc = usersQuery.docs[i];
-        final userData = userDoc.data();
-        final userPosts = postsResults[i].docs;
-        final userFoodPrefs = List<String>.from(userData['foodPreferences'] ?? []);
-        
-        // Calculate matching preferences
-        final matchingPreferences = userPreferences
-            .where((pref) => userFoodPrefs.contains(pref))
-            .length;
-
-        // Calculate engagement metrics from the recent posts only
-        double totalLikes = 0;
-        double totalComments = 0;
-        
-        for (var post in userPosts) {
-          final postData = post.data();
-          totalLikes += (postData['likes'] as num?)?.toDouble() ?? 0;
-          totalComments += (postData['commentCount'] as num?)?.toDouble() ?? 0;
-        }
-
-        // Simplified scoring system that's faster to calculate
-        final activityScore = (userPosts.length * 10) +  // Recent posts worth 10 points each
-            (totalLikes * 2).toInt() +                   // Likes worth 2 points
-            (totalComments * 3).toInt() +                // Comments worth 3 points
-            (matchingPreferences * 15);                  // Matching preferences worth 15 points
-
-        rankedUsers.add({
-          'userData': userData,
-          'activityScore': activityScore,
-          'matchingPreferences': matchingPreferences,
-          'recentPosts': userPosts,
-          'stats': {
-            'posts': userPosts.length,
-            'avgLikes': userPosts.isEmpty ? 0.0 : totalLikes / userPosts.length,
-            'avgComments': userPosts.isEmpty ? 0.0 : totalComments / userPosts.length,
-          },
-          'userId': userDoc.id,
-        });
-      }
-
-      // Sort by activity score and take top 3
-      rankedUsers.sort((a, b) => b['activityScore'].compareTo(a['activityScore']));
-      final recommendations = rankedUsers.take(3).toList();
-      debugPrint('Returning ${recommendations.length} recommended users');
-      return recommendations;
-    } catch (e, stackTrace) {
-      debugPrint('Error getting recommended users: $e');
-      debugPrint('Stack trace: $stackTrace');
+      return [{
+        'userData': adamData,
+        'activityScore': 100, // High score to ensure prominence
+        'matchingPreferences': 3, // Assuming good match
+        'recentPosts': recentPosts.docs,
+        'stats': {
+          'posts': recentPosts.docs.length,
+          'avgLikes': recentPosts.docs.isEmpty ? 0.0 : totalLikes / recentPosts.docs.length,
+          'avgComments': recentPosts.docs.isEmpty ? 0.0 : totalComments / recentPosts.docs.length,
+        },
+        'userId': adamId,
+      }];
+    } catch (e) {
+      debugPrint('Error getting recommended user: $e');
       return [];
     }
   }
@@ -1061,7 +1010,7 @@ class HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMix
     if (_followedUsers[userId] == true) {
       final startTime = _countdownStartTimes[userId] ?? DateTime.now();
       final elapsed = DateTime.now().difference(startTime).inSeconds;
-      final initialValue = max(10.0 - elapsed, 0.0);
+      final initialValue = max(3.0 - elapsed, 0.0);
 
       return TweenAnimationBuilder<double>(
         tween: Tween(begin: initialValue, end: 0.0),

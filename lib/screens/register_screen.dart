@@ -191,8 +191,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (user != null) {
         String? displayName;
-        if (appleCredential.givenName != null && appleCredential.familyName != null) {
-          displayName = '${appleCredential.givenName} ${appleCredential.familyName}';
+        String? firstName = appleCredential.givenName;
+        String? lastName = appleCredential.familyName;
+        
+        if (firstName != null && lastName != null) {
+          displayName = '$firstName $lastName';
         }
 
         await FirebaseFirestore.instance
@@ -208,6 +211,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'uid': user.uid,
           'displayName': displayName ?? user.email?.split('@')[0] ?? 'User',
           'avatarUrl': user.photoURL ?? '',
+          'firstName': firstName ?? '',  // Store firstName separately
+          'lastName': lastName ?? '',    // Store lastName separately
         });
 
         // Create welcome notification

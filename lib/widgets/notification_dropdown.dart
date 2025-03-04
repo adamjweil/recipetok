@@ -1,14 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/notification.dart';
 import '../services/notification_service.dart';
+import '../screens/profile_screen.dart';
 
 class NotificationDropdown extends StatelessWidget {
   final NotificationService _notificationService = NotificationService();
   final String _userId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   NotificationDropdown({Key? key}) : super(key: key);
+
+  Future<Map<String, dynamic>> _getUserInfo(String userId) async {
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    return {
+      'name': '${userDoc.data()?['firstName'] ?? ''} ${userDoc.data()?['lastName'] ?? ''}'.trim(),
+      'avatarUrl': userDoc.data()?['avatarUrl'] ?? '',
+    };
+  }
+
+  void _handleNotificationTap(BuildContext context, AppNotification notification) {
+    Navigator.pop(context); // Close the notification dropdown
+
+    switch (notification.type) {
+      case NotificationType.follow:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfileScreen(userId: notification.userId),
+          ),
+        );
+        break;
+      case NotificationType.like:
+      case NotificationType.comment:
+        if (notification.postId != null) {
+          // Navigate to the post
+          Navigator.pushNamed(
+            context,
+            '/post',
+            arguments: notification.postId,
+          );
+        }
+        break;
+      case NotificationType.poke:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfileScreen(userId: notification.userId),
+          ),
+        );
+        break;
+      case NotificationType.welcome:
+        // No navigation needed for welcome notification
+        break;
+    }
+  }
+
+  String _getNotificationMessage(AppNotification notification, String userName) {
+    switch (notification.type) {
+      case NotificationType.follow:
+        return '$userName started following you';
+      case NotificationType.like:
+        return '$userName liked your post';
+      case NotificationType.comment:
+        return '$userName commented on your post';
+      case NotificationType.poke:
+        return '$userName poked you';
+      case NotificationType.welcome:
+        return 'Welcome to Munchster! Start by sharing your first recipe 🎉';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +116,6 @@ class NotificationDropdown extends StatelessWidget {
             ],
           ),
           onOpened: () {
-            // Mark all as read when opened
             _notificationService.markAllAsRead(_userId);
           },
           itemBuilder: (context) {
@@ -93,36 +155,67 @@ class NotificationDropdown extends StatelessWidget {
                 ),
               ),
               const PopupMenuDivider(),
-              ...snapshot.data!.map((notification) => PopupMenuItem(
+              ...snapshot.data!.map((notification) => PopupMenuItem<void>(
                     height: 72,
-                    child: Dismissible(
-                      key: Key(notification.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        color: Colors.red,
-                        child: const Padding(
-                          padding: EdgeInsets.only(right: 16),
-                          child: Icon(Icons.delete, color: Colors.white),
-                        ),
-                      ),
-                      onDismissed: (_) {
-                        _notificationService.deleteNotification(_userId, notification.id);
+                    child: FutureBuilder<Map<String, dynamic>>(
+                      future: _getUserInfo(notification.userId),
+                      builder: (context, userSnapshot) {
+                        final userName = userSnapshot.data?['name'] ?? '';
+                        final avatarUrl = userSnapshot.data?['avatarUrl'] ?? '';
+                        
+                        if (!userSnapshot.hasData) {
+                          return const SizedBox(
+                            height: 56,
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        
+                        return InkWell(
+                          onTap: () => _handleNotificationTap(context, notification),
+                          child: Dismissible(
+                            key: Key(notification.id),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              color: Colors.red,
+                              child: const Padding(
+                                padding: EdgeInsets.only(right: 16),
+                                child: Icon(Icons.delete, color: Colors.white),
+                              ),
+                            ),
+                            onDismissed: (_) {
+                              _notificationService.deleteNotification(_userId, notification.id);
+                            },
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: notification.type == NotificationType.welcome
+                                ? _buildNotificationIcon(notification.type)
+                                : CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.grey[200],
+                                    backgroundImage: avatarUrl.isNotEmpty
+                                      ? CachedNetworkImageProvider(avatarUrl)
+                                      : null,
+                                    child: avatarUrl.isEmpty
+                                      ? const Icon(Icons.person, color: Colors.grey)
+                                      : null,
+                                  ),
+                              title: Text(
+                                _getNotificationMessage(notification, userName),
+                                style: const TextStyle(fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                timeago.format(notification.timestamp),
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        );
                       },
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: _buildNotificationIcon(notification.type),
-                        title: Text(
-                          notification.notificationMessage,
-                          style: const TextStyle(fontSize: 14),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          timeago.format(notification.timestamp),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
                     ),
                   )),
             ];

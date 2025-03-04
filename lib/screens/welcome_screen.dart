@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -37,13 +38,97 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Munchster',
-                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Neon Red M
+                      Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF1744).withOpacity(0.6),
+                              blurRadius: 16,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
+                        child: Text(
+                          'M',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 96,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                            color: const Color(0xFFFF1744), // Neon Red
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Neon Green N
+                      Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF39FF14).withOpacity(0.5),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          'N',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 96,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                            color: const Color(0xFF39FF14), // Neon Green
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Neon Orange C
+                      Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF6B08).withOpacity(0.5),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          'C',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 96,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                            color: const Color(0xFFFF6B08), // Neon Orange
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Neon Blue H
+                      Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF00FFFF).withOpacity(0.5),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          'H',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 96,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                            color: const Color(0xFF00FFFF), // Neon Blue
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Text(
